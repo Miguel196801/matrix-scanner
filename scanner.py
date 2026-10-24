@@ -354,36 +354,63 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if timeframe == '1wk':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
+    # Calcolo indicatori
     df['SMA_Short'] = df['Close'].rolling(window=sma_short).mean()
     df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean()
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
     df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
+    
+    # VWAP (Volume Weighted Average Price)
+    df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
+    
+    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
     
+    # Livelli di supporto/resistenza (minimi e massimi degli ultimi 60 giorni)
+    recent_df = df.tail(60)
+    supporto = recent_df['Low'].min()
+    resistenza = recent_df['High'].max()
+    
+    # Creazione figura con tema scuro
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.6, 0.2, 0.2],
                        subplot_titles=(f'{ticker} - {timeframe.upper()} | Rete delle Balene', 'Volumi', 'RSI'))
     
+    # Candele (più sottili e brillanti)
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Prezzo',
-        increasing_line_color='#26a69a', increasing_fillcolor='#26a69a',
-        decreasing_line_color='#ef5350', decreasing_fillcolor='#ef5350'
+        increasing_line_color='#00e676', increasing_fillcolor='#00e676',
+        decreasing_line_color='#ff1744', decreasing_fillcolor='#ff1744',
+        increasing_line_width=1, decreasing_line_width=1
     ), row=1, col=1)
     
-    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#ff9800', width=2), name=f'SMA {sma_short}'), row=1, col=1)
+    # Medie mobili
+    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#ff9800', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#9c27b0', width=1.5, dash='dash'), name='SMA 20'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2196f3', width=2), name=f'SMA {sma_long}'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2196f3', width=1.5), name=f'SMA {sma_long}'), row=1, col=1)
     
+    # VWAP (linea gialla tratteggiata)
+    fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#ffeb3b', width=1.5, dash='dot'), name='VWAP'), row=1, col=1)
+    
+    # Prezzo medio di carico
     if prezzo_medio_eur is not None:
-        fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2.5,
+        fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2,
                      annotation_text=f"  Prezzo Medio: €{prezzo_medio_eur:.2f}", annotation_position="top left", row=1, col=1)
     
+    # Zona Accumulo (Rete delle Balene)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], fill=None, mode='lines', line=dict(width=0), showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], fill='tonexty', mode='lines', line=dict(width=0), 
-                            fillcolor='rgba(33, 150, 243, 0.12)', name='Zona Accumulo'), row=1, col=1)
+                            fillcolor='rgba(33, 150, 243, 0.15)', name='Zona Accumulo'), row=1, col=1)
     
+    # Livelli di supporto e resistenza
+    fig.add_hline(y=supporto, line_dash="dash", line_color="#00e676", line_width=1.5, 
+                 annotation_text=f"  Supporto: {supporto:.2f}", annotation_position="bottom right", row=1, col=1)
+    fig.add_hline(y=resistenza, line_dash="dash", line_color="#ff1744", line_width=1.5,
+                 annotation_text=f"  Resistenza: {resistenza:.2f}", annotation_position="top right", row=1, col=1)
+    
+    # Marker BY e SELL
     by_x, by_y, sell_x, sell_y = [], [], [], []
     for i in range(sma_long, len(df)):
         if (abs(df['Close'].iloc[i] - df['SMA_Short'].iloc[i]) / df['SMA_Short'].iloc[i] <= 0.02 and 
@@ -406,16 +433,29 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             name='▼ SELL'
         ), row=1, col=1)
     
-    colors = ['#26a69a' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ef5350' for i in range(len(df))]
+    # Volumi
+    colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['Vol_Media_20'], line=dict(color='#9c27b0', width=2), name='Vol Medio 20'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=2), name='RSI 14'), row=3, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['Vol_Media_20'], line=dict(color='#9c27b0', width=1.5), name='Vol Medio 20'), row=2, col=1)
+    
+    # RSI
+    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=1.5), name='RSI 14'), row=3, col=1)
     fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", row=3, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=3, col=1)
-    fig.update_layout(height=600, xaxis_rangeslider_visible=False, template="plotly_white", 
-                     legend=dict(orientation="h", yanchor="bottom", y=1.02))
+    
+    # Layout con tema scuro
+    fig.update_layout(
+        height=700,
+        xaxis_rangeslider_visible=False,
+        template="plotly_dark",
+        paper_bgcolor='#1a1a2e',
+        plot_bgcolor='#16213e',
+        font=dict(color='#e0e0e0', size=11),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0.3)'),
+        margin=dict(l=60, r=60, t=80, b=40)
+    )
+    
     return fig
-
 def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     risultati = []
     for pos in portafoglio:
