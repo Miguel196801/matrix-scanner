@@ -451,8 +451,8 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#1a1a2e',
         plot_bgcolor='#16213e',
         font=dict(color='#e0e0e0', size=11),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(0,0,0,0.3)'),
-        margin=dict(l=60, r=60, t=80, b=40)
+        legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5, bgcolor='rgba(0,0,0,0.5)', font=dict(size=9)),
+        margin=dict(l=60, r=60, t=100, b=80)
     )
     
     return fig
