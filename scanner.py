@@ -106,7 +106,7 @@ PORTAFOGLIO_INIZIALE = [
 # Session state
 for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts', 
             'scansione_completata', 'df_fortezza', 'df_cavalli', 'df_monitor',
-            'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'analisi_singola']:
+            'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'analisi_singola', 'analisi_risultati']:
     if key not in st.session_state:
         st.session_state[key] = None if key != 'pyramiding_alerts' else []
 
