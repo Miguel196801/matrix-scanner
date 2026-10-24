@@ -375,7 +375,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     resistenza = recent_df['High'].max()
     
     # Creazione figura con tema scuro
-        prezzo_attuale = df['Close'].iloc[-1]
+            prezzo_attuale = df['Close'].iloc[-1]
         fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.6, 0.2, 0.2],
         subplot_titles=(f'{ticker} ${prezzo_attuale:.2f} - {timeframe.upper()} | Rete delle Balene', 'Volumi', 'RSI'))     
             
