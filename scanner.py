@@ -495,9 +495,17 @@ eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, 
 budget_psv = st.sidebar.number_input("Budget Spot ($):", min_value=100, max_value=5000, value=500, step=100)
 
 st.sidebar.markdown("---")
+st.sidebar.subheader(" Filtri")
+filtro_s_score = st.sidebar.checkbox("Escludi S-Score < 60", True)
+filtro_weinstein = st.sidebar.selectbox("Fase Weinstein minima", ["Tutte", "FASE 1 (Accumulazione)", "FASE 2 (Avanzamento)"])
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
-filtro_delisting = st.sidebar.checkbox("Blocca <$1", True)
+filtro_delisting = st.sidebar.checkbox("Blocca titoli <$1", True)
 
+st.sidebar.markdown("---")
+st.sidebar.subheader(" Protocolli Speciali")
+show_insider = st.sidebar.checkbox("Mostra Insider", True)
+show_balene = st.sidebar.checkbox("Mostra Balene", True)
+show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
 # Pulsante scansione
 st.sidebar.markdown("---")
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
