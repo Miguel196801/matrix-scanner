@@ -483,7 +483,7 @@ st.markdown("""
 
 # Parametri (sidebar)
 st.sidebar.header("⚙️ Parametri")
-tickers_input = st.sidebar.text_area("Ticker (virgola):", "ADBE, RKLB, PLTR, NKE, CRWD, NU")
+tickers_input = st.sidebar.text_area("Ticker (virgola):", "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, S"), "ADBE, RKLB, PLTR, NKE, CRWD, NU")
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 
 period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
