@@ -19,13 +19,11 @@ st.set_page_config(page_title="MATRIX Mobile", layout="wide", page_icon="🛡️
 # ==============================================================================
 st.markdown("""
 <style>
-    /* Stile mobile-optimized */
     .main .block-container {
         padding-top: 1rem;
         padding-bottom: 1rem;
     }
     
-    /* Pulsanti grandi per touch */
     .stButton > button {
         width: 100%;
         padding: 0.75rem;
@@ -33,19 +31,8 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* Metric grandi e leggibili */
-    .metric-container {
-        background: white;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 0.5rem;
-    }
-    
-    /* Nascondi footer Streamlit */
     footer {visibility: hidden;}
     
-    /* Header colorato */
     .header-box {
         background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
         color: white;
@@ -61,7 +48,6 @@ st.markdown("""
         font-size: 1.8rem;
     }
     
-    /* Box segnali colorati */
     .signal-box {
         padding: 1rem;
         border-radius: 10px;
@@ -103,7 +89,7 @@ def salva_json(file_path, data):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 # ==============================================================================
-# PORTAFOGLIO INIZIALE (9 titoli, senza ETF europei)
+# PORTAFOGLIO INIZIALE (9 titoli)
 # ==============================================================================
 PORTAFOGLIO_INIZIALE = [
     {"Ticker": "TTWO", "Tipo": "Spot", "Quantita": 3.547945, "Prezzo_Medio": 187.55, "Categoria": "Azione"},
@@ -125,7 +111,7 @@ for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts'
         st.session_state[key] = None if key != 'pyramiding_alerts' else []
 
 # ==============================================================================
-# FUNZIONI CORE (S-Score, Fasi Weinstein, ecc.)
+# FUNZIONI CORE
 # ==============================================================================
 def calcola_s_score(info):
     score = 50
@@ -266,11 +252,11 @@ def verifica_delisting(info, df):
 def calcola_relative_strength(df_ticker, df_spy):
     try:
         if df_ticker is None or df_spy is None or len(df_ticker) < 60 or len(df_spy) < 60:
-            return 0.0, "⚪ N/D"
+            return 0.0, " N/D"
         perf_ticker = (df_ticker['Close'].iloc[-1] / df_ticker['Close'].iloc[-60] - 1) * 100
         perf_spy = (df_spy['Close'].iloc[-1] / df_spy['Close'].iloc[-60] - 1) * 100
         rs_diff = perf_ticker - perf_spy
-        if rs_diff > 5: return rs_diff, "🟢 Outperforming"
+        if rs_diff > 5: return rs_diff, " Outperforming"
         elif rs_diff < -5: return rs_diff, "🔴 Underperforming"
         else: return rs_diff, "🟡 In linea"
     except:
@@ -294,11 +280,11 @@ def controlla_earnings(ticker_obj):
         if giorni_mancanti <= 7:
             return giorni_mancanti, f"🔴 UTILI tra {giorni_mancanti}gg", True
         elif giorni_mancanti <= 14:
-            return giorni_mancanti, f"🟡 Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
         elif giorni_mancanti <= 30:
             return giorni_mancanti, f"🟢 Utili tra {giorni_mancanti}gg", False
         else:
-            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f"⚪ Utili tra {giorni_mancanti}gg", False
     except:
         return None, "⚪ N/D", False
 
@@ -313,7 +299,7 @@ def calcola_trailing_stop(df, sma_short, sma_long):
         elif prezzo > sma200:
             return sma200, "SMA 200", f"Trailing: {sma200:.2f} (SMA200)"
         else:
-            return sma200, "ALERTA", f"⚠️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
+            return sma200, "ALERTA", f"️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
     except:
         return None, "N/D", "Errore calcolo"
 
@@ -488,10 +474,9 @@ def calcola_pyramiding(posizione, prezzo_attuale_eur, budget_modulo=100.0):
 # INTERFACCIA MOBILE-FIRST
 # ==============================================================================
 
-# Header colorato
 st.markdown("""
 <div class="header-box">
-    <h1>🛡️ MATRIX DVMS</h1>
+    <h1>️ MATRIX DVMS</h1>
     <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Scanner Operativo Blindato v4.4</p>
 </div>
 """, unsafe_allow_html=True)
@@ -513,7 +498,7 @@ st.sidebar.markdown("---")
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 filtro_delisting = st.sidebar.checkbox("Blocca <$1", True)
 
-# Pulsante scansione (grande, in sidebar)
+# Pulsante scansione
 st.sidebar.markdown("---")
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
     lista_fortezza, lista_cavalli, lista_monitor = [], [], []
@@ -575,10 +560,10 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     pyramiding_alerts.append({'ticker': ticker, 'tipo': pos.get('Tipo', 'Spot'), 'prezzo_attuale': prezzo_eur, 'pyramiding': pyramiding})
             
             if is_cp_valido:
-                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': "🟢 BY", 'Earnings': earnings_msg})
+                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': " BY", 'Earnings': earnings_msg})
                 stats['by_count'] += 1; stats['by_tickers'].append(ticker)
             elif is_fortezza_valida:
-                stato_by_display = "🟢 BY" if trigger_by else "🟡 HOLD"
+                stato_by_display = "🟢 BY" if trigger_by else " HOLD"
                 lista_fortezza.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': stato_by_display, 'Motivo BY': motivo_by, 'Trailing Stop': trailing_desc, 'Earnings': earnings_msg})
                 if trigger_by: stats['by_count'] += 1; stats['by_tickers'].append(ticker)
                 else: stats['hold_count'] += 1; stats['hold_tickers'].append(ticker)
@@ -606,18 +591,17 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
         st.warning("Nessun titolo soddisfa i criteri.")
 
 # ==============================================================================
-# TAB PRINCIPALI (ottimizzate per mobile)
+# TAB PRINCIPALI
 # ==============================================================================
-tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "💼 Portafoglio", " Analisi"])
+tab1, tab2, tab3 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi"])
 
-# TAB 1: DASHBOARD (segnali operativi)
+# TAB 1: DASHBOARD
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
     
     if st.session_state.dashboard_stats:
         stats = st.session_state.dashboard_stats
         
-        # Box segnali colorati
         if stats['by_count'] > 0:
             st.markdown(f"""
             <div class="signal-box signal-green">
@@ -644,12 +628,11 @@ with tab1:
         if stats['earnings_warnings']:
             st.markdown(f"""
             <div class="signal-box signal-red">
-                <h4 style="margin: 0; color: #721c24;">⚠️ Attenzione Utili</h4>
+                <h4 style="margin: 0; color: #721c24;">️ Attenzione Utili</h4>
                 <p style="margin: 0.5rem 0 0 0;">{', '.join(stats['earnings_warnings'])}</p>
             </div>
             """, unsafe_allow_html=True)
         
-        # Pyramiding alerts
         if st.session_state.pyramiding_alerts:
             st.markdown("---")
             st.subheader("🟢 Opportunità Pyramiding")
@@ -660,7 +643,7 @@ with tab1:
                 <div class="signal-box signal-green">
                     <h4 style="margin: 0; color: #155724;">{ticker} - Segnale BY</h4>
                     <p style="margin: 0.5rem 0;">
-                         Capitale: ~{pyr['capitale']}€<br>
+                        💶 Capitale: ~{pyr['capitale']}€<br>
                         📊 Azioni: {pyr['azioni']}<br>
                         📉 Stop: {pyr['stop_loss']}€<br>
                         🎯 Target: {pyr['target']}€
@@ -670,15 +653,15 @@ with tab1:
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
-# TAB 2: PORTAFOGLIO
+# TAB 2: PORTAFOGLIO (MODIFICATO: mostra sempre i titoli)
 with tab2:
-    st.subheader(" Il Mio Portafoglio")
+    st.subheader("💼 Il Mio Portafoglio")
     
     if st.session_state.portafoglio is None:
         portafoglio_salvato = carica_json(PORTAFOGLIO_FILE)
         st.session_state.portafoglio = portafoglio_salvato if portafoglio_salvato else PORTAFOGLIO_INIZIALE
     
-    # Pulsante aggiorna (grande)
+    # Pulsante aggiorna
     if st.button("🔄 Aggiorna Quotazioni", type="primary", use_container_width=True):
         st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
         st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
@@ -687,12 +670,10 @@ with tab2:
     portafoglio = st.session_state.portafoglio
     
     if portafoglio:
-        has_live_data = len(portafoglio) > 0 and isinstance(portafoglio[0], dict) and 'Prezzo_Attuale_EUR' in portafoglio[0] and portafoglio[0].get('Prezzo_Attuale_EUR') is not None
+        # Riepilogo totale (solo se ci sono quotazioni)
+        has_live_data = any(p.get('Prezzo_Attuale_EUR') is not None for p in portafoglio)
         
-        if not has_live_data:
-            st.info("👆 Clicca **🔄 Aggiorna Quotazioni** per vedere i prezzi live.")
-        else:
-            # Riepilogo totale
+        if has_live_data:
             totale_valore = sum(p.get('Valore_Attuale', 0) or 0 for p in portafoglio)
             totale_carico = sum(p.get('Valore_Carico', p.get('Prezzo_Medio', 0) * p.get('Quantita', 0)) for p in portafoglio)
             totale_pnl = totale_valore - totale_carico
@@ -703,15 +684,21 @@ with tab2:
             col2.metric("📈 P&L Totale", f"€ {totale_pnl:,.0f}", f"{totale_pnl_pct:+.1f}%")
             
             st.markdown("---")
-            
-            # Lista titoli (semplificata per mobile)
-            for pos in portafoglio:
+        
+        # Separa Spot e PAC
+        spot = [p for p in portafoglio if p.get('Tipo') == 'Spot']
+        pac = [p for p in portafoglio if p.get('Tipo') == 'PAC']
+        
+        # Mostra SPOT
+        if spot:
+            st.markdown("### 📈 Azioni Singole (SPOT)")
+            for pos in spot:
                 pnl = pos.get('PnL_EUR', 0) or 0
                 pnl_pct = pos.get('PnL_%', 0) or 0
                 trend = pos.get('Trend', 'N/D')
                 earnings = pos.get('Earnings', 'N/D')
+                prezzo_attuale = pos.get('Prezzo_Attuale_EUR', 'N/A')
                 
-                # Colore in base al P&L
                 if pnl > 0:
                     bg_color = "#d4edda"
                     text_color = "#155724"
@@ -739,16 +726,59 @@ with tab2:
                         </div>
                     </div>
                     <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
-                        {pos.get('Prezzo_Attuale_EUR', 'N/A')}€ | {earnings}
+                        {prezzo_attuale}€ | {earnings}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Mostra PAC
+        if pac:
+            st.markdown("### 🔄 Piani di Accumulo (PAC)")
+            for pos in pac:
+                pnl = pos.get('PnL_EUR', 0) or 0
+                pnl_pct = pos.get('PnL_%', 0) or 0
+                trend = pos.get('Trend', 'N/D')
+                earnings = pos.get('Earnings', 'N/D')
+                pac_sett = pos.get('PAC_Settimanale', 0)
+                prezzo_attuale = pos.get('Prezzo_Attuale_EUR', 'N/A')
+                
+                if pnl > 0:
+                    bg_color = "#d4edda"
+                    text_color = "#155724"
+                elif pnl < 0:
+                    bg_color = "#f8d7da"
+                    text_color = "#721c24"
+                else:
+                    bg_color = "#fff3cd"
+                    text_color = "#856404"
+                
+                st.markdown(f"""
+                <div style="background-color: {bg_color}; padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="font-size: 1.2rem;">{pos['Ticker']}</strong>
+                            <span style="margin-left: 0.5rem; font-size: 0.9rem;">{trend}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.1rem; font-weight: bold; color: {text_color};">
+                                {pnl_pct:+.1f}%
+                            </div>
+                            <div style="font-size: 0.9rem; color: {text_color};">
+                                {pnl:+.2f}€
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
+                        {prezzo_attuale}€ | PAC: {pac_sett}€/sett | {earnings}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
         st.info("Portafoglio vuoto.")
 
-# TAB 3: ANALISI SINGOLA
+# TAB 3: ANALISI SINGOLA (MODIFICATO: BY/HOLD/SELL invece di NON QUALIFICATO)
 with tab3:
-    st.subheader(" Analisi Singola")
+    st.subheader("🔍 Analisi Singola")
     ticker_input = st.text_input("Ticker:", value="ADBE")
     
     if st.button("🔍 Analizza", type="primary", use_container_width=True):
@@ -771,11 +801,20 @@ with tab3:
                 trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
                 earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
                 
-                if s_score >= 60 and "FASE 2" in fase: comparto = " FORTEZZA"
-                elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60: comparto = "🎪 CAVALLO PAZZO"
-                else: comparto = "️ NON QUALIFICATO"
+                # Determina il segnale operativo
+                if s_score >= 60 and "FASE 2" in fase:
+                    if trigger_by:
+                        segnale = "🟢 BY - Acquista"
+                    else:
+                        segnale = " HOLD - Monitora"
+                elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z:
+                    segnale = "🟢 BY - Cavallo Pazzo"
+                elif "FASE 4" in fase or s_score < 40:
+                    segnale = "🔴 SELL - Evita"
+                else:
+                    segnale = "🟡 HOLD - In attesa"
                 
-                st.markdown(f"### {ticker_s} - {comparto}")
+                st.markdown(f"### {ticker_s} - {segnale}")
                 
                 col1, col2 = st.columns(2)
                 col1.metric("💶 Prezzo EUR", f"€ {prezzo_eur:.2f}")
@@ -786,14 +825,15 @@ with tab3:
                 col4.metric("Fase", fase)
                 
                 st.markdown(f"**Volume Ratio:** {vol_ratio:.2f}")
-                st.markdown(f"**Figura Z:** {'✅ Sì' if figura_z else ' No'}")
+                st.markdown(f"**Figura Z:** {'✅ Sì' if figura_z else '❌ No'}")
                 st.markdown(f"**Prossimi Utili:** {earnings_msg}")
                 
-                if "FORTEZZA" in comparto:
-                    if trigger_by:
-                        st.success(f"🟢 **BY ATTIVATO**: {motivo_by}")
-                    else:
-                        st.warning(f"🟡 **HOLD**: {motivo_by}")
+                if "BY" in segnale:
+                    st.success(f"**Segnale**: {motivo_by}")
+                elif "HOLD" in segnale:
+                    st.warning(f"**Segnale**: {motivo_by}")
+                else:
+                    st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
                 
                 if st.button(f"📊 Grafico {ticker_s}", type="secondary", use_container_width=True):
                     st.session_state.grafico_ticker = ticker_s
@@ -805,7 +845,7 @@ with tab3:
     # Grafico
     if st.session_state.grafico_ticker:
         st.markdown("---")
-        st.subheader(f" {st.session_state.grafico_ticker}")
+        st.subheader(f"📊 {st.session_state.grafico_ticker}")
         
         timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
         tf_value = '1d' if "Daily" in timeframe else '1wk'
