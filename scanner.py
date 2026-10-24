@@ -776,12 +776,12 @@ with tab2:
     else:
         st.info("Portafoglio vuoto.")
 
-# TAB 3: ANALISI SINGOLA (MODIFICATO: BY/HOLD/SELL invece di NON QUALIFICATO)
+# TAB 3: ANALISI SINGOLA (CORRETTO: risultati salvati in session state)
 with tab3:
     st.subheader("🔍 Analisi Singola")
     ticker_input = st.text_input("Ticker:", value="ADBE")
     
-    if st.button("🔍 Analizza", type="primary", use_container_width=True):
+    if st.button(" Analizza", type="primary", use_container_width=True):
         ticker_s = ticker_input.strip().upper()
         try:
             ticker_obj = yf.Ticker(ticker_s)
@@ -806,43 +806,63 @@ with tab3:
                     if trigger_by:
                         segnale = "🟢 BY - Acquista"
                     else:
-                        segnale = " HOLD - Monitora"
+                        segnale = "🟡 HOLD - Monitora"
                 elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z:
-                    segnale = "🟢 BY - Cavallo Pazzo"
+                    segnale = " BY - Cavallo Pazzo"
                 elif "FASE 4" in fase or s_score < 40:
                     segnale = "🔴 SELL - Evita"
                 else:
                     segnale = "🟡 HOLD - In attesa"
                 
-                st.markdown(f"### {ticker_s} - {segnale}")
-                
-                col1, col2 = st.columns(2)
-                col1.metric("💶 Prezzo EUR", f"€ {prezzo_eur:.2f}")
-                col2.metric("💵 Prezzo USD", f"$ {prezzo_usd:.2f}")
-                
-                col3, col4 = st.columns(2)
-                col3.metric("S-Score", s_score)
-                col4.metric("Fase", fase)
-                
-                st.markdown(f"**Volume Ratio:** {vol_ratio:.2f}")
-                st.markdown(f"**Figura Z:** {'✅ Sì' if figura_z else '❌ No'}")
-                st.markdown(f"**Prossimi Utili:** {earnings_msg}")
-                
-                if "BY" in segnale:
-                    st.success(f"**Segnale**: {motivo_by}")
-                elif "HOLD" in segnale:
-                    st.warning(f"**Segnale**: {motivo_by}")
-                else:
-                    st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
-                
-                if st.button(f"📊 Grafico {ticker_s}", type="secondary", use_container_width=True):
-                    st.session_state.grafico_ticker = ticker_s
-                    st.session_state.grafico_prezzo_medio = None
-                    st.rerun()
+                # SALVA I RISULTATI IN SESSION STATE (così sopravvivono al refresh)
+                st.session_state.analisi_risultati = {
+                    'ticker': ticker_s,
+                    'segnale': segnale,
+                    'prezzo_eur': prezzo_eur,
+                    'prezzo_usd': prezzo_usd,
+                    's_score': s_score,
+                    'fase': fase,
+                    'vol_ratio': vol_ratio,
+                    'figura_z': figura_z,
+                    'earnings_msg': earnings_msg,
+                    'trigger_by': trigger_by,
+                    'motivo_by': motivo_by
+                }
         except Exception as e:
             st.error(f"Errore: {e}")
     
-    # Grafico
+    # MOSTRA I RISULTATI (FUORI dal button, così persistono dopo il refresh)
+    if st.session_state.analisi_risultati:
+        r = st.session_state.analisi_risultati
+        
+        st.markdown(f"### {r['ticker']} - {r['segnale']}")
+        
+        col1, col2 = st.columns(2)
+        col1.metric("💶 Prezzo EUR", f"€ {r['prezzo_eur']:.2f}")
+        col2.metric("💵 Prezzo USD", f"$ {r['prezzo_usd']:.2f}")
+        
+        col3, col4 = st.columns(2)
+        col3.metric("S-Score", r['s_score'])
+        col4.metric("Fase", r['fase'])
+        
+        st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f}")
+        st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
+        st.markdown(f"**Prossimi Utili:** {r['earnings_msg']}")
+        
+        if "BY" in r['segnale']:
+            st.success(f"**Segnale**: {r['motivo_by']}")
+        elif "HOLD" in r['segnale']:
+            st.warning(f"**Segnale**: {r['motivo_by']}")
+        else:
+            st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
+        
+        # Pulsante grafico (ora funziona perché i risultati persistono)
+        if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
+            st.session_state.grafico_ticker = r['ticker']
+            st.session_state.grafico_prezzo_medio = None
+            st.rerun()
+    
+    # MOSTRA IL GRAFICO (se selezionato)
     if st.session_state.grafico_ticker:
         st.markdown("---")
         st.subheader(f"📊 {st.session_state.grafico_ticker}")
@@ -858,7 +878,7 @@ with tab3:
         else:
             st.error("Impossibile generare il grafico")
         
-        if st.button("✖️ Chiudi", use_container_width=True):
+        if st.button("✖️ Chiudi grafico", use_container_width=True):
             st.session_state.grafico_ticker = None
             st.session_state.grafico_prezzo_medio = None
             st.rerun()
