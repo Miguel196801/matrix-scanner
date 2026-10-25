@@ -413,7 +413,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=3, col=1)
     
     fig.update_layout(
-        height=700, xaxis_rangeslider_visible=False, template="plotly_dark",
+        height=1000, xaxis_rangeslider_visible=False, template="plotly_dark",
         paper_bgcolor='#1a1a2e', plot_bgcolor='#16213e', font=dict(color='#e0e0e0', size=11),
         legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, bgcolor='rgba(26,26,46,0.8)', font=dict(size=10, color='#e0e0e0')),
         margin=dict(l=60, r=60, t=120, b=60)
@@ -922,7 +922,7 @@ with tab3:
         fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
                                       prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         else:
             st.error("Impossibile generare il grafico")
         
