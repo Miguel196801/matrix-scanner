@@ -23,16 +23,13 @@ st.markdown("""
         padding-top: 1rem;
         padding-bottom: 1rem;
     }
-    
     .stButton > button {
         width: 100%;
         padding: 0.75rem;
         font-size: 1.1rem;
         font-weight: bold;
     }
-    
     footer {visibility: hidden;}
-    
     .header-box {
         background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
         color: white;
@@ -41,29 +38,24 @@ st.markdown("""
         text-align: center;
         margin-bottom: 1rem;
     }
-    
     .header-box h1 {
         color: white;
         margin: 0;
         font-size: 1.8rem;
     }
-    
     .signal-box {
         padding: 1rem;
         border-radius: 10px;
         margin-bottom: 0.5rem;
     }
-    
     .signal-green {
         background-color: #d4edda;
         border-left: 5px solid #28a745;
     }
-    
     .signal-yellow {
         background-color: #fff3cd;
         border-left: 5px solid #ffc107;
     }
-    
     .signal-red {
         background-color: #f8d7da;
         border-left: 5px solid #dc3545;
@@ -77,6 +69,7 @@ st.markdown("""
 PORTAFOGLIO_FILE = "portafoglio.json"
 WATCHLIST_FILE = "watchlist.json"
 STORICO_FILE = "storico_operazioni.json"
+IMPOSTAZIONI_FILE = "impostazioni.json" # <-- AGGIUNTO PER MEMORIA LISTA TICKER
 
 def carica_json(file_path):
     if os.path.exists(file_path):
@@ -111,7 +104,7 @@ for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts'
         st.session_state[key] = None if key != 'pyramiding_alerts' else []
 
 # ==============================================================================
-# FUNZIONI CORE
+# FUNZIONI CORE (Invariate, sono perfette)
 # ==============================================================================
 def calcola_s_score(info):
     score = 50
@@ -252,11 +245,11 @@ def verifica_delisting(info, df):
 def calcola_relative_strength(df_ticker, df_spy):
     try:
         if df_ticker is None or df_spy is None or len(df_ticker) < 60 or len(df_spy) < 60:
-            return 0.0, " N/D"
+            return 0.0, "⚪ N/D"
         perf_ticker = (df_ticker['Close'].iloc[-1] / df_ticker['Close'].iloc[-60] - 1) * 100
         perf_spy = (df_spy['Close'].iloc[-1] / df_spy['Close'].iloc[-60] - 1) * 100
         rs_diff = perf_ticker - perf_spy
-        if rs_diff > 5: return rs_diff, " Outperforming"
+        if rs_diff > 5: return rs_diff, "🟢 Outperforming"
         elif rs_diff < -5: return rs_diff, "🔴 Underperforming"
         else: return rs_diff, "🟡 In linea"
     except:
@@ -280,7 +273,7 @@ def controlla_earnings(ticker_obj):
         if giorni_mancanti <= 7:
             return giorni_mancanti, f"🔴 UTILI tra {giorni_mancanti}gg", True
         elif giorni_mancanti <= 14:
-            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f"🟡 Utili tra {giorni_mancanti}gg", False
         elif giorni_mancanti <= 30:
             return giorni_mancanti, f"🟢 Utili tra {giorni_mancanti}gg", False
         else:
@@ -299,7 +292,7 @@ def calcola_trailing_stop(df, sma_short, sma_long):
         elif prezzo > sma200:
             return sma200, "SMA 200", f"Trailing: {sma200:.2f} (SMA200)"
         else:
-            return sma200, "ALERTA", f"️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
+            return sma200, "ALERTA", f"⚠️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
     except:
         return None, "N/D", "Errore calcolo"
 
@@ -354,32 +347,25 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if timeframe == '1wk':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
-    # Calcolo indicatori
     df['SMA_Short'] = df['Close'].rolling(window=sma_short).mean()
     df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean()
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
     df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
-    
-    # VWAP (Volume Weighted Average Price)
     df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
     
-    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
     
-    # Livelli di supporto/resistenza (minimi e massimi degli ultimi 60 giorni)
     recent_df = df.tail(60)
     supporto = recent_df['Low'].min()
     resistenza = recent_df['High'].max()
     
-    # Creazione figura con tema scuro
     prezzo_attuale = df['Close'].iloc[-1]
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.6, 0.2, 0.2],
                        subplot_titles=(f'{ticker} ${prezzo_attuale:.2f} - {timeframe.upper()} | Rete delle Balene', 'Volumi', 'RSI'))
     
-    # Candele (più sottili e brillanti)
     fig.add_trace(go.Candlestick(
         x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Prezzo',
         increasing_line_color='#00e676', increasing_fillcolor='#00e676',
@@ -387,31 +373,24 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         increasing_line_width=1, decreasing_line_width=1
     ), row=1, col=1)
     
-    # Medie mobili
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#ff9800', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#9c27b0', width=1.5, dash='dash'), name='SMA 20'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2196f3', width=1.5), name=f'SMA {sma_long}'), row=1, col=1)
-    
-    # VWAP (linea gialla tratteggiata)
     fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#ffeb3b', width=1.5, dash='dot'), name='VWAP'), row=1, col=1)
     
-    # Prezzo medio di carico
     if prezzo_medio_eur is not None:
         fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2,
                      annotation_text=f"  Prezzo Medio: €{prezzo_medio_eur:.2f}", annotation_position="top left", row=1, col=1)
     
-    # Zona Accumulo (Rete delle Balene)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], fill=None, mode='lines', line=dict(width=0), showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], fill='tonexty', mode='lines', line=dict(width=0), 
                             fillcolor='rgba(33, 150, 243, 0.15)', name='Zona Accumulo'), row=1, col=1)
     
-    # Livelli di supporto e resistenza
     fig.add_hline(y=supporto, line_dash="dash", line_color="#00e676", line_width=1.5, 
                  annotation_text=f"  Supporto: {supporto:.2f}", annotation_position="bottom right", row=1, col=1)
     fig.add_hline(y=resistenza, line_dash="dash", line_color="#ff1744", line_width=1.5,
                  annotation_text=f"  Resistenza: {resistenza:.2f}", annotation_position="top right", row=1, col=1)
     
-    # Marker BY e SELL
     by_x, by_y, sell_x, sell_y = [], [], [], []
     for i in range(sma_long, len(df)):
         if (abs(df['Close'].iloc[i] - df['SMA_Short'].iloc[i]) / df['SMA_Short'].iloc[i] <= 0.02 and 
@@ -421,42 +400,25 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             sell_x.append(df.index[i]); sell_y.append(df['Close'].iloc[i])
     
     if by_x:
-        fig.add_trace(go.Scatter(
-            x=by_x, y=by_y, mode='markers',
-            marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')),
-            name='▲ BY (Buy)'
-        ), row=1, col=1)
-    
+        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')), name='▲ BY (Buy)'), row=1, col=1)
     if sell_x:
-        fig.add_trace(go.Scatter(
-            x=sell_x, y=sell_y, mode='markers',
-            marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')),
-            name='▼ SELL'
-        ), row=1, col=1)
+        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), name='▼ SELL'), row=1, col=1)
     
-    # Volumi
     colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7), row=2, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['Vol_Media_20'], line=dict(color='#9c27b0', width=1.5), name='Vol Medio 20'), row=2, col=1)
-    
-    # RSI
     fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=1.5), name='RSI 14'), row=3, col=1)
     fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", row=3, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=3, col=1)
     
-    # Layout con tema scuro
     fig.update_layout(
-        height=700,
-        xaxis_rangeslider_visible=False,
-        template="plotly_dark",
-        paper_bgcolor='#1a1a2e',
-        plot_bgcolor='#16213e',
-        font=dict(color='#e0e0e0', size=11),
+        height=700, xaxis_rangeslider_visible=False, template="plotly_dark",
+        paper_bgcolor='#1a1a2e', plot_bgcolor='#16213e', font=dict(color='#e0e0e0', size=11),
         legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, bgcolor='rgba(26,26,46,0.8)', font=dict(size=10, color='#e0e0e0')),
         margin=dict(l=60, r=60, t=120, b=60)
     )
-    
     return fig
+
 def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     risultati = []
     for pos in portafoglio:
@@ -486,8 +448,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             
             risultati.append({**pos, "Prezzo_Attuale_EUR": round(prezzo_eur, 2), "Prezzo_Attuale_USD": round(prezzo_usd, 2),
                              "Valore_Attuale": round(valore_attuale, 2), "Valore_Carico": round(valore_carico, 2),
-                             "PnL_EUR": round(pnl_eur, 2), "PnL_%": round(pnl_pct, 2), "Trend": trend,
-                             "Earnings": earnings_msg})
+                             "PnL_EUR": round(pnl_eur, 2), "PnL_%": round(pnl_pct, 2), "Trend": trend, "Earnings": earnings_msg})
         except Exception:
             risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "Valore_Attuale": None, "PnL_EUR": None, "PnL_%": None, "Trend": "Errore", "Earnings": "N/D"})
     return risultati
@@ -514,17 +475,25 @@ def calcola_pyramiding(posizione, prezzo_attuale_eur, budget_modulo=100.0):
 # ==============================================================================
 # INTERFACCIA MOBILE-FIRST
 # ==============================================================================
-
 st.markdown("""
 <div class="header-box">
-    <h1>️ MATRIX DVMS</h1>
+    <h1>🛡️ MATRIX DVMS</h1>
     <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Scanner Operativo Blindato v4.4</p>
 </div>
 """, unsafe_allow_html=True)
 
+# --- MODIFICA 1: CARICAMENTO MEMORIA LISTA TICKER ---
+if os.path.exists(IMPOSTAZIONI_FILE):
+    with open(IMPOSTAZIONI_FILE, 'r', encoding='utf-8') as f:
+        impostazioni = json.load(f)
+else:
+    impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC"}
+    with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
+        json.dump(impostazioni, f)
+
 # Parametri (sidebar)
 st.sidebar.header("⚙️ Parametri")
-tickers_input = st.sidebar.text_area("Ticker (virgola):", "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, S")
+tickers_input = st.sidebar.text_area("Ticker (virgola):", value=impostazioni.get("lista_ticker_default", "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC"))
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
 sma_short = st.sidebar.slider("SMA Breve:", 10, 100, 50)
@@ -535,20 +504,27 @@ eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, 
 budget_psv = st.sidebar.number_input("Budget Spot ($):", min_value=100, max_value=5000, value=500, step=100)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader(" Filtri")
+st.sidebar.subheader("🔒 Filtri")
 filtro_s_score = st.sidebar.checkbox("Escludi S-Score < 60", True)
 filtro_weinstein = st.sidebar.selectbox("Fase Weinstein minima", ["Tutte", "FASE 1 (Accumulazione)", "FASE 2 (Avanzamento)"])
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 filtro_delisting = st.sidebar.checkbox("Blocca titoli <$1", True)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader(" Protocolli Speciali")
+st.sidebar.subheader("👁️ Protocolli Speciali")
 show_insider = st.sidebar.checkbox("Mostra Insider", True)
 show_balene = st.sidebar.checkbox("Mostra Balene", True)
 show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
+
 # Pulsante scansione
 st.sidebar.markdown("---")
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
+    
+    # --- MODIFICA 2: SALVA LA LISTA TICKER CORRENTE E UNISCE IL PORTAFOGLIO ---
+    impostazioni["lista_ticker_default"] = tickers_input
+    with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
+        json.dump(impostazioni, f)
+
     lista_fortezza, lista_cavalli, lista_monitor = [], [], []
     progress_bar = st.progress(0)
     watchlist_esistente = carica_json(WATCHLIST_FILE)
@@ -561,6 +537,13 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
+    
+    # INCLUSIONE AUTOMATICA TITOLI PORTAFOGLIO
+    ticker_portafoglio = list(ticker_in_portafoglio.keys())
+    tickers = list(set(tickers + ticker_portafoglio)) # unisce e rimuove duplicati
+    tickers.sort() # ordina alfabeticamente
+    
+    st.info(f"🔄 Scansione avviata per {len(tickers)} titoli (inclusi automaticamente i {len(ticker_portafoglio)} del portafoglio).")
     
     for i, ticker in enumerate(tickers):
         progress_bar.progress((i + 1) / len(tickers))
@@ -608,16 +591,16 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     pyramiding_alerts.append({'ticker': ticker, 'tipo': pos.get('Tipo', 'Spot'), 'prezzo_attuale': prezzo_eur, 'pyramiding': pyramiding})
             
             if is_cp_valido:
-                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': " BY", 'Earnings': earnings_msg})
+                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': "🟢 BY", 'Earnings': earnings_msg})
                 stats['by_count'] += 1; stats['by_tickers'].append(ticker)
             elif is_fortezza_valida:
-                stato_by_display = "🟢 BY" if trigger_by else " HOLD"
+                stato_by_display = "🟢 BY" if trigger_by else "🟡 HOLD"
                 lista_fortezza.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': stato_by_display, 'Motivo BY': motivo_by, 'Trailing Stop': trailing_desc, 'Earnings': earnings_msg})
                 if trigger_by: stats['by_count'] += 1; stats['by_tickers'].append(ticker)
                 else: stats['hold_count'] += 1; stats['hold_tickers'].append(ticker)
             elif is_watchlist:
                 motivi_hold = []
-                if vol_ratio < 1.60: motivi_hold.append(f"Volumi bassi")
+                if vol_ratio < 1.60: motivi_hold.append("Volumi bassi")
                 if not figura_z: motivi_hold.append("No Figura Z")
                 lista_monitor.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'Fase': fase, 'Motivo Hold': "; ".join(motivi_hold), 'Earnings': earnings_msg})
                 stats['hold_count'] += 1; stats['hold_tickers'].append(ticker)
@@ -641,7 +624,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
 # ==============================================================================
 # TAB PRINCIPALI
 # ==============================================================================
-tab1, tab2, tab3 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi"])
+tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "💼 Portafoglio", "🔍 Analisi"])
 
 # TAB 1: DASHBOARD
 with tab1:
@@ -676,7 +659,7 @@ with tab1:
         if stats['earnings_warnings']:
             st.markdown(f"""
             <div class="signal-box signal-red">
-                <h4 style="margin: 0; color: #721c24;">️ Attenzione Utili</h4>
+                <h4 style="margin: 0; color: #721c24;">⚠️ Attenzione Utili</h4>
                 <p style="margin: 0.5rem 0 0 0;">{', '.join(stats['earnings_warnings'])}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -701,7 +684,7 @@ with tab1:
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
-# TAB 2: PORTAFOGLIO (MODIFICATO: mostra sempre i titoli)
+# TAB 2: PORTAFOGLIO
 with tab2:
     st.subheader("💼 Il Mio Portafoglio")
     
@@ -709,7 +692,6 @@ with tab2:
         portafoglio_salvato = carica_json(PORTAFOGLIO_FILE)
         st.session_state.portafoglio = portafoglio_salvato if portafoglio_salvato else PORTAFOGLIO_INIZIALE
     
-    # Pulsante aggiorna
     if st.button("🔄 Aggiorna Quotazioni", type="primary", use_container_width=True):
         st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
         st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
@@ -718,7 +700,6 @@ with tab2:
     portafoglio = st.session_state.portafoglio
     
     if portafoglio:
-        # Riepilogo totale (solo se ci sono quotazioni)
         has_live_data = any(p.get('Prezzo_Attuale_EUR') is not None for p in portafoglio)
         
         if has_live_data:
@@ -730,14 +711,11 @@ with tab2:
             col1, col2 = st.columns(2)
             col1.metric("💰 Valore Totale", f"€ {totale_valore:,.0f}")
             col2.metric("📈 P&L Totale", f"€ {totale_pnl:,.0f}", f"{totale_pnl_pct:+.1f}%")
-            
             st.markdown("---")
         
-        # Separa Spot e PAC
         spot = [p for p in portafoglio if p.get('Tipo') == 'Spot']
         pac = [p for p in portafoglio if p.get('Tipo') == 'PAC']
         
-        # Mostra SPOT
         if spot:
             st.markdown("### 📈 Azioni Singole (SPOT)")
             for pos in spot:
@@ -747,39 +725,23 @@ with tab2:
                 earnings = pos.get('Earnings', 'N/D')
                 prezzo_attuale = pos.get('Prezzo_Attuale_EUR', 'N/A')
                 
-                if pnl > 0:
-                    bg_color = "#d4edda"
-                    text_color = "#155724"
-                elif pnl < 0:
-                    bg_color = "#f8d7da"
-                    text_color = "#721c24"
-                else:
-                    bg_color = "#fff3cd"
-                    text_color = "#856404"
+                if pnl > 0: bg_color, text_color = "#d4edda", "#155724"
+                elif pnl < 0: bg_color, text_color = "#f8d7da", "#721c24"
+                else: bg_color, text_color = "#fff3cd", "#856404"
                 
                 st.markdown(f"""
                 <div style="background-color: {bg_color}; padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="font-size: 1.2rem;">{pos['Ticker']}</strong>
-                            <span style="margin-left: 0.5rem; font-size: 0.9rem;">{trend}</span>
-                        </div>
+                        <div><strong style="font-size: 1.2rem;">{pos['Ticker']}</strong> <span style="margin-left: 0.5rem; font-size: 0.9rem;">{trend}</span></div>
                         <div style="text-align: right;">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: {text_color};">
-                                {pnl_pct:+.1f}%
-                            </div>
-                            <div style="font-size: 0.9rem; color: {text_color};">
-                                {pnl:+.2f}€
-                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold; color: {text_color};">{pnl_pct:+.1f}%</div>
+                            <div style="font-size: 0.9rem; color: {text_color};">{pnl:+.2f}€</div>
                         </div>
                     </div>
-                    <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
-                        {prezzo_attuale}€ | {earnings}
-                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">{prezzo_attuale}€ | {earnings}</div>
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Mostra PAC
         if pac:
             st.markdown("### 🔄 Piani di Accumulo (PAC)")
             for pos in pac:
@@ -790,46 +752,31 @@ with tab2:
                 pac_sett = pos.get('PAC_Settimanale', 0)
                 prezzo_attuale = pos.get('Prezzo_Attuale_EUR', 'N/A')
                 
-                if pnl > 0:
-                    bg_color = "#d4edda"
-                    text_color = "#155724"
-                elif pnl < 0:
-                    bg_color = "#f8d7da"
-                    text_color = "#721c24"
-                else:
-                    bg_color = "#fff3cd"
-                    text_color = "#856404"
+                if pnl > 0: bg_color, text_color = "#d4edda", "#155724"
+                elif pnl < 0: bg_color, text_color = "#f8d7da", "#721c24"
+                else: bg_color, text_color = "#fff3cd", "#856404"
                 
                 st.markdown(f"""
                 <div style="background-color: {bg_color}; padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="font-size: 1.2rem;">{pos['Ticker']}</strong>
-                            <span style="margin-left: 0.5rem; font-size: 0.9rem;">{trend}</span>
-                        </div>
+                        <div><strong style="font-size: 1.2rem;">{pos['Ticker']}</strong> <span style="margin-left: 0.5rem; font-size: 0.9rem;">{trend}</span></div>
                         <div style="text-align: right;">
-                            <div style="font-size: 1.1rem; font-weight: bold; color: {text_color};">
-                                {pnl_pct:+.1f}%
-                            </div>
-                            <div style="font-size: 0.9rem; color: {text_color};">
-                                {pnl:+.2f}€
-                            </div>
+                            <div style="font-size: 1.1rem; font-weight: bold; color: {text_color};">{pnl_pct:+.1f}%</div>
+                            <div style="font-size: 0.9rem; color: {text_color};">{pnl:+.2f}€</div>
                         </div>
                     </div>
-                    <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
-                        {prezzo_attuale}€ | PAC: {pac_sett}€/sett | {earnings}
-                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">{prezzo_attuale}€ | PAC: {pac_sett}€/sett | {earnings}</div>
                 </div>
                 """, unsafe_allow_html=True)
     else:
         st.info("Portafoglio vuoto.")
 
-# TAB 3: ANALISI SINGOLA (CORRETTO: risultati salvati in session state)
+# TAB 3: ANALISI SINGOLA
 with tab3:
     st.subheader("🔍 Analisi Singola")
     ticker_input = st.text_input("Ticker:", value="ADBE")
     
-    if st.button(" Analizza", type="primary", use_container_width=True):
+    if st.button("🔎 Analizza", type="primary", use_container_width=True):
         ticker_s = ticker_input.strip().upper()
         try:
             ticker_obj = yf.Ticker(ticker_s)
@@ -849,40 +796,25 @@ with tab3:
                 trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
                 earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
                 
-                # Determina il segnale operativo
                 if s_score >= 60 and "FASE 2" in fase:
-                    if trigger_by:
-                        segnale = "🟢 BY - Acquista"
-                    else:
-                        segnale = "🟡 HOLD - Monitora"
+                    segnale = "🟢 BY - Acquista" if trigger_by else "🟡 HOLD - Monitora"
                 elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z:
-                    segnale = " BY - Cavallo Pazzo"
+                    segnale = "🟢 BY - Cavallo Pazzo"
                 elif "FASE 4" in fase or s_score < 40:
                     segnale = "🔴 SELL - Evita"
                 else:
                     segnale = "🟡 HOLD - In attesa"
                 
-                # SALVA I RISULTATI IN SESSION STATE (così sopravvivono al refresh)
                 st.session_state.analisi_risultati = {
-                    'ticker': ticker_s,
-                    'segnale': segnale,
-                    'prezzo_eur': prezzo_eur,
-                    'prezzo_usd': prezzo_usd,
-                    's_score': s_score,
-                    'fase': fase,
-                    'vol_ratio': vol_ratio,
-                    'figura_z': figura_z,
-                    'earnings_msg': earnings_msg,
-                    'trigger_by': trigger_by,
-                    'motivo_by': motivo_by
+                    'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
+                    's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
+                    'earnings_msg': earnings_msg, 'trigger_by': trigger_by, 'motivo_by': motivo_by
                 }
         except Exception as e:
             st.error(f"Errore: {e}")
     
-    # MOSTRA I RISULTATI (FUORI dal button, così persistono dopo il refresh)
     if st.session_state.analisi_risultati:
         r = st.session_state.analisi_risultati
-        
         st.markdown(f"### {r['ticker']} - {r['segnale']}")
         
         col1, col2 = st.columns(2)
@@ -897,30 +829,23 @@ with tab3:
         st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
         st.markdown(f"**Prossimi Utili:** {r['earnings_msg']}")
         
-        if "BY" in r['segnale']:
-            st.success(f"**Segnale**: {r['motivo_by']}")
-        elif "HOLD" in r['segnale']:
-            st.warning(f"**Segnale**: {r['motivo_by']}")
-        else:
-            st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
+        if "BY" in r['segnale']: st.success(f"**Segnale**: {r['motivo_by']}")
+        elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
+        else: st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
         
-        # Pulsante grafico (ora funziona perché i risultati persistono)
         if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
             st.session_state.grafico_ticker = r['ticker']
             st.session_state.grafico_prezzo_medio = None
             st.rerun()
     
-    # MOSTRA IL GRAFICO (se selezionato)
     if st.session_state.grafico_ticker:
         st.markdown("---")
         st.subheader(f"📊 {st.session_state.grafico_ticker}")
-        
         timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
         tf_value = '1d' if "Daily" in timeframe else '1wk'
         
         fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
-                                      prezzo_medio_eur=st.session_state.grafico_prezzo_medio,
-                                      timeframe=tf_value)
+                                      prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
         else:
