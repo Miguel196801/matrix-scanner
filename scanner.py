@@ -585,7 +585,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 rs = gain / loss
                 rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
                 
-                if rsi_oggi >= 30:
+                if rsi_oggi >= 75:
                     pos = ticker_in_portafoglio[ticker]
                     prezzo_medio = pos['Prezzo_Medio']
                     gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
