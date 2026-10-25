@@ -534,6 +534,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     
     stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'capital_used': 0, 'earnings_warnings': []}
     pyramiding_alerts = []
+    take_profit_alerts = []    
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
@@ -575,7 +576,28 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             trailing_level, trailing_tipo, trailing_desc = calcola_trailing_stop(df, sma_short, sma_long)
             earnings_giorni, earnings_msg, earnings_bloccato2 = controlla_earnings(ticker_obj)
             if earnings_bloccato2: stats['earnings_warnings'].append(f"{ticker} ({earnings_msg})")
-            
+                        # --- CONTROLLO TAKE PROFIT (RSI >= 75) PER TITOLI IN PORTAFOGLIO ---
+            if ticker in ticker_in_portafoglio:
+                # Calcolo rapido RSI a 14 periodi
+                delta = df['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
+                
+                if rsi_oggi >= 75:
+                    pos = ticker_in_portafoglio[ticker]
+                    prezzo_medio = pos['Prezzo_Medio']
+                    gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
+                    
+                    take_profit_alerts.append({
+                        'ticker': ticker,
+                        'rsi': round(rsi_oggi, 1),
+                        'prezzo_attuale_eur': prezzo_eur,
+                        'gain_pct': round(gain_pct, 1),
+                        'tipo': pos.get('Tipo', 'Spot')
+                    })
+            # --------------------------------------------------------------------
             if filtro_delisting and "CRITICO" in rischio_delisting: 
                 stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
@@ -611,7 +633,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     stats['capital_used'] = sum(p.get('Capitale_USD', 0) for p in portafoglio_attuale)
     st.session_state.dashboard_stats = stats
     st.session_state.pyramiding_alerts = pyramiding_alerts
-    
+    st.session_state.take_profit_alerts = take_profit_alerts
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
         st.session_state.df_cavalli = pd.DataFrame(lista_cavalli) if lista_cavalli else None
@@ -681,6 +703,30 @@ with tab1:
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # --- MOSTRA ALLERTA TAKE PROFIT ---
+        if st.session_state.get('take_profit_alerts'):
+            st.markdown("---")
+            st.subheader("🎯 ALLERTA TAKE PROFIT (Porta a casa tutto)")
+            st.markdown("*I seguenti titoli in portafoglio sono in forte ipercomprato. Statisticamente, è il momento ottimale per vendere l'intera posizione e bloccare il guadagno.*")
+            
+            for alert in st.session_state.take_profit_alerts:
+                ticker = alert['ticker']
+                gain_color = "#155724" if alert['gain_pct'] > 0 else "#721c24"
+                
+                st.markdown(f"""
+                <div class="signal-box" style="background-color: #f8d7da; border-left: 5px solid #dc3545;">
+                    <h4 style="margin: 0; color: #721c24;">🔴 {ticker} ({alert['tipo']}) - RSI: {alert['rsi']}</h4>
+                    <p style="margin: 0.5rem 0; font-size: 1.1rem;">
+                        💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>
+                        📈 <strong>Gain dal tuo medio:</strong> <span style="color: {gain_color}; font-weight: bold;">+{alert['gain_pct']}%</span>
+                    </p>
+                    <p style="margin: 0; font-size: 0.9rem; color: #721c24;">
+                        💡 <strong>Azione consigliata:</strong> Vendi l'intera posizione su Trade Republic e aggiorna il portafoglio.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        # ----------------------------------
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
