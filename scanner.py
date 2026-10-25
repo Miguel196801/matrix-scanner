@@ -69,7 +69,7 @@ st.markdown("""
 PORTAFOGLIO_FILE = "portafoglio.json"
 WATCHLIST_FILE = "watchlist.json"
 STORICO_FILE = "storico_operazioni.json"
-IMPOSTAZIONI_FILE = "impostazioni.json" # <-- AGGIUNTO PER MEMORIA LISTA TICKER
+IMPOSTAZIONI_FILE = "impostazioni.json"
 
 def carica_json(file_path):
     if os.path.exists(file_path):
@@ -99,12 +99,13 @@ PORTAFOGLIO_INIZIALE = [
 # Session state
 for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts', 
             'scansione_completata', 'df_fortezza', 'df_cavalli', 'df_monitor',
-            'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'analisi_singola', 'analisi_risultati']:
+            'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'analisi_singola', 'analisi_risultati',
+            'take_profit_alerts', 'zona_interesse_alerts']:
     if key not in st.session_state:
-        st.session_state[key] = None if key != 'pyramiding_alerts' else []
+        st.session_state[key] = None if key != 'pyramiding_alerts' and key != 'take_profit_alerts' and key != 'zona_interesse_alerts' else []
 
 # ==============================================================================
-# FUNZIONI CORE (Invariate, sono perfette)
+# FUNZIONI CORE
 # ==============================================================================
 def calcola_s_score(info):
     score = 50
@@ -482,7 +483,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- MODIFICA 1: CARICAMENTO MEMORIA LISTA TICKER ---
+# --- MEMORIA LISTA TICKER ---
 if os.path.exists(IMPOSTAZIONI_FILE):
     with open(IMPOSTAZIONI_FILE, 'r', encoding='utf-8') as f:
         impostazioni = json.load(f)
@@ -491,7 +492,6 @@ else:
     with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
         json.dump(impostazioni, f)
 
-# Parametri (sidebar)
 st.sidebar.header("⚙️ Parametri")
 tickers_input = st.sidebar.text_area("Ticker (virgola):", value=impostazioni.get("lista_ticker_default", "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC"))
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
@@ -520,7 +520,7 @@ show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
 st.sidebar.markdown("---")
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
     
-    # --- MODIFICA 2: SALVA LA LISTA TICKER CORRENTE E UNISCE IL PORTAFOGLIO ---
+    # Salva lista ticker
     impostazioni["lista_ticker_default"] = tickers_input
     with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
         json.dump(impostazioni, f)
@@ -534,15 +534,16 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     
     stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'capital_used': 0, 'earnings_warnings': []}
     pyramiding_alerts = []
-    take_profit_alerts = []    
+    take_profit_alerts = []
+    zona_interesse_alerts = []  # <-- AGGIUNTO
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
     
-    # INCLUSIONE AUTOMATICA TITOLI PORTAFOGLIO
+    # Inclusione automatica titoli portafoglio
     ticker_portafoglio = list(ticker_in_portafoglio.keys())
-    tickers = list(set(tickers + ticker_portafoglio)) # unisce e rimuove duplicati
-    tickers.sort() # ordina alfabeticamente
+    tickers = list(set(tickers + ticker_portafoglio))
+    tickers.sort()
     
     st.info(f"🔄 Scansione avviata per {len(tickers)} titoli (inclusi automaticamente i {len(ticker_portafoglio)} del portafoglio).")
     
@@ -576,9 +577,9 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             trailing_level, trailing_tipo, trailing_desc = calcola_trailing_stop(df, sma_short, sma_long)
             earnings_giorni, earnings_msg, earnings_bloccato2 = controlla_earnings(ticker_obj)
             if earnings_bloccato2: stats['earnings_warnings'].append(f"{ticker} ({earnings_msg})")
-                        # --- CONTROLLO TAKE PROFIT (RSI >= 75) PER TITOLI IN PORTAFOGLIO ---
+            
+            # --- CONTROLLO TAKE PROFIT (RSI >= 75) ---
             if ticker in ticker_in_portafoglio:
-                # Calcolo rapido RSI a 14 periodi
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -589,15 +590,23 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     pos = ticker_in_portafoglio[ticker]
                     prezzo_medio = pos['Prezzo_Medio']
                     gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
-                    
                     take_profit_alerts.append({
-                        'ticker': ticker,
-                        'rsi': round(rsi_oggi, 1),
-                        'prezzo_attuale_eur': prezzo_eur,
-                        'gain_pct': round(gain_pct, 1),
-                        'tipo': pos.get('Tipo', 'Spot')
+                        'ticker': ticker, 'rsi': round(rsi_oggi, 1), 'prezzo_attuale_eur': prezzo_eur,
+                        'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot')
                     })
-            # --------------------------------------------------------------------
+            
+            # --- CONTROLLO ZONA DI INTERESSE (Supporto SMA 200) ---
+            if ticker in ticker_in_portafoglio or s_score >= 60:
+                sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+                distanza_sma200_pct = abs(df['Close'].iloc[-1] - sma200) / sma200 * 100
+                if s_score >= 60 and distanza_sma200_pct <= 5.0:
+                    zona_interesse_alerts.append({
+                        'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
+                        'sma200_eur': round(sma200 / eurusd_rate if currency == 'USD' else sma200, 2),
+                        'distanza_pct': round(distanza_sma200_pct, 1), 's_score': s_score
+                    })
+
+            # Filtri di esclusione
             if filtro_delisting and "CRITICO" in rischio_delisting: 
                 stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
@@ -634,6 +643,8 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     st.session_state.dashboard_stats = stats
     st.session_state.pyramiding_alerts = pyramiding_alerts
     st.session_state.take_profit_alerts = take_profit_alerts
+    st.session_state.zona_interesse_alerts = zona_interesse_alerts # <-- AGGIUNTO
+    
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
         st.session_state.df_cavalli = pd.DataFrame(lista_cavalli) if lista_cavalli else None
@@ -686,6 +697,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
         
+        # 1. PYRAMIDING
         if st.session_state.pyramiding_alerts:
             st.markdown("---")
             st.subheader("🟢 Opportunità Pyramiding")
@@ -704,16 +716,33 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # --- MOSTRA ALLERTA TAKE PROFIT ---
+        # 2. ZONA DI INTERESSE (NUOVO)
+        if st.session_state.get('zona_interesse_alerts'):
+            st.markdown("---")
+            st.subheader("🟡 ZONA DI INTERESSE (Supporto + Rete delle Balene)")
+            st.markdown("*Titoli solidi (Fortezze) che stanno testando un supporto chiave (SMA 200). Ottimo punto per valutare ordini limite o accumulo, prima del breakout.*")
+            for alert in st.session_state.zona_interesse_alerts:
+                st.markdown(f"""
+                <div class="signal-box" style="background-color: #fff3cd; border-left: 5px solid #ffc107;">
+                    <h4 style="margin: 0; color: #856404;">🟡 {alert['ticker']} (S-Score: {alert['s_score']})</h4>
+                    <p style="margin: 0.5rem 0; font-size: 1rem;">
+                        💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>
+                        🛡️ <strong>Supporto SMA 200:</strong> {alert['sma200_eur']}€ (Distanza: solo {alert['distanza_pct']}%)
+                    </p>
+                    <p style="margin: 0; font-size: 0.9rem; color: #856404;">
+                        💡 <strong>Azione:</strong> Il titolo è in "Rete" su un supporto. Valuta un ordine limite o tienilo nella watchlist per il prossimo BY.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # 3. TAKE PROFIT
         if st.session_state.get('take_profit_alerts'):
             st.markdown("---")
             st.subheader("🎯 ALLERTA TAKE PROFIT (Porta a casa tutto)")
             st.markdown("*I seguenti titoli in portafoglio sono in forte ipercomprato. Statisticamente, è il momento ottimale per vendere l'intera posizione e bloccare il guadagno.*")
-            
             for alert in st.session_state.take_profit_alerts:
                 ticker = alert['ticker']
                 gain_color = "#155724" if alert['gain_pct'] > 0 else "#721c24"
-                
                 st.markdown(f"""
                 <div class="signal-box" style="background-color: #f8d7da; border-left: 5px solid #dc3545;">
                     <h4 style="margin: 0; color: #721c24;">🔴 {ticker} ({alert['tipo']}) - RSI: {alert['rsi']}</h4>
@@ -726,7 +755,7 @@ with tab1:
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
-        # ----------------------------------
+                
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
