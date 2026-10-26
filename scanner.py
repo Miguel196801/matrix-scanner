@@ -833,7 +833,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 rs = gain / loss
                 rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
                 
-                if rsi_oggi >= 75:
+                if rsi_oggi >= 30:
                     pos = ticker_in_portafoglio[ticker]
                     prezzo_medio = pos['Prezzo_Medio']
                     gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
@@ -855,7 +855,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
                 in_fase_1_o_2 = "FASE 1" in fase or "FASE 2" in fase
                 
-                if s_score >= 60 and distanza_sma200_pct <= 15.0 and (prezzo_sopra_sma200 or in_fase_1_o_2):
+                if s_score >= 60 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or in_fase_1_o_2):
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
