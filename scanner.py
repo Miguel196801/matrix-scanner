@@ -866,7 +866,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     })
             # -----------------------------------------------------------------------            
             if filtro_delisting and "CRITICO" in rischio_delisting: 
-            stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
+                stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
             
             is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
