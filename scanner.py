@@ -833,7 +833,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 rs = gain / loss
                 rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
                 
-                if rsi_oggi >= 75:
+                if rsi_oggi >= 30:
                     pos = ticker_in_portafoglio[ticker]
                     prezzo_medio = pos['Prezzo_Medio']
                     gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
@@ -1021,7 +1021,7 @@ with tab1:
                     <h4 style="margin: 0;">🔴 {ticker} ({alert['tipo']}) - RSI: {alert['rsi']}</h4>
                     <p style="margin: 0.5rem 0;">
                         💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>
-                        📈 <strong>Gain dal tuo medio:</strong> <span style="color: {gain_color}; font-weight: bold;">+{alert['gain_pct']}%</span>{range52_info}
+                        📈 <strong>Gain dal tuo medio:</strong> <span style="color: {gain_color}; ...font-weight: bold;">{alert['gain_pct']:+.1f}%</span>{range52_info}
                     </p>
                     <p style="margin: 0; font-size: 0.9rem;">
                         💡 <strong>Azione:</strong> Vendi l'intera posizione su Trade Republic e aggiorna il portafoglio.
