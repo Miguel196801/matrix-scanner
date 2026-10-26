@@ -855,7 +855,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
                 in_fase_1_o_2 = "FASE 1" in fase or "FASE 2" in fase
                 
-                if s_score >= 60 and distanza_sma200_pct <= 15.0 and (prezzo_sopra_sma200 or in_fase_1_o_2):
+                if s_score >= 60 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or in_fase_1_o_2):
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
@@ -864,9 +864,9 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                         'qualita_supporto': qualita_sup, 'motivi_qualita': motivi_qualita,
                         'range52_high': range52_high, 'range52_low': range52_low
                     })
-            # -----------------------------------------------------------------------
+            # -----------------------------------------------------------------------            
             if filtro_delisting and "CRITICO" in rischio_delisting: 
-                stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
+            stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
             
             is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
