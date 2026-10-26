@@ -847,7 +847,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             if ticker in ticker_in_portafoglio or s_score >= 60:
                 sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
                 distanza_sma200_pct = abs(df['Close'].iloc[-1] - sma200) / sma200 * 100
-                if s_score >= 60 and distanza_sma200_pct <= 5.0:
+                if s_score >= 60 and distanza_sma200_pct <= 15.0:
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
