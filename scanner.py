@@ -570,15 +570,15 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     )
     
     # === PANNELLO PREZZO ===
-    # Bollinger Bands (banda semitrasparente)
+        # Bollinger Bands (banda molto tenue, non disturba)
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['BB_Upper'], line=dict(color='rgba(147, 197, 253, 0.3)', width=1),
-        name='BB Upper', showlegend=True
+        x=df.index, y=df['BB_Upper'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'),
+        name='BB Upper', showlegend=False
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['BB_Lower'], line=dict(color='rgba(147, 197, 253, 0.3)', width=1),
-        fill='tonexty', fillcolor='rgba(147, 197, 253, 0.08)',
-        name='Bollinger Bands', showlegend=True
+        x=df.index, y=df['BB_Lower'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'),
+        fill='tonexty', fillcolor='rgba(200, 200, 200, 0.03)',
+        name='Bollinger Bands', showlegend=False
     ), row=1, col=1)
     
     # Candele
@@ -600,10 +600,10 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2,
                      annotation_text=f"  Prezzo Medio: €{prezzo_medio_eur:.2f}", annotation_position="top left", row=1, col=1)
     
-    # Rete delle Balene (zona tra SMA 50 e SMA 200)
+        # Rete delle Balene (zona tra SMA 50 e SMA 200) - PIÙ EVIDENTE
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], fill=None, mode='lines', line=dict(width=0), showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], fill='tonexty', mode='lines', line=dict(width=0), 
-                            fillcolor='rgba(33, 150, 243, 0.15)', name='Zona Accumulo'), row=1, col=1)
+                            fillcolor='rgba(59, 130, 246, 0.25)', name='🐋 Rete Balene'), row=1, col=1)
     
     # Supporto/Resistenza
     fig.add_hline(y=supporto, line_dash="dash", line_color="#00e676", line_width=1.5, 
