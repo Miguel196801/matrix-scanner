@@ -485,7 +485,7 @@ def calcola_qualita_supporto(df):
     except:
         return "N/D", "Errore calcolo"
 
-def rileva_gap_storico(df, soglia_minima_pct=5.0):
+def rileva_gap_storico(df, soglia_minima_pct=3.0):
     """Trova il gap storico non chiuso più significativo sotto il prezzo attuale"""
     try:
         if len(df) < 30:
@@ -495,37 +495,35 @@ def rileva_gap_storico(df, soglia_minima_pct=5.0):
         max_gap_sotto = None
         max_gap_size = 0
         
-        # Scansione ultimi 6 mesi
-        df_scan = df.tail(120).copy()
+        # Scansione di TUTTO lo storico disponibile
+        df_scan = df.copy()
         df_scan['Prev_Close'] = df_scan['Close'].shift(1)
         
-        for idx, row in df_scan.iterrows():
-            if pd.isna(row['Prev_Close']):
-                continue
+        for idx in range(1, len(df_scan)):
+            row = df_scan.iloc[idx]
+            prev_close = df_scan.iloc[idx-1]['Close']
             open_price = row['Open']
-            prev_close = row['Prev_Close']
             
             # Gap down: open molto sotto prev close
             if open_price < prev_close:
                 gap_pct = ((prev_close - open_price) / prev_close) * 100
-                gap_bottom = open_price
                 
-                # Il gap è sotto il prezzo attuale e non è stato chiuso
-                if gap_bottom < prezzo_attuale and gap_pct >= soglia_minima_pct:
-                    # Verifica che il gap non sia stato riempito (nessun close sotto l'open dopo il gap)
-                    mask_post = df_scan.index > idx
-                    if mask_post.any():
-                        post_gap = df_scan.loc[mask_post]
-                        min_post = post_gap['Low'].min()
-                        if min_post >= gap_bottom * 0.98:  # gap ancora aperto
-                            if gap_pct > max_gap_size:
-                                max_gap_size = gap_pct
-                                max_gap_sotto = gap_bottom
+                # Il gap è sotto il prezzo attuale e significativo
+                if open_price < prezzo_attuale and gap_pct >= soglia_minima_pct:
+                    # Verifica che il gap non sia stato completamente riempito
+                    post_gap_lows = df_scan.iloc[idx:]['Low']
+                    min_post = post_gap_lows.min()
+                    
+                    # Gap ancora aperto se il minimo post-gap è sopra il fondo del gap
+                    if min_post >= open_price * 0.95:
+                        if gap_pct > max_gap_size:
+                            max_gap_size = gap_pct
+                            max_gap_sotto = open_price
         
         return round(max_gap_sotto, 2) if max_gap_sotto else None
     except:
         return None
-
+        
 def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d'):
     df = yf.Ticker(ticker).history(period=period)
     if df.empty: return None
