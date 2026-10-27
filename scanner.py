@@ -1035,7 +1035,7 @@ with tab2:
     if st.session_state.get('last_update'):
         st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
     else:
-    st.caption("🕐 Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
+        st.caption("🕐 Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
     
     if st.session_state.portafoglio is None:
         portafoglio_salvato = carica_json(PORTAFOGLIO_FILE)
