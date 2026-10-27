@@ -1033,7 +1033,7 @@ with tab1:
 with tab2:
     st.subheader("💼 Il Mio Portafoglio")
     if st.session_state.get('last_update'):
-    st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
+        st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
 else:
     st.caption("🕐 Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
     
