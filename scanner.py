@@ -1235,7 +1235,7 @@ with tab3:
             sma_short = 50
             sma_long = 200
             fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
-                                      prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
+                                         prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
             # ZOOM ABILITATO con due dita
             st.plotly_chart(fig, use_container_width=True, config={
