@@ -1189,25 +1189,42 @@ with tab3:
         except Exception as e:
             st.error(f"Errore: {e}")
     
-    if st.session_state.analisi_risultati:
+        if st.session_state.analisi_risultati:
         r = st.session_state.analisi_risultati
         st.markdown(f"### {r['ticker']} - {r['segnale']}")
         
+        # Riga 1: Prezzi
         col1, col2 = st.columns(2)
         col1.metric("💶 Prezzo EUR", f"€ {r['prezzo_eur']:.2f}")
-        col2.metric(" Prezzo USD", f"$ {r['prezzo_usd']:.2f}")
+        col2.metric("💵 Prezzo USD", f"$ {r['prezzo_usd']:.2f}")
         
+        # Riga 2: S-Score e Fase
         col3, col4 = st.columns(2)
-        col3.metric("S-Score", r['s_score'])
-        col4.metric("Fase", r['fase'])
+        col3.metric("⚡ S-Score", r['s_score'])
+        col4.metric("📊 Fase", r['fase'])
         
+        # Riga 3: Medie Mobili in USD (NUOVE)
+        col5, col6 = st.columns(2)
+        col5.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
+        col6.metric(" SMA 200", f"$ {r['sma200_usd']:.2f}")
+        
+        # Riga 4: Volumi (NUOVI)
+        col7, col8 = st.columns(2)
+        col7.metric("📊 Volume Oggi", f"{r['vol_oggi']:,.0f}")
+        col8.metric("📊 Volume Medio", f"{r['vol_medio']:,.0f}")
+        
+        # Riga 5: Variazione
         if r.get('var_pct') is not None:
             var_color = "green" if r['var_pct'] > 0 else "red"
             st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
         
+        # Riga 6, 7, 8: Dati classici
         st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f}")
         st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
         st.markdown(f"**Prossimi Utili:** {r['earnings_msg']}")
+        
+        # Riga 9: Supporto e Resistenza (Abbreviati)
+        st.markdown(f"**🛡️ Sup:** ${r['supporto']:.2f} | **🎯 Res:** ${r['resistenza']:.2f}")
         
         if "BY" in r['segnale']: st.success(f"**Segnale**: {r['motivo_by']}")
         elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
