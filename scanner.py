@@ -1184,8 +1184,7 @@ with tab3:
             'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
             'vol_oggi': vol_oggi, 'vol_medio': vol_medio,
             'supporto': supporto, 'resistenza': resistenza
-        }
-                }
+            }              
         except Exception as e:
             st.error(f"Errore: {e}")
     
