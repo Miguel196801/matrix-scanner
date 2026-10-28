@@ -12,117 +12,38 @@ from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
-st.set_page_config(page_title="MATRIX Mobile V4.5", layout="wide", page_icon="🛡️")
+st.set_page_config(page_title="MATRIX Mobile V5.0", layout="wide", page_icon="🛡️")
 
 # ==============================================================================
 # CONFIGURAZIONE MOBILE - DARK MODE OPTIMIZED
 # ==============================================================================
 st.markdown("""
 <style>
-    .main .block-container {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-    }
-    .stButton > button {
-        width: 100%;
-        padding: 0.75rem;
-        font-size: 1.1rem;
-        font-weight: bold;
-    }
+    .main .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+    .stButton > button { width: 100%; padding: 0.75rem; font-size: 1.1rem; font-weight: bold; }
     footer {visibility: hidden;}
     .header-box {
         background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 1rem;
+        color: white; padding: 1.5rem; border-radius: 15px; text-align: center; margin-bottom: 1rem;
     }
-    .header-box h1 {
-        color: white;
-        margin: 0;
-        font-size: 1.8rem;
-    }
+    .header-box h1 { color: white; margin: 0; font-size: 1.8rem; }
     
-    /* BOX PORTAFOGLIO DARK MODE MINIMALISTA */
-    .portfolio-box {
-        background-color: #1e293b;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 0.75rem;
-        border-left: 5px solid #64748b;
-    }
-    .portfolio-box-green {
-        background-color: #1e293b;
-        border-left: 5px solid #10b981;
-    }
-    .portfolio-box-red {
-        background-color: #1e293b;
-        border-left: 5px solid #ef4444;
-    }
-    .portfolio-box-neutral {
-        background-color: #1e293b;
-        border-left: 5px solid #f59e0b;
-    }
-    .portfolio-ticker {
-        color: #f8fafc;
-        font-size: 1.3rem;
-        font-weight: bold;
-    }
-    .portfolio-price {
-        color: #cbd5e1;
-        font-size: 0.9rem;
-    }
-    .portfolio-change-positive {
-        color: #10b981;
-        font-size: 1.2rem;
-        font-weight: bold;
-        text-align: right;
-    }
-    .portfolio-change-negative {
-        color: #ef4444;
-        font-size: 1.2rem;
-        font-weight: bold;
-        text-align: right;
-    }
-    .portfolio-change-neutral {
-        color: #f59e0b;
-        font-size: 1.2rem;
-        font-weight: bold;
-        text-align: right;
-    }
-    .portfolio-pnl {
-        color: #94a3b8;
-        font-size: 0.85rem;
-        text-align: right;
-    }
-    .portfolio-info {
-        color: #94a3b8;
-        font-size: 0.8rem;
-        margin-top: 0.3rem;
-    }
+    .portfolio-box { background-color: #1e293b; border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; border-left: 5px solid #64748b; }
+    .portfolio-box-green { background-color: #1e293b; border-left: 5px solid #10b981; }
+    .portfolio-box-red { background-color: #1e293b; border-left: 5px solid #ef4444; }
+    .portfolio-box-neutral { background-color: #1e293b; border-left: 5px solid #f59e0b; }
+    .portfolio-ticker { color: #f8fafc; font-size: 1.3rem; font-weight: bold; }
+    .portfolio-price { color: #cbd5e1; font-size: 0.9rem; }
+    .portfolio-change-positive { color: #10b981; font-size: 1.2rem; font-weight: bold; text-align: right; }
+    .portfolio-change-negative { color: #ef4444; font-size: 1.2rem; font-weight: bold; text-align: right; }
+    .portfolio-change-neutral { color: #f59e0b; font-size: 1.2rem; font-weight: bold; text-align: right; }
+    .portfolio-pnl { color: #94a3b8; font-size: 0.85rem; text-align: right; }
+    .portfolio-info { color: #94a3b8; font-size: 0.8rem; margin-top: 0.3rem; }
     
-    /* BOX ALLERTA */
-    .signal-box {
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 0.5rem;
-    }
-    .signal-green {
-        background-color: #064e3b;
-        border-left: 5px solid #10b981;
-        color: #d1fae5;
-    }
-    .signal-yellow {
-        background-color: #451a03;
-        border-left: 5px solid #f59e0b;
-        color: #fef3c7;
-    }
-    .signal-red {
-        background-color: #450a0a;
-        border-left: 5px solid #ef4444;
-        color: #fee2e2;
-    }
+    .signal-box { padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
+    .signal-green { background-color: #064e3b; border-left: 5px solid #10b981; color: #d1fae5; }
+    .signal-yellow { background-color: #451a03; border-left: 5px solid #f59e0b; color: #fef3c7; }
+    .signal-red { background-color: #450a0a; border-left: 5px solid #ef4444; color: #fee2e2; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -405,11 +326,9 @@ def get_prezzi_corretti(ticker_obj, eurusd_rate):
         return round(prezzo_raw, 2), round(prezzo_raw * eurusd_rate, 2), currency
 
 def calcola_variazione_giornaliera(ticker_obj):
-    """Calcola la variazione % giornaliera stile Yahoo Finance"""
     try:
         hist = ticker_obj.history(period="2d")
-        if len(hist) < 2:
-            return None, None
+        if len(hist) < 2: return None, None
         prezzo_ieri = hist['Close'].iloc[-2]
         prezzo_oggi = hist['Close'].iloc[-1]
         variazione_pct = ((prezzo_oggi - prezzo_ieri) / prezzo_ieri) * 100
@@ -419,63 +338,41 @@ def calcola_variazione_giornaliera(ticker_obj):
         return None, None
 
 def calcola_qualita_supporto(df):
-    """Analizza come il prezzo arriva sul supporto"""
     try:
-        if len(df) < 10:
-            return "N/D", "Dati insufficienti"
-        
-        # Ultimi 3 giorni
+        if len(df) < 10: return "N/D", "Dati insufficienti"
         ultimi_3_vol = df['Volume'].iloc[-3:].mean()
         vol_medio_20 = df['Volume'].rolling(window=20).mean().iloc[-1]
-        
-        # Candele ultime 3 giornate
         candele_recenti = df.tail(3)
         ultima_candela = df.iloc[-1]
-        corpo_candela = abs(ultima_candela['Close'] - ultima_candela['Open'])
         range_candela = ultima_candela['High'] - ultima_candela['Low']
         ombra_inferiore = min(ultima_candela['Open'], ultima_candela['Close']) - ultima_candela['Low']
         
-        # RSI
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
         
-        # Analisi
-        punti_positivi = 0
-        punti_negativi = 0
-        motivi = []
+        punti_positivi, punti_negativi, motivi = 0, 0, []
         
-        # 1. Volumi in calo = positivo (esaurimento venditori)
         if ultimi_3_vol < vol_medio_20 * 0.8:
-            punti_positivi += 2
-            motivi.append("Volumi in esaurimento")
+            punti_positivi += 2; motivi.append("Volumi in esaurimento")
         elif ultimi_3_vol > vol_medio_20 * 1.3:
-            punti_negativi += 2
-            motivi.append("Volumi aggressivi")
+            punti_negativi += 2; motivi.append("Volumi aggressivi")
         
-        # 2. Candela con ombra inferiore lunga = rigetto (positivo)
         if range_candela > 0 and ombra_inferiore / range_candela > 0.5:
-            punti_positivi += 2
-            motivi.append("Ombra inferiore (rigetto)")
+            punti_positivi += 2; motivi.append("Ombra inferiore (rigetto)")
         
-        # 3. Candela verde = positivo
         if ultima_candela['Close'] > ultima_candela['Open']:
-            punti_positivi += 1
-            motivi.append("Candela verde")
+            punti_positivi += 1; motivi.append("Candela verde")
         else:
-            punti_negativi += 1
-            motivi.append("Candela rossa")
+            punti_negativi += 1; motivi.append("Candela rossa")
         
-        # 4. RSI ipervenduto ma in ripresa
         if rsi_oggi < 35:
-            punti_positivi += 1
-            motivi.append("RSI ipervenduto")
+            punti_positivi += 1; motivi.append("RSI ipervenduto")
         elif rsi_oggi > 60:
             punti_negativi += 1
         
-        # Verdetto
         if punti_positivi >= punti_negativi + 2:
             return "ALTA", " " + "; ".join(motivi[:3])
         elif punti_negativi > punti_positivi:
@@ -486,40 +383,25 @@ def calcola_qualita_supporto(df):
         return "N/D", "Errore calcolo"
 
 def rileva_gap_storico(df, soglia_minima_pct=3.0):
-    """Trova il gap storico non chiuso più significativo sotto il prezzo attuale"""
     try:
-        if len(df) < 30:
-            return None
-        
+        if len(df) < 30: return None
         prezzo_attuale = df['Close'].iloc[-1]
-        max_gap_sotto = None
-        max_gap_size = 0
-        
-        # Scansione di TUTTO lo storico disponibile
+        max_gap_sotto, max_gap_size = None, 0
         df_scan = df.copy()
         df_scan['Prev_Close'] = df_scan['Close'].shift(1)
         
         for idx in range(1, len(df_scan)):
-            row = df_scan.iloc[idx]
             prev_close = df_scan.iloc[idx-1]['Close']
-            open_price = row['Open']
-            
-            # Gap down: open molto sotto prev close
+            open_price = df_scan.iloc[idx]['Open']
             if open_price < prev_close:
                 gap_pct = ((prev_close - open_price) / prev_close) * 100
-                
-                # Il gap è sotto il prezzo attuale e significativo
                 if open_price < prezzo_attuale and gap_pct >= soglia_minima_pct:
-                    # Verifica che il gap non sia stato completamente riempito
                     post_gap_lows = df_scan.iloc[idx:]['Low']
                     min_post = post_gap_lows.min()
-                    
-                    # Gap ancora aperto se il minimo post-gap è sopra il fondo del gap
                     if min_post >= open_price * 0.95:
                         if gap_pct > max_gap_size:
                             max_gap_size = gap_pct
                             max_gap_sotto = open_price
-        
         return round(max_gap_sotto, 2) if max_gap_sotto else None
     except:
         return None
@@ -531,90 +413,63 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if timeframe == '1wk':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
-    # Medie mobili
     df['SMA_Short'] = df['Close'].rolling(window=sma_short).mean()
     df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean()
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
     df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
     df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
     
-    # BOLLINGER BANDS (SMA 20 ± 2 deviazioni standard)
     df['BB_Middle'] = df['Close'].rolling(window=20).mean()
     df['BB_Std'] = df['Close'].rolling(window=20).std()
     df['BB_Upper'] = df['BB_Middle'] + (df['BB_Std'] * 2)
     df['BB_Lower'] = df['BB_Middle'] - (df['BB_Std'] * 2)
     
-    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss)))
     
-    # Supporti/Resistenze
     recent_df = df.tail(60)
     supporto = recent_df['Low'].min()
     resistenza = recent_df['High'].max()
     
-    # Rileva gap storico
-    gap_level = rileva_gap_storico(df, soglia_minima_pct=5.0)
-    
+    # FIX: Soglia gap abbassata al 3.0% per trovare gap storici più piccoli
+    gap_level = rileva_gap_storico(df, soglia_minima_pct=3.0)
     prezzo_attuale = df['Close'].iloc[-1]
     
-    # Layout migliorato: 4 righe (Prezzo 70%, Volumi 15%, BB RSI 15%)
-    fig = make_subplots(
-        rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
-        row_heights=[0.70, 0.15, 0.15],
-        subplot_titles=(f'{ticker} ${prezzo_attuale:.2f} - {timeframe.upper()} | Rete delle Balene', 'Volumi', 'RSI')
-    )
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, 
+                        row_heights=[0.70, 0.15, 0.15],
+                        subplot_titles=(f'{ticker} ${prezzo_attuale:.2f} - {timeframe.upper()} | Rete delle Balene', 'Volumi', 'RSI'))
     
-    # === PANNELLO PREZZO ===
-        # Bollinger Bands (banda molto tenue, non disturba)
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['BB_Upper'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'),
-        name='BB Upper', showlegend=False
-    ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df['BB_Lower'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'),
-        fill='tonexty', fillcolor='rgba(200, 200, 200, 0.03)',
-        name='Bollinger Bands', showlegend=False
-    ), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'), showlegend=False), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], line=dict(color='rgba(200, 200, 200, 0.2)', width=1, dash='dot'), fill='tonexty', fillcolor='rgba(200, 200, 200, 0.03)', showlegend=False), row=1, col=1)
     
-    # Candele
-    fig.add_trace(go.Candlestick(
-        x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Prezzo',
-        increasing_line_color='#00e676', increasing_fillcolor='#00e676',
-        decreasing_line_color='#ff1744', decreasing_fillcolor='#ff1744',
-        increasing_line_width=1, decreasing_line_width=1
-    ), row=1, col=1)
+    fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Prezzo',
+        increasing_line_color='#00e676', increasing_fillcolor='#00e676', decreasing_line_color='#ff1744', decreasing_fillcolor='#ff1744',
+        increasing_line_width=1, decreasing_line_width=1), row=1, col=1)
     
-    # Medie mobili
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#ff9800', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#9c27b0', width=1.5, dash='dash'), name='SMA 20'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2196f3', width=1.5), name=f'SMA {sma_long}'), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['VWAP'], line=dict(color='#ffeb3b', width=1.5, dash='dot'), name='VWAP'), row=1, col=1)
     
-    # Prezzo medio di carico
     if prezzo_medio_eur is not None:
         fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2,
                      annotation_text=f"  Prezzo Medio: €{prezzo_medio_eur:.2f}", annotation_position="top left", row=1, col=1)
     
-        # Rete delle Balene (zona tra SMA 50 e SMA 200) - PIÙ EVIDENTE
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], fill=None, mode='lines', line=dict(width=0), showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], fill='tonexty', mode='lines', line=dict(width=0), 
                             fillcolor='rgba(59, 130, 246, 0.25)', name='🐋 Rete Balene'), row=1, col=1)
     
-    # Supporto/Resistenza
     fig.add_hline(y=supporto, line_dash="dash", line_color="#00e676", line_width=1.5, 
                  annotation_text=f"  Supporto: {supporto:.2f}", annotation_position="bottom right", row=1, col=1)
     fig.add_hline(y=resistenza, line_dash="dash", line_color="#ff1744", line_width=1.5,
                  annotation_text=f"  Resistenza: {resistenza:.2f}", annotation_position="top right", row=1, col=1)
     
-    # LINEA GAP (se presente)
     if gap_level:
         fig.add_hline(y=gap_level, line_dash="dot", line_color="#f59e0b", line_width=2,
                      annotation_text=f"  ️ Target Gap: {gap_level}", annotation_position="bottom left", row=1, col=1)
     
-    # Marker BY e SELL
     by_x, by_y, sell_x, sell_y = [], [], [], []
     for i in range(sma_long, len(df)):
         if (abs(df['Close'].iloc[i] - df['SMA_Short'].iloc[i]) / df['SMA_Short'].iloc[i] <= 0.02 and 
@@ -628,31 +483,20 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if sell_x:
         fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), name='▼ SELL'), row=1, col=1)
     
-    # === PANNELLO VOLUMI ===
     colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7, showlegend=False), row=2, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['Vol_Media_20'], line=dict(color='#9c27b0', width=1.5), name='Vol Medio 20', showlegend=False), row=2, col=1)
     
-    # === PANNELLO RSI ===
     fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=1.5), name='RSI 14', showlegend=False), row=3, col=1)
     fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", row=3, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=3, col=1)
     
-    # Layout ottimizzato per mobile
     fig.update_layout(
-        height=1100,
-        xaxis_rangeslider_visible=False,
-        template="plotly_dark",
-        paper_bgcolor='#0f172a',
-        plot_bgcolor='#1e293b',
-        font=dict(color='#e2e8f0', size=11, family='Arial'),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, 
-                   bgcolor='rgba(15, 23, 42, 0.9)', font=dict(size=9, color='#e2e8f0')),
-        margin=dict(l=50, r=50, t=80, b=40),
-        xaxis=dict(showgrid=True, gridcolor='#334155', gridwidth=0.5),
-        yaxis=dict(showgrid=True, gridcolor='#334155', gridwidth=0.5)
+        height=1100, xaxis_rangeslider_visible=False, template="plotly_dark",
+        paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0', size=11, family='Arial'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, bgcolor='rgba(15, 23, 42, 0.9)', font=dict(size=9, color='#e2e8f0')),
+        margin=dict(l=50, r=50, t=80, b=40), xaxis=dict(showgrid=True, gridcolor='#334155', gridwidth=0.5), yaxis=dict(showgrid=True, gridcolor='#334155', gridwidth=0.5)
     )
-    
     return fig
 
 def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
@@ -664,9 +508,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             info = ticker_obj.info
             hist = ticker_obj.history(period="2d")
             if hist.empty:
-                risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, 
-                                 "Valore_Attuale": None, "PnL_EUR": None, "PnL_%": None, 
-                                 "Trend": "N/D", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None})
+                risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "Valore_Attuale": None, "PnL_EUR": None, "PnL_%": None, "Trend": "N/D", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None})
                 continue
             
             currency = info.get('currency', 'USD')
@@ -674,7 +516,6 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             prezzo_eur = prezzo_raw / eurusd_rate if currency == 'USD' else prezzo_raw
             prezzo_usd = prezzo_raw if currency == 'USD' else prezzo_raw * eurusd_rate
             
-            # Variazione giornaliera
             var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)                     
             prezzo_medio = pos['Prezzo_Medio']
             quantita = pos['Quantita']
@@ -691,9 +532,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
                              "PnL_EUR": round(pnl_eur, 2), "PnL_%": round(pnl_pct, 2), "Trend": trend, 
                              "Earnings": earnings_msg, "Variazione_Pct": var_pct, "Variazione_Abs": var_abs})
         except Exception:
-            risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, 
-                             "Valore_Attuale": None, "PnL_EUR": None, "PnL_%": None, 
-                             "Trend": "Errore", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None})
+            risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "Valore_Attuale": None, "PnL_EUR": None, "PnL_%": None, "Trend": "Errore", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None})
     return risultati
 
 def calcola_pyramiding(posizione, prezzo_attuale_eur, budget_modulo=100.0):
@@ -720,12 +559,11 @@ def calcola_pyramiding(posizione, prezzo_attuale_eur, budget_modulo=100.0):
 # ==============================================================================
 st.markdown("""
 <div class="header-box">
-    <h1>🛡️ MATRIX DVMS V4.5</h1>
+    <h1>🛡️ MATRIX DVMS V5.0</h1>
     <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Scanner Operativo Blindato</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- MEMORIA LISTA TICKER ---
 if os.path.exists(IMPOSTAZIONI_FILE):
     with open(IMPOSTAZIONI_FILE, 'r', encoding='utf-8') as f:
         impostazioni = json.load(f)
@@ -758,34 +596,28 @@ show_insider = st.sidebar.checkbox("Mostra Insider", True)
 show_balene = st.sidebar.checkbox("Mostra Balene", True)
 show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
 
-# Pulsante scansione
-st.sidebar.markdown("---")
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
-    
     impostazioni["lista_ticker_default"] = tickers_input
     with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
         json.dump(impostazioni, f)
 
     lista_fortezza, lista_cavalli, lista_monitor = [], [], []
     progress_bar = st.progress(0)
-    watchlist_esistente = carica_json(WATCHLIST_FILE)
+    
     if st.session_state.spy_data is None:
         try: st.session_state.spy_data = yf.Ticker("SPY").history(period=period)
         except: st.session_state.spy_data = None
     
     stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'capital_used': 0, 'earnings_warnings': []}
-    pyramiding_alerts = []
-    take_profit_alerts = []
-    zona_interesse_alerts = []
+    pyramiding_alerts, take_profit_alerts, zona_interesse_alerts = [], [], []
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
     
-    ticker_portafoglio = list(ticker_in_portafoglio.keys())
-    tickers = list(set(tickers + ticker_portafoglio))
+    tickers = list(set(tickers + list(ticker_in_portafoglio.keys())))
     tickers.sort()
     
-    st.info(f"🔄 Scansione avviata per {len(tickers)} titoli (inclusi automaticamente i {len(ticker_portafoglio)} del portafoglio).")
+    st.info(f"🔄 Scansione avviata per {len(tickers)} titoli.")
     
     for i, ticker in enumerate(tickers):
         progress_bar.progress((i + 1) / len(tickers))
@@ -818,11 +650,9 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             earnings_giorni, earnings_msg, earnings_bloccato2 = controlla_earnings(ticker_obj)
             if earnings_bloccato2: stats['earnings_warnings'].append(f"{ticker} ({earnings_msg})")
             
-            # Range 52 settimane
             range52_high = info.get('fiftyTwoWeekHigh')
             range52_low = info.get('fiftyTwoWeekLow')
             
-            # --- CONTROLLO TAKE PROFIT (RSI >= 75) ---
             if ticker in ticker_in_portafoglio:
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -840,19 +670,14 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                         'range52_high': range52_high, 'range52_low': range52_low
                     })
             
-            # --- CONTROLLO ZONA DI INTERESSE + QUALITÀ SUPPORTO ---
             if ticker in ticker_in_portafoglio or s_score >= 60:
                 sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
                 prezzo_attuale = df['Close'].iloc[-1]
                 distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100
-                
-                # Mostra Zona di Interesse SOLO se:
-                # 1. Prezzo è SOPRA la SMA 200 (supporto valido) E entro 5%
-                # 2. OPPURE prezzo è sotto ma in Fase 1 (accumulazione)
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
-                in_fase_1_o_2 = "FASE 1" in fase or "FASE 2" in fase
                 
-                if s_score >= 60 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or in_fase_1_o_2):
+                # FIX LOGICA AVGO: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
+                if s_score >= 60 and distanza_sma200_pct <= 5.0 and prezzo_sopra_sma200:
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
@@ -861,7 +686,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                         'qualita_supporto': qualita_sup, 'motivi_qualita': motivi_qualita,
                         'range52_high': range52_high, 'range52_low': range52_low
                     })
-            # -----------------------------------------------------------------------            
+            
             if filtro_delisting and "CRITICO" in rischio_delisting: 
                 stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
@@ -914,121 +739,52 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
 # ==============================================================================
 tab1, tab2, tab3 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi"])
 
-# TAB 1: DASHBOARD
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
-    
     if st.session_state.dashboard_stats:
         stats = st.session_state.dashboard_stats
-        
         if stats['by_count'] > 0:
-            st.markdown(f"""
-            <div class="signal-box signal-green">
-                <h3 style="margin: 0;">🟢 {stats['by_count']} Segnali BY</h3>
-                <p style="margin: 0.5rem 0 0 0;">{', '.join(stats['by_tickers'])}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="signal-box signal-green"><h3 style="margin: 0;">🟢 {stats['by_count']} Segnali BY</h3><p style="margin: 0.5rem 0 0 0;">{', '.join(stats['by_tickers'])}</p></div>""", unsafe_allow_html=True)
         else:
-            st.markdown("""
-            <div class="signal-box signal-yellow">
-                <h3 style="margin: 0;">🟡 Nessun segnale BY oggi</h3>
-                <p style="margin: 0.5rem 0 0 0;">Continua a monitorare</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown("""<div class="signal-box signal-yellow"><h3 style="margin: 0;">🟡 Nessun segnale BY oggi</h3><p style="margin: 0.5rem 0 0 0;">Continua a monitorare</p></div>""", unsafe_allow_html=True)
         
         if stats['hold_count'] > 0:
-            st.markdown(f"""
-            <div class="signal-box signal-yellow">
-                <h4 style="margin: 0;">🟡 {stats['hold_count']} in Accumulo (HOLD)</h4>
-                <p style="margin: 0.5rem 0 0 0;">{', '.join(stats['hold_tickers'])}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
+            st.markdown(f"""<div class="signal-box signal-yellow"><h4 style="margin: 0;">🟡 {stats['hold_count']} in Accumulo (HOLD)</h4><p style="margin: 0.5rem 0 0 0;">{', '.join(stats['hold_tickers'])}</p></div>""", unsafe_allow_html=True)
         if stats['earnings_warnings']:
-            st.markdown(f"""
-            <div class="signal-box signal-red">
-                <h4 style="margin: 0;">️ Attenzione Utili</h4>
-                <p style="margin: 0.5rem 0 0 0;">{', '.join(stats['earnings_warnings'])}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">️ Attenzione Utili</h4><p style="margin: 0.5rem 0 0 0;">{', '.join(stats['earnings_warnings'])}</p></div>""", unsafe_allow_html=True)
         
-        # PYRAMIDING
         if st.session_state.pyramiding_alerts:
-            st.markdown("---")
-            st.subheader("🟢 Opportunità Pyramiding")
+            st.markdown("---"); st.subheader("🟢 Opportunità Pyramiding")
             for alert in st.session_state.pyramiding_alerts:
-                ticker = alert['ticker']
                 pyr = alert['pyramiding']
-                st.markdown(f"""
-                <div class="signal-box signal-green">
-                    <h4 style="margin: 0;">{ticker} - Segnale BY</h4>
-                    <p style="margin: 0.5rem 0;">
-                        💶 Capitale: ~{pyr['capitale']}€<br>
-                        📊 Azioni: {pyr['azioni']}<br>
-                         Stop: {pyr['stop_loss']}€<br>
-                        🎯 Target: {pyr['target']}€
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div class="signal-box signal-green"><h4 style="margin: 0;">{alert['ticker']} - Segnale BY</h4><p style="margin: 0.5rem 0;">💶 Capitale: ~{pyr['capitale']}€<br>📊 Azioni: {pyr['azioni']}<br> Stop: {pyr['stop_loss']}€<br>🎯 Target: {pyr['target']}€</p></div>""", unsafe_allow_html=True)
 
-        # ZONA DI INTERESSE (con Qualità Supporto + Range 52s)
         if st.session_state.get('zona_interesse_alerts'):
-            st.markdown("---")
-            st.subheader("🟡 ZONA DI INTERESSE (Supporto + Rete delle Balene)")
-            st.markdown("*Titoli solidi (Fortezze) che stanno testando un supporto chiave (SMA 200).*")
+            st.markdown("---"); st.subheader("🟡 ZONA DI INTERESSE (Supporto + Rete delle Balene)")
             for alert in st.session_state.zona_interesse_alerts:
-                # Calcolo posizione nel range 52s
                 range52_info = ""
                 if alert.get('range52_high') and alert.get('range52_low'):
                     h, l = alert['range52_high'], alert['range52_low']
-                    pos_pct = ((alert['prezzo_attuale_eur'] - l) / (h - l) * 100) if h != l else 50
+                    # FIX: max(0.0, ...) per evitare percentuali negative
+                    pos_pct = max(0.0, ((alert['prezzo_attuale_eur'] - l) / (h - l) * 100)) if h != l else 0.0
                     range52_info = f"<br>📏 <strong>Range 52s:</strong> {l:.2f}€ - {h:.2f}€ (sei al {pos_pct:.0f}% del range)"
-                
-                st.markdown(f"""
-                <div class="signal-box signal-yellow">
-                    <h4 style="margin: 0;"> {alert['ticker']} (S-Score: {alert['s_score']})</h4>
-                    <p style="margin: 0.5rem 0;">
-                        💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>
-                        🛡️ <strong>Supporto SMA 200:</strong> {alert['sma200_eur']}€ (Distanza: {alert['distanza_pct']}%)<br>
-                        ⚖️ <strong>Qualità Supporto:</strong> {alert['motivi_qualita']}{range52_info}
-                    </p>
-                    <p style="margin: 0; font-size: 0.9rem;">
-                        💡 <strong>Azione:</strong> Il titolo è in "Rete" su un supporto. Valuta un ordine limite o tienilo nella watchlist per il prossimo BY.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div class="signal-box signal-yellow"><h4 style="margin: 0;"> {alert['ticker']} (S-Score: {alert['s_score']})</h4><p style="margin: 0.5rem 0;">💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>🛡️ <strong>Supporto SMA 200:</strong> {alert['sma200_eur']}€ (Distanza: {alert['distanza_pct']}%)<br>⚖️ <strong>Qualità Supporto:</strong> {alert['motivi_qualita']}{range52_info}</p><p style="margin: 0; font-size: 0.9rem;">💡 <strong>Azione:</strong> Il titolo è in "Rete" su un supporto. Valuta un ordine limite o tienilo nella watchlist.</p></div>""", unsafe_allow_html=True)
 
-        # TAKE PROFIT (con Range 52s)
         if st.session_state.get('take_profit_alerts'):
-            st.markdown("---")
-            st.subheader("🎯 ALLERTA TAKE PROFIT (Porta a casa tutto)")
-            st.markdown("*Titoli in forte ipercomprato. Momento ottimale per vendere.*")
+            st.markdown("---"); st.subheader("🎯 ALLERTA TAKE PROFIT (Porta a casa tutto)")
             for alert in st.session_state.take_profit_alerts:
-                ticker = alert['ticker']
                 gain_color = "#10b981" if alert['gain_pct'] > 0 else "#ef4444"
-                
                 range52_info = ""
                 if alert.get('range52_high') and alert.get('range52_low'):
                     h, l = alert['range52_high'], alert['range52_low']
-                    pos_pct = ((alert['prezzo_attuale_eur'] - l) / (h - l) * 100) if h != l else 50
+                    # FIX: max(0.0, ...) per evitare percentuali negative
+                    pos_pct = max(0.0, ((alert['prezzo_attuale_eur'] - l) / (h - l) * 100)) if h != l else 0.0
                     range52_info = f"<br>📏 <strong>Range 52s:</strong> {l:.2f}€ - {h:.2f}€ (sei al {pos_pct:.0f}% del range)"
-                
-                st.markdown(f"""
-                <div class="signal-box signal-red">
-                    <h4 style="margin: 0;">🔴 {ticker} ({alert['tipo']}) - RSI: {alert['rsi']}</h4>
-                    <p style="margin: 0.5rem 0;">
-                        💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>
-                        📈 <strong>Gain dal tuo medio:</strong> <span style="color: {gain_color}; ...font-weight: bold;">{alert['gain_pct']:+.1f}%</span>{range52_info}
-                    </p>
-                    <p style="margin: 0; font-size: 0.9rem;">
-                        💡 <strong>Azione:</strong> Vendi l'intera posizione su Trade Republic e aggiorna il portafoglio.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+                # FIX: Corretto typo nel CSS (rimosso "...")
+                st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} ({alert['tipo']}) - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 <strong>Prezzo attuale:</strong> {alert['prezzo_attuale_eur']}€<br>📈 <strong>Gain dal tuo medio:</strong> <span style="color: {gain_color}; font-weight: bold;">{alert['gain_pct']:+.1f}%</span>{range52_info}</p><p style="margin: 0; font-size: 0.9rem;">💡 <strong>Azione:</strong> Vendi l'intera posizione su Trade Republic e aggiorna il portafoglio.</p></div>""", unsafe_allow_html=True)
     else:
         st.info(" Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
-# TAB 2: PORTAFOGLIO (REDESIGN DARK MODE)
 with tab2:
     st.subheader("💼 Il Mio Portafoglio")
     if st.session_state.get('last_update'):
@@ -1046,16 +802,13 @@ with tab2:
         st.rerun()
     
     portafoglio = st.session_state.portafoglio
-    
     if portafoglio:
         has_live_data = any(p.get('Prezzo_Attuale_EUR') is not None for p in portafoglio)
-        
         if has_live_data:
             totale_valore = sum(p.get('Valore_Attuale', 0) or 0 for p in portafoglio)
             totale_carico = sum(p.get('Valore_Carico', p.get('Prezzo_Medio', 0) * p.get('Quantita', 0)) for p in portafoglio)
             totale_pnl = totale_valore - totale_carico
             totale_pnl_pct = ((totale_valore / totale_carico) - 1) * 100 if totale_carico > 0 else 0
-            
             col1, col2 = st.columns(2)
             col1.metric("💰 Valore Totale", f"€ {totale_valore:,.0f}")
             col2.metric("📈 P&L Totale", f"€ {totale_pnl:,.0f}", f"{totale_pnl_pct:+.1f}%")
@@ -1064,78 +817,46 @@ with tab2:
         spot = [p for p in portafoglio if p.get('Tipo') == 'Spot']
         pac = [p for p in portafoglio if p.get('Tipo') == 'PAC']
         
-        # Funzione helper per box dark mode
         def render_box_dark(pos):
             pnl = pos.get('PnL_EUR', 0) or 0
             pnl_pct = pos.get('PnL_%', 0) or 0
-            trend = pos.get('Trend', 'N/D')
-            earnings = pos.get('Earnings', 'N/D')
             prezzo_eur = pos.get('Prezzo_Attuale_EUR')
             prezzo_usd = pos.get('Prezzo_Attuale_USD')
             var_pct = pos.get('Variazione_Pct')
             var_abs = pos.get('Variazione_Abs')
             pac_sett = pos.get('PAC_Settimanale', 0)
+            earnings = pos.get('Earnings', 'N/D')
             
-            # Classe box in base al P&L
             if pnl > 0: box_class = "portfolio-box-green"
             elif pnl < 0: box_class = "portfolio-box-red"
             else: box_class = "portfolio-box-neutral"
             
-            # Variazione giornaliera stile Yahoo
             if var_pct is not None:
-                if var_pct > 0:
-                    var_class = "portfolio-change-positive"
-                    var_symbol = "▲"
-                elif var_pct < 0:
-                    var_class = "portfolio-change-negative"
-                    var_symbol = "▼"
-                else:
-                    var_class = "portfolio-change-neutral"
-                    var_symbol = "●"
+                if var_pct > 0: var_class, var_symbol = "portfolio-change-positive", "▲"
+                elif var_pct < 0: var_class, var_symbol = "portfolio-change-negative", "▼"
+                else: var_class, var_symbol = "portfolio-change-neutral", "●"
                 var_display = f"{var_symbol} {abs(var_pct):.2f}% ({var_abs:+.2f}€)"
             else:
-                var_class = "portfolio-change-neutral"
-                var_display = "N/D"
+                var_class, var_display = "portfolio-change-neutral", "N/D"
             
-            # Info aggiuntive
             info_extra = f"{prezzo_eur}€" if prezzo_eur else "N/A"
-            if prezzo_usd:
-                info_extra += f" | ${prezzo_usd}"
-            if pac_sett > 0:
-                info_extra += f" | PAC: {pac_sett}€/sett"
-            if earnings and earnings != "N/D":
-                info_extra += f" | {earnings}"
+            if prezzo_usd: info_extra += f" | ${prezzo_usd}"
+            if pac_sett > 0: info_extra += f" | PAC: {pac_sett}€/sett"
+            if earnings and earnings != "N/D": info_extra += f" | {earnings}"
             
-            st.markdown(f"""
-            <div class="portfolio-box {box_class}">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <div class="portfolio-ticker">{pos['Ticker']}</div>
-                        <div class="portfolio-info">{info_extra}</div>
-                    </div>
-                    <div>
-                        <div class="{var_class}">{var_display}</div>
-                        <div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl:+.2f}€</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="portfolio-box {box_class}"><div style="display: flex; justify-content: space-between; align-items: flex-start;"><div><div class="portfolio-ticker">{pos['Ticker']}</div><div class="portfolio-info">{info_extra}</div></div><div><div class="{var_class}">{var_display}</div><div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl:+.2f}€</div></div></div></div>""", unsafe_allow_html=True)
         
         if spot:
             st.markdown("### 📈 Azioni Singole (SPOT)")
-            for pos in spot:
-                render_box_dark(pos)
-        
+            for pos in spot: render_box_dark(pos)
         if pac:
             st.markdown("### 🔄 Piani di Accumulo (PAC)")
-            for pos in pac:
-                render_box_dark(pos)
+            for pos in pac: render_box_dark(pos)
     else:
         st.info("Portafoglio vuoto.")
 
-# TAB 3: ANALISI SINGOLA
 with tab3:
-    st.subheader(" Analisi Singola")
+    st.subheader("🔍 Analisi Singola")
     ticker_input = st.text_input("Ticker:", value="ADBE")
     
     if st.button("🔎 Analizza", type="primary", use_container_width=True):
@@ -1158,13 +879,26 @@ with tab3:
                 trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
                 earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
                 var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)                              
-                # Calcoli aggiuntivi per la scheda completa
+                
                 sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
                 sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
                 vol_oggi = df['Volume'].iloc[-1]
                 vol_medio = round(df['Volume'].rolling(window=20).mean().iloc[-1], 0)
                 supporto = round(df.tail(60)['Low'].min(), 2)
-                resistenza = round(df.tail(60)['High'].max(), 2)                
+                resistenza = round(df.tail(60)['High'].max(), 2)
+                
+                # FIX: Dato Pre-Market
+                pre_market_price = info.get('preMarketPrice')
+                pre_market_change = info.get('preMarketChangePercent')
+                if pre_market_price and pre_market_change:
+                    pre_market_msg = f"🌅 Pre-Market: ${pre_market_price:.2f} ({pre_market_change:+.2f}%)"
+                else:
+                    pre_market_msg = "🌅 Pre-Market: N/D (fuori orario o non disponibile)"
+                
+                # FIX: Allarme Pre-Death Cross
+                distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
+                pre_death_cross = distanza_medie_pct < 2.0 and sma50_usd < sma200_usd
+                
                 if s_score >= 60 and "FASE 2" in fase:
                     segnale = "🟢 BY - Acquista" if trigger_by else "🟡 HOLD - Monitora"
                 elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z:
@@ -1178,70 +912,71 @@ with tab3:
                     'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
                     's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
                     'earnings_msg': earnings_msg, 'trigger_by': trigger_by, 'motivo_by': motivo_by,
-            'var_pct': var_pct, 'var_abs': var_abs,
-            'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
-            'vol_oggi': vol_oggi, 'vol_medio': vol_medio,
-            'supporto': supporto, 'resistenza': resistenza
-            }              
+                    'var_pct': var_pct, 'var_abs': var_abs, 'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
+                    'vol_oggi': vol_oggi, 'vol_medio': vol_medio, 'supporto': supporto, 'resistenza': resistenza,
+                    'pre_market_msg': pre_market_msg, 'pre_death_cross': pre_death_cross
+                }              
         except Exception as e:
             st.error(f"Errore: {e}")
     
-        if st.session_state.analisi_risultati:
-            r = st.session_state.analisi_risultati
-            st.markdown(f"### {r['ticker']} - {r['segnale']}")
+    if st.session_state.analisi_risultati:
+        r = st.session_state.analisi_risultati
+        st.markdown(f"### {r['ticker']} - {r['segnale']}")
         
-        # Riga 1: Prezzi
         col1, col2 = st.columns(2)
         col1.metric("💶 Prezzo EUR", f"€ {r['prezzo_eur']:.2f}")
         col2.metric("💵 Prezzo USD", f"$ {r['prezzo_usd']:.2f}")
         
-        # Riga 2: S-Score e Fase
         col3, col4 = st.columns(2)
         col3.metric("⚡ S-Score", r['s_score'])
         col4.metric("📊 Fase", r['fase'])
         
-        # Riga 3: Medie Mobili in USD (NUOVE)
         col5, col6 = st.columns(2)
         col5.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
-        col6.metric(" SMA 200", f"$ {r['sma200_usd']:.2f}")
+        col6.metric("📉 SMA 200", f"$ {r['sma200_usd']:.2f}")
         
-        # Riga 4: Volumi (NUOVI)
         col7, col8 = st.columns(2)
         col7.metric("📊 Volume Oggi", f"{r['vol_oggi']:,.0f}")
         col8.metric("📊 Volume Medio", f"{r['vol_medio']:,.0f}")
         
-        # Riga 5: Variazione
         if r.get('var_pct') is not None:
             var_color = "green" if r['var_pct'] > 0 else "red"
             st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
         
-        # Riga 6, 7, 8: Dati classici
+        st.markdown(f"**{r['pre_market_msg']}**")
+        
+        if r.get('pre_death_cross'):
+            st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta avvicinando la SMA 200 dal basso. Attenzione al cambio di trend!")
+        
         st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f}")
         st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
         st.markdown(f"**Prossimi Utili:** {r['earnings_msg']}")
-        
-        # Riga 9: Supporto e Resistenza (Abbreviati)
         st.markdown(f"**🛡️ Sup:** ${r['supporto']:.2f} | **🎯 Res:** ${r['resistenza']:.2f}")
         
         if "BY" in r['segnale']: st.success(f"**Segnale**: {r['motivo_by']}")
         elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
         else: st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
-        if st.session_state.grafico_ticker:
-            st.markdown("---")
-            st.subheader(f"📊 {st.session_state.grafico_ticker}")
+        
+        # FIX: Bottone Mostra Grafico SENZA st.rerun()
+        if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
+            st.session_state.grafico_ticker = r['ticker']
+            st.session_state.grafico_prezzo_medio = None
+            
+    # FIX: Blocco Grafico correttamente indentato e isolato
+    if st.session_state.get('grafico_ticker'):
+        st.markdown("---")
+        st.subheader(f"📊 {st.session_state.grafico_ticker}")
         timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
         tf_value = '1d' if "Daily" in timeframe else '1wk'
-        period = "1y"
-        sma_short = 50
-        sma_long = 200
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
-                                         prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
+        period_graph = "1y"
+        sma_short_graph = 50
+        sma_long_graph = 200
+        
+        fig = genera_grafico_baleine(st.session_state.grafico_ticker, period_graph, sma_short_graph, sma_long_graph, 
+                                     prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
-            # ZOOM ABILITATO con due dita
             st.plotly_chart(fig, use_container_width=True, config={
-                'scrollZoom': True,
-                'displayModeBar': True,
-                'modeBarButtonsToRemove': ['lasso2d', 'select2d']
+                'scrollZoom': True, 'displayModeBar': True, 'modeBarButtonsToRemove': ['lasso2d', 'select2d']
             })
         else:
             st.error("Impossibile generare il grafico")
@@ -1250,9 +985,3 @@ with tab3:
             st.session_state.grafico_ticker = None
             st.session_state.grafico_prezzo_medio = None
             st.rerun()
-        
-        if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
-            st.session_state.grafico_ticker = r['ticker']
-            st.session_state.grafico_prezzo_medio = None            
-    
-    
