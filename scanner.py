@@ -675,15 +675,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             prezzo_usd = prezzo_raw if currency == 'USD' else prezzo_raw * eurusd_rate
             
             # Variazione giornaliera
-            var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
-                            # Calcoli aggiuntivi per la scheda completa
-            sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
-            sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
-            vol_oggi = df['Volume'].iloc[-1]
-            vol_medio = round(df['Volume'].rolling(window=20).mean().iloc[-1], 0)
-            supporto = round(df.tail(60)['Low'].min(), 2)
-            resistenza = round(df.tail(60)['High'].max(), 2)
-            
+            var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)                     
             prezzo_medio = pos['Prezzo_Medio']
             quantita = pos['Quantita']
             valore_attuale = prezzo_eur * quantita
@@ -1165,8 +1157,14 @@ with tab3:
                 figura_z, figura_z_msg = rileva_figura_z(df)
                 trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
                 earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
-                var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
-                
+                var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)                              
+                # Calcoli aggiuntivi per la scheda completa
+                sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
+                sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
+                vol_oggi = df['Volume'].iloc[-1]
+                vol_medio = round(df['Volume'].rolling(window=20).mean().iloc[-1], 0)
+                supporto = round(df.tail(60)['Low'].min(), 2)
+                resistenza = round(df.tail(60)['High'].max(), 2)                
                 if s_score >= 60 and "FASE 2" in fase:
                     segnale = "🟢 BY - Acquista" if trigger_by else "🟡 HOLD - Monitora"
                 elif 40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z:
