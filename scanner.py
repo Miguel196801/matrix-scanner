@@ -1231,10 +1231,10 @@ with tab3:
             st.subheader(f"📊 {st.session_state.grafico_ticker}")
             timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
             tf_value = '1d' if "Daily" in timeframe else '1wk'
-                period = "1y"
-        sma_short = 50
-        sma_long = 200
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
+            period = "1y"
+            sma_short = 50
+            sma_long = 200
+            fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
                                       prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
             # ZOOM ABILITATO con due dita
