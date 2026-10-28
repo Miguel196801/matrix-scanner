@@ -1227,12 +1227,12 @@ with tab3:
         elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
         else: st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
         if st.session_state.grafico_ticker:
-        st.markdown("---")
-        st.subheader(f"📊 {st.session_state.grafico_ticker}")
-        timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
-        tf_value = '1d' if "Daily" in timeframe else '1wk'
+            st.markdown("---")
+            st.subheader(f"📊 {st.session_state.grafico_ticker}")
+            timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
+            tf_value = '1d' if "Daily" in timeframe else '1wk'
         
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
+            fig = genera_grafico_baleine(st.session_state.grafico_ticker, period, sma_short, sma_long, 
                                       prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_value)
         if fig:
             # ZOOM ABILITATO con due dita
