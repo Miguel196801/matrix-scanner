@@ -1189,8 +1189,8 @@ with tab3:
             st.error(f"Errore: {e}")
     
         if st.session_state.analisi_risultati:
-        r = st.session_state.analisi_risultati
-        st.markdown(f"### {r['ticker']} - {r['segnale']}")
+            r = st.session_state.analisi_risultati
+            st.markdown(f"### {r['ticker']} - {r['segnale']}")
         
         # Riga 1: Prezzi
         col1, col2 = st.columns(2)
