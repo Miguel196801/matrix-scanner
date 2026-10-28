@@ -676,6 +676,13 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             
             # Variazione giornaliera
             var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
+                            # Calcoli aggiuntivi per la scheda completa
+            sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
+            sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
+            vol_oggi = df['Volume'].iloc[-1]
+            vol_medio = round(df['Volume'].rolling(window=20).mean().iloc[-1], 0)
+            supporto = round(df.tail(60)['Low'].min(), 2)
+            resistenza = round(df.tail(60)['High'].max(), 2)
             
             prezzo_medio = pos['Prezzo_Medio']
             quantita = pos['Quantita']
@@ -1173,7 +1180,11 @@ with tab3:
                     'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
                     's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
                     'earnings_msg': earnings_msg, 'trigger_by': trigger_by, 'motivo_by': motivo_by,
-                    'var_pct': var_pct, 'var_abs': var_abs
+            'var_pct': var_pct, 'var_abs': var_abs,
+            'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
+            'vol_oggi': vol_oggi, 'vol_medio': vol_medio,
+            'supporto': supporto, 'resistenza': resistenza
+        }
                 }
         except Exception as e:
             st.error(f"Errore: {e}")
