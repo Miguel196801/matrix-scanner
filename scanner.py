@@ -1226,13 +1226,7 @@ with tab3:
         if "BY" in r['segnale']: st.success(f"**Segnale**: {r['motivo_by']}")
         elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
         else: st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
-        
-        if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
-            st.session_state.grafico_ticker = r['ticker']
-            st.session_state.grafico_prezzo_medio = None
-            st.rerun()
-    
-    if st.session_state.grafico_ticker:
+        if st.session_state.grafico_ticker:
         st.markdown("---")
         st.subheader(f"📊 {st.session_state.grafico_ticker}")
         timeframe = st.selectbox("Timeframe:", ["1d (Daily)", "1wk (Weekly)"], index=0)
@@ -1254,3 +1248,9 @@ with tab3:
             st.session_state.grafico_ticker = None
             st.session_state.grafico_prezzo_medio = None
             st.rerun()
+        
+        if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
+            st.session_state.grafico_ticker = r['ticker']
+            st.session_state.grafico_prezzo_medio = None            
+    
+    
