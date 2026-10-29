@@ -2,7 +2,7 @@
     {"Ticker": "TTWO", "Tipo": "Spot", "Quantita": 3.547945, "Prezzo_Medio": 187.55, "Categoria": "Azione"},
     {"Ticker": "ONDS", "Tipo": "Spot", "Quantita": 29.0, "Prezzo_Medio": 6.22, "Categoria": "Azione"},
     {"Ticker": "APP", "Tipo": "Spot", "Quantita": 0.48268, "Prezzo_Medio": 273.47, "Categoria": "Azione"},
-    {"Ticker": "APLD", "Tipo": "PAC", "Quantita": 43.513985, "Prezzo_Medio": 21.07, "PAC_Settimanale": 30.0, "Categoria": "Azione"},
+    {"Ticker": "APLD", "Tipo": "PAC", "Quantita": 49.51, "Prezzo_Medio": 20.6, "PAC_Settimanale": 30.0, "Categoria": "Azione"},
     {"Ticker": "SOFI", "Tipo": "PAC", "Quantita": 53.607426, "Prezzo_Medio": 14.31, "PAC_Settimanale": 15.0, "Categoria": "Azione"},
     {"Ticker": "NKE", "Tipo": "PAC", "Quantita": 5.485346, "Prezzo_Medio": 31.28, "PAC_Settimanale": 25.0, "Categoria": "Azione"},
     {"Ticker": "TTD", "Tipo": "PAC", "Quantita": 6.890467, "Prezzo_Medio": 13.60, "PAC_Settimanale": 5.0, "Categoria": "Azione"},
