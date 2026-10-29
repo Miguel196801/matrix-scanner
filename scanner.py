@@ -115,10 +115,21 @@ def rileva_fase_weinstein(df):
     sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
     sma200_prev = df['Close'].rolling(window=200).mean().iloc[-20]
     pendenza = (sma200 - sma200_prev) / sma200_prev
-    if prezzo < sma200 and pendenza < -0.01: return "FASE 4 (Declino)"
-    elif prezzo > sma200 * 1.2 and pendenza > 0.02: return "FASE 3 (Distribuzione)"
-    elif prezzo > sma200 and pendenza > 0.005: return "FASE 2 (Avanzamento)"
-    else: return "FASE 1 (Accumulazione/Basing)"
+    sma50 = df['Close'].rolling(window=50).mean().iloc[-1]
+    
+    # FIX: Logica di transizione per titoli in rimbalzo
+    if prezzo < sma200 and pendenza < -0.01: 
+        # Se il prezzo è sopra la SMA 50 e vicino alla SMA 200 (< 3%), è accumulo
+        distanza_sma200 = abs(prezzo - sma200) / sma200
+        if prezzo > sma50 and distanza_sma200 < 0.03:
+            return "FASE 1 (Accumulazione/Basing)"
+        return "FASE 4 (Declino)"
+    elif prezzo > sma200 * 1.2 and pendenza > 0.02: 
+        return "FASE 3 (Distribuzione)"
+    elif prezzo > sma200 and pendenza > 0.005: 
+        return "FASE 2 (Avanzamento)"
+    else: 
+        return "FASE 1 (Accumulazione/Basing)"
 
 def rileva_figura_z(df):
     if len(df) < 55: return False, "Dati insufficienti"
