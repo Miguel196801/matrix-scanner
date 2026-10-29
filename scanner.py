@@ -908,7 +908,9 @@ with tab3:
                 
                 # FIX: Allarme Pre-Death Cross
                 distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
-                pre_death_cross = distanza_medie_pct < 2.0 and sma50_usd < sma200_usd
+                # FIX: Distinguiamo Golden Cross (dal basso) da Death Cross (dall'alto)
+                pre_golden_cross = distanza_medie_pct < 3.0 and sma50_usd < sma200_usd 
+                pre_death_cross = distanza_medie_pct < 3.0 and sma50_usd > sma200_usd
                 
                 if s_score >= 60 and "FASE 2" in fase:
                     segnale = "🟢 BY - Acquista" if trigger_by else "🟡 HOLD - Monitora"
