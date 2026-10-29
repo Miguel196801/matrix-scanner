@@ -958,8 +958,11 @@ with tab3:
         
         st.markdown(f"**{r['pre_market_msg']}**")
         
-        if r.get('pre_death_cross'):
-            st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta avvicinando la SMA 200 dal basso. Attenzione al cambio di trend!")
+        if r.get('pre_golden_cross'):
+           st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso! Segnale di forza strutturale.")
+        elif r.get('pre_death_cross'):
+            st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione al cambio di trend!")
+            
         
         st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f}")
         st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
