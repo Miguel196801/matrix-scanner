@@ -701,7 +701,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     })
             
                         # ZONA DI INTERESSE (Supporto SMA 200)
-            if ticker in ticker_in_portafoglio or s_score >= 60:
+            if ticker in ticker_in_portafoglio or s_score >= 40:  # Abbassato a 40 per il limite cloud
                 sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
                 prezzo_attuale = df['Close'].iloc[-1]
                 distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100
@@ -709,7 +709,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 
                 # FIX: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
                 # FIX: Accetta anche titoli VICINI alla SMA 200 (entro 1%), non solo sopra
-                if s_score >= 60 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or distanza_sma200_pct <= 1.0):
+                if s_score >= 40 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or distanza_sma200_pct <= 1.0):  # Soglia mobile
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 
