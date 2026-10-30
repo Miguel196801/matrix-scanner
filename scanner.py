@@ -1016,8 +1016,7 @@ with tab3:
             var_color = "green" if r['var_pct'] > 0 else "red"
             st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
         
-        st.markdown(f"**{r['pre_market_msg']}**")
-        
+        st.markdown(f"**{r['market_msg']}**")
         if r.get('pre_golden_cross'):
            st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso! Segnale di forza strutturale.")
         elif r.get('pre_death_cross'):
