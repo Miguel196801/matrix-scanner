@@ -708,7 +708,8 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
                 
                 # FIX: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
-                if s_score >= 60 and distanza_sma200_pct <= 5.0 and prezzo_sopra_sma200:
+                # FIX: Accetta anche titoli VICINI alla SMA 200 (entro 1%), non solo sopra
+                if s_score >= 60 and distanza_sma200_pct <= 5.0 and (prezzo_sopra_sma200 or distanza_sma200_pct <= 1.0):
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 
