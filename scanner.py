@@ -756,7 +756,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     st.session_state.take_profit_alerts = take_profit_alerts
     st.session_state.zona_interesse_alerts = zona_interesse_alerts
     st.session_state.extended_hours_alerts = extended_hours_alerts
-    
+    st.write(f"DEBUG: extended_hours_alerts = {extended_hours_alerts}")
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
         st.session_state.df_cavalli = pd.DataFrame(lista_cavalli) if lista_cavalli else None
