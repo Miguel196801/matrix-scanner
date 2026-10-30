@@ -751,6 +751,8 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             
     progress_bar.empty()
     stats['capital_used'] = sum(p.get('Capitale_USD', 0) for p in portafoglio_attuale)
+    st.write(f"DEBUG 1: pyramiding_alerts = {len(pyramiding_alerts)}")
+    st.write(f"DEBUG 2: extended_hours_alerts = {len(extended_hours_alerts)}")
     st.session_state.dashboard_stats = stats
     st.session_state.pyramiding_alerts = pyramiding_alerts
     st.session_state.take_profit_alerts = take_profit_alerts
