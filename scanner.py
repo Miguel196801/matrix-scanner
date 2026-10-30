@@ -758,13 +758,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     st.session_state.take_profit_alerts = take_profit_alerts
     st.session_state.zona_interesse_alerts = zona_interesse_alerts
     st.session_state.extended_hours_alerts = extended_hours_alerts
-        # DEBUG PERSISTENTE (sopravvive al rerun)
-    st.session_state.debug_test = {
-        'totale_titoli': len(tickers),
-        'alert_trovati': len(extended_hours_alerts),
-        'esempi': extended_hours_alerts[:3] if extended_hours_alerts else []
-    }
-    st.write(f"DEBUG: extended_hours_alerts = {extended_hours_alerts}")
+     
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
         st.session_state.df_cavalli = pd.DataFrame(lista_cavalli) if lista_cavalli else None
