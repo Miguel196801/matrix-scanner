@@ -620,7 +620,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
         except: st.session_state.spy_data = None
     
     stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'capital_used': 0, 'earnings_warnings': []}
-    pyramiding_alerts, take_profit_alerts, zona_interesse_alerts = [], [], []
+    pyramiding_alerts, take_profit_alerts, zona_interesse_alerts, extended_hours_alerts = [], [], [], []
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
@@ -735,6 +735,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     st.session_state.pyramiding_alerts = pyramiding_alerts
     st.session_state.take_profit_alerts = take_profit_alerts
     st.session_state.zona_interesse_alerts = zona_interesse_alerts
+    st.session_state.extended_hours_alerts = extended_hours_alerts
     
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
@@ -763,7 +764,33 @@ with tab1:
             st.markdown(f"""<div class="signal-box signal-yellow"><h4 style="margin: 0;">🟡 {stats['hold_count']} in Accumulo (HOLD)</h4><p style="margin: 0.5rem 0 0 0;">{', '.join(stats['hold_tickers'])}</p></div>""", unsafe_allow_html=True)
         if stats['earnings_warnings']:
             st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">️ Attenzione Utili</h4><p style="margin: 0.5rem 0 0 0;">{', '.join(stats['earnings_warnings'])}</p></div>""", unsafe_allow_html=True)
-        
+                # ALERT FUORI ORARIO (5%+)
+        if st.session_state.get('extended_hours_alerts'):
+            st.markdown("---")
+            st.subheader("⚡ ALERT MOVIMENTI ANOMALI (Fuori Orario)")
+            st.markdown("*Titoli con variazione ≥ 5% in Pre-Market o After-Hours. Azione immediata possibile su Trade Republic.*")
+            
+            col_a1, col_a2 = st.columns(2)
+            for idx, alert in enumerate(st.session_state.extended_hours_alerts):
+                box_class = "signal-green" if alert['variazione'] > 0 else "signal-red"
+                icon = "🚀" if alert['variazione'] > 0 else "🩸"
+                
+                html_block = f"""
+                <div class="signal-box {box_class}">
+                    <h4 style="margin:0">{alert['colore']} {alert['ticker']} - {alert['sessione']}</h4>
+                    <p style="margin:0.5rem 0">
+                        Variazione: <strong>{alert['variazione']:+.2f}%</strong><br>
+                        Prezzo attuale: €{alert['prezzo_eur']:.2f}
+                    </p>
+                    <p style="margin:0; font-size:0.9rem">
+                        💡 <strong>Azione:</strong> {'Valuta acquisto immediato' if alert['variazione'] > 0 else 'Valuta vendita/stop loss'} su Trade Republic.
+                    </p>
+                </div>
+                """
+                if idx % 2 == 0:
+                    col_a1.markdown(html_block, unsafe_allow_html=True)
+                else:
+                    col_a2.markdown(html_block, unsafe_allow_html=True)
         if st.session_state.pyramiding_alerts:
             st.markdown("---"); st.subheader("🟢 Opportunità Pyramiding")
             for alert in st.session_state.pyramiding_alerts:
@@ -898,14 +925,20 @@ with tab3:
                 supporto = round(df.tail(60)['Low'].min(), 2)
                 resistenza = round(df.tail(60)['High'].max(), 2)
                 
-                # FIX: Dato Pre-Market
-                pre_market_price = info.get('preMarketPrice')
-                pre_market_change = info.get('preMarketChangePercent')
-                if pre_market_price and pre_market_change:
-                    pre_market_msg = f"🌅 Pre-Market: ${pre_market_price:.2f} ({pre_market_change:+.2f}%)"
+                # FIX: Logica dinamica Pre-Market / After-Hours / Regular
+                post_price = info.get('postMarketPrice')
+                post_change = info.get('postMarketChangePercent')
+                pre_price = info.get('preMarketPrice')
+                pre_change = info.get('preMarketChangePercent')
+                    
+                if post_price and post_change:
+                   market_msg = f"🌙 After-Hours: ${post_price:.2f} ({post_change:+.2f}%)"
+                elif pre_price and pre_change:
+                   market_msg = f"🌅 Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
                 else:
-                    pre_market_msg = "🌅 Pre-Market: N/D (fuori orario o non disponibile)"
-                
+                  market_msg = "🌞 Regular Market (o N/D fuori orario)"
+                                            
+                               
                 # FIX: Allarme Pre-Death Cross
                 distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
                 # FIX: Distinguiamo Golden Cross (dal basso) da Death Cross (dall'alto)
