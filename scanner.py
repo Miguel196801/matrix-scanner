@@ -987,7 +987,7 @@ with tab3:
                     'earnings_msg': earnings_msg, 'trigger_by': trigger_by, 'motivo_by': motivo_by,
                     'var_pct': var_pct, 'var_abs': var_abs, 'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
                     'vol_oggi': vol_oggi, 'vol_medio': vol_medio, 'supporto': supporto, 'resistenza': resistenza,
-                    'pre_market_msg': pre_market_msg, 'pre_death_cross': pre_death_cross
+                    'market_msg': market_msg, 'pre_death_cross': pre_death_cross
                 }              
         except Exception as e:
             st.error(f"Errore: {e}")
