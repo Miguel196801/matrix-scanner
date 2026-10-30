@@ -664,6 +664,26 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             range52_high = info.get('fiftyTwoWeekHigh')
             range52_low = info.get('fiftyTwoWeekLow')
             
+            # --- CONTROLLO ALERT 5% FUORI ORARIO ---
+            pm_var = info.get('preMarketChangePercent') or 0
+            am_var = info.get('postMarketChangePercent') or 0
+            
+            # Usa il dato più recente (dopo l'after-hours ha priorità)
+            variazione_extra = am_var if am_var != 0 else pm_var
+            
+            # FIX: Cambia 5.0 in 0.1 per fare il test, poi rimetti 5.0
+            if abs(variazione_extra) >= 5.0: 
+                tipo_sessione = "After-Hours" if am_var != 0 else "Pre-Market"
+                colore = "🟢" if variazione_extra > 0 else "🔴"
+                extended_hours_alerts.append({
+                    'ticker': ticker,
+                    'variazione': round(variazione_extra, 2),
+                    'sessione': tipo_sessione,
+                    'colore': colore,
+                    'prezzo_eur': prezzo_eur
+                })
+            # -----------------------------------------
+            
             if ticker in ticker_in_portafoglio:
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
