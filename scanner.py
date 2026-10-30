@@ -130,7 +130,6 @@ def rileva_fase_weinstein(df):
         return "FASE 2 (Avanzamento)"
     else: 
         return "FASE 1 (Accumulazione/Basing)"
-
 def rileva_figura_z(df):
     if len(df) < 55: return False, "Dati insufficienti"
     sma50 = df['Close'].rolling(window=50).mean()
@@ -708,6 +707,9 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
                 
                 # FIX LOGICA AVGO: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
+                        # DEBUG ZONA INTERESSE
+            if ticker == 'NVDA':
+                st.write(f"DEBUG NVDA: s_score={s_score}, distanza={distanza_sma200_pct:.2f}%, sopra_sma200={prezzo_sopra_sma200}")
                 if s_score >= 60 and distanza_sma200_pct <= 5.0 and prezzo_sopra_sma200:
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
