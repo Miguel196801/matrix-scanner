@@ -585,7 +585,7 @@ else:
 st.sidebar.header("⚙️ Parametri")
 tickers_input = st.sidebar.text_area("Ticker (virgola):", value=impostazioni.get("lista_ticker_default", "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC"))
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
-period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
+period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=3)
 sma_short = st.sidebar.slider("SMA Breve:", 10, 100, 50)
 sma_long = st.sidebar.slider("SMA Lunga:", 50, 200, 200)
 
@@ -700,24 +700,26 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                         'range52_high': range52_high, 'range52_low': range52_low
                     })
             
+                        # ZONA DI INTERESSE (Supporto SMA 200)
             if ticker in ticker_in_portafoglio or s_score >= 60:
                 sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
                 prezzo_attuale = df['Close'].iloc[-1]
                 distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100
                 prezzo_sopra_sma200 = prezzo_attuale >= sma200
                 
-                # FIX LOGICA AVGO: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
-                        # DEBUG ZONA INTERESSE
-            if ticker == 'NVDA':
-                st.write(f"DEBUG NVDA: s_score={s_score}, distanza={distanza_sma200_pct:.2f}%, sopra_sma200={prezzo_sopra_sma200}")
+                # FIX: Richiede tassativamente prezzo SOPRA la SMA 200 e distanza <= 5%
                 if s_score >= 60 and distanza_sma200_pct <= 5.0 and prezzo_sopra_sma200:
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
-                        'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur,
+                        'ticker': ticker, 
+                        'prezzo_attuale_eur': prezzo_eur,
                         'sma200_eur': round(sma200 / eurusd_rate if currency == 'USD' else sma200, 2),
-                        'distanza_pct': round(distanza_sma200_pct, 1), 's_score': s_score,
-                        'qualita_supporto': qualita_sup, 'motivi_qualita': motivi_qualita,
-                        'range52_high': range52_high, 'range52_low': range52_low
+                        'distanza_pct': round(distanza_sma200_pct, 1), 
+                        's_score': s_score,
+                        'qualita_supporto': qualita_sup, 
+                        'motivi_qualita': motivi_qualita,
+                        'range52_high': range52_high, 
+                        'range52_low': range52_low
                     })
             
             if filtro_delisting and "CRITICO" in rischio_delisting: 
@@ -753,8 +755,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             
     progress_bar.empty()
     stats['capital_used'] = sum(p.get('Capitale_USD', 0) for p in portafoglio_attuale)
-    st.write(f"DEBUG 1: pyramiding_alerts = {len(pyramiding_alerts)}")
-    st.write(f"DEBUG 2: extended_hours_alerts = {len(extended_hours_alerts)}")
+    
     st.session_state.dashboard_stats = stats
     st.session_state.pyramiding_alerts = pyramiding_alerts
     st.session_state.take_profit_alerts = take_profit_alerts
@@ -778,10 +779,7 @@ tab1, tab2, tab3 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi"])
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
         # DEBUG PERSISTENTE (sopravvive al rerun)
-    if st.session_state.get('debug_test'):
-        st.info(f"🔍 DEBUG: Scansionati {st.session_state.debug_test['totale_titoli']} titoli, trovati {st.session_state.debug_test['alert_trovati']} alert")
-        if st.session_state.debug_test['esempi']:
-            st.write("Esempi:", st.session_state.debug_test['esempi'])
+    
     if st.session_state.dashboard_stats:
         stats = st.session_state.dashboard_stats
         if stats['by_count'] > 0:
