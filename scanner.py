@@ -758,6 +758,12 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
     st.session_state.take_profit_alerts = take_profit_alerts
     st.session_state.zona_interesse_alerts = zona_interesse_alerts
     st.session_state.extended_hours_alerts = extended_hours_alerts
+        # DEBUG PERSISTENTE (sopravvive al rerun)
+    st.session_state.debug_test = {
+        'totale_titoli': len(tickers),
+        'alert_trovati': len(extended_hours_alerts),
+        'esempi': extended_hours_alerts[:3] if extended_hours_alerts else []
+    }
     st.write(f"DEBUG: extended_hours_alerts = {extended_hours_alerts}")
     if lista_fortezza or lista_cavalli or lista_monitor:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
@@ -775,6 +781,11 @@ tab1, tab2, tab3 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi"])
 
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
+        # DEBUG PERSISTENTE (sopravvive al rerun)
+    if st.session_state.get('debug_test'):
+        st.info(f"🔍 DEBUG: Scansionati {st.session_state.debug_test['totale_titoli']} titoli, trovati {st.session_state.debug_test['alert_trovati']} alert")
+        if st.session_state.debug_test['esempi']:
+            st.write("Esempi:", st.session_state.debug_test['esempi'])
     if st.session_state.dashboard_stats:
         stats = st.session_state.dashboard_stats
         if stats['by_count'] > 0:
