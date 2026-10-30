@@ -672,7 +672,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             variazione_extra = am_var if am_var != 0 else pm_var
             
             # FIX: Cambia 5.0 in 0.1 per fare il test, poi rimetti 5.0
-            if abs(variazione_extra) >= 5.0: 
+            if abs(variazione_extra) >= 0.1: 
                 tipo_sessione = "After-Hours" if am_var != 0 else "Pre-Market"
                 colore = "🟢" if variazione_extra > 0 else "🔴"
                 extended_hours_alerts.append({
