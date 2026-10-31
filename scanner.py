@@ -733,14 +733,14 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             sell_x.append(df.index[i])
             sell_y.append(df['Close'].iloc[i])
     
-    if by_x:
-        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', 
-                    marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')), 
-                    name='▲ BY (Buy)', row=1, col=1))
-    if sell_x:
-        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', 
-                    marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), 
-                    name='▼ SELL', row=1, col=1))
+        if by_x:
+            fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', 
+                        marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')), 
+                        name='▲ BY (Buy)'))
+        if sell_x:
+            fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', 
+                        marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), 
+                        name='▼ SELL'))
     
     colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7, showlegend=False), row=2, col=1)
