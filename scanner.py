@@ -84,6 +84,9 @@ PORTAFOGLIO_INIZIALE = [
     {"Ticker": "CRWD", "Tipo": "PAC", "Quantita": 0.092269, "Prezzo_Medio": 216.76, "PAC_Settimanale": 10.0, "Categoria": "Azione"},
 ]
 
+# LISTA ESTESA BIG TECH & GROWTH PER SCANSIONE AI
+BIG_TECH_GROWTH_LIST = "GOOGL, AMZN, PLTR, META, MSFT, AAPL, TSLA, AVGO, CRM, ADBE, NOW, PANW, FTNT, CRDO, SMCI, ARMR, MRVL, QCOM, MU, INTU"
+
 # Session state
 for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts', 
             'scansione_completata', 'df_fortezza', 'df_cavalli', 'df_monitor', 'df_palantir',
@@ -248,10 +251,10 @@ def calcola_relative_strength(df_ticker, df_spy):
         perf_spy = (df_spy['Close'].iloc[-1] / df_spy['Close'].iloc[-60] - 1) * 100
         rs_diff = perf_ticker - perf_spy
         if rs_diff > 5: return rs_diff, "🟢 Outperforming"
-        elif rs_diff < -5: return rs_diff, "🔴 Underperforming"
+        elif rs_diff < -5: return rs_diff, " Underperforming"
         else: return rs_diff, "🟡 In linea"
     except:
-        return 0.0, "⚪ N/D"
+        return 0.0, " N/D"
 
 def controlla_earnings(ticker_obj):
     try:
@@ -271,11 +274,11 @@ def controlla_earnings(ticker_obj):
         if giorni_mancanti <= 7:
             return giorni_mancanti, f"🔴 UTILI tra {giorni_mancanti}gg", True
         elif giorni_mancanti <= 14:
-            return giorni_mancanti, f"🟡 Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
         elif giorni_mancanti <= 30:
             return giorni_mancanti, f"🟢 Utili tra {giorni_mancanti}gg", False
         else:
-            return giorni_mancanti, f"⚪ Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
     except:
         return None, "⚪ N/D", False
 
@@ -290,7 +293,7 @@ def calcola_trailing_stop(df, sma_short, sma_long):
         elif prezzo > sma200:
             return sma200, "SMA 200", f"Trailing: {sma200:.2f} (SMA200)"
         else:
-            return sma200, "ALERTA", f"⚠️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
+            return sma200, "ALERTA", f"️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
     except:
         return None, "N/D", "Errore calcolo"
 
@@ -523,7 +526,7 @@ def valuta_stato_pac(ticker_obj, df_storico):
             return "🔴 PAC SOSPESO"
         return "🟢 PAC ATTIVO"
     except:
-        return "⚪ N/D"
+        return " N/D"
 
 def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     risultati = []
@@ -532,7 +535,6 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
         try:
             ticker_obj = yf.Ticker(ticker)
             info = ticker_obj.info
-            # Necessario 1y per il calcolo della Fase Weinstein nel Kill Switch
             hist = ticker_obj.history(period="1y")
             
             if hist.empty:
@@ -552,10 +554,9 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             pnl_eur = valore_attuale - valore_carico
             pnl_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
             
-            trend = "🟢 Forte +" if pnl_pct > 5 else (" +" if pnl_pct > 0 else (" -" if pnl_pct > -5 else "🔴 Forte -"))
+            trend = " Forte +" if pnl_pct > 5 else (" +" if pnl_pct > 0 else (" -" if pnl_pct > -5 else "🔴 Forte -"))
             earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
             
-            # PUNTO 1: Applicazione Kill Switch per posizioni PAC
             stato_pac = valuta_stato_pac(ticker_obj, hist) if pos.get('Tipo') == 'PAC' else "N/A"
             
             risultati.append({**pos, "Prezzo_Attuale_EUR": round(prezzo_eur, 2), "Prezzo_Attuale_USD": round(prezzo_usd, 2),
@@ -615,14 +616,14 @@ eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, 
 budget_psv = st.sidebar.number_input("Budget Spot ($):", min_value=100, max_value=5000, value=500, step=100)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🔒 Filtri")
+st.sidebar.subheader(" Filtri")
 filtro_s_score = st.sidebar.checkbox("Escludi S-Score < 60", True)
 filtro_weinstein = st.sidebar.selectbox("Fase Weinstein minima", ["Tutte", "FASE 1 (Accumulazione)", "FASE 2 (Avanzamento)"])
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 filtro_delisting = st.sidebar.checkbox("Blocca titoli <$1", True)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("👁️ Protocolli Speciali")
+st.sidebar.subheader("️ Protocolli Speciali")
 show_insider = st.sidebar.checkbox("Mostra Insider", True)
 show_balene = st.sidebar.checkbox("Mostra Balene", True)
 show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
@@ -684,7 +685,6 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             range52_high = info.get('fiftyTwoWeekHigh')
             range52_low = info.get('fiftyTwoWeekLow')
             
-            # PUNTO 3: LOGICA SETUP PALANTIR
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -711,7 +711,6 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     'Rev Growth': f"{revenue_growth*100:.1f}%", 'Distanza SMA200': f"{distanza_sma200_pct:.1f}%"
                 })
 
-            # --- CONTROLLO ALERT 5% FUORI ORARIO ---
             pm_var = info.get('preMarketChangePercent') or 0
             am_var = info.get('postMarketChangePercent') or 0
             
@@ -739,7 +738,6 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                         'range52_high': range52_high, 'range52_low': range52_low
                     })
             
-            # ZONA DI INTERESSE (FIX MOBILE: Soglia a 40 per compensare dati cloud)
             if ticker in ticker_in_portafoglio or s_score >= 40:
                 if s_score >= 40 and distanza_sma200_pct <= 5.0 and (prezzo_attuale >= sma200 or distanza_sma200_pct <= 1.0):
                     qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
@@ -808,7 +806,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
 # ==============================================================================
 # TAB PRINCIPALI (AGGIUNTA TAB 4)
 # ==============================================================================
-tab1, tab2, tab3, tab4 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi", "🤖 Portfolio Sperimentale AI"])
+tab1, tab2, tab3, tab4 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi", " Portfolio Sperimentale AI"])
 
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
@@ -827,7 +825,7 @@ with tab1:
                 
         if st.session_state.get('extended_hours_alerts'):
             st.markdown("---")
-            st.subheader("⚡ ALERT MOVIMENTI ANOMALI (Fuori Orario)")
+            st.subheader(" ALERT MOVIMENTI ANOMALI (Fuori Orario)")
             col_a1, col_a2 = st.columns(2)
             for idx, alert in enumerate(st.session_state.extended_hours_alerts):
                 box_class = "signal-green" if alert['variazione'] > 0 else "signal-red"
@@ -853,12 +851,10 @@ with tab1:
         if st.session_state.get('take_profit_alerts'):
             st.markdown("---"); st.subheader("🎯 ALLERTA TAKE PROFIT")
             for alert in st.session_state.take_profit_alerts:
-                st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 📈 Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ |  Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
 
-        # PUNTO 3: VISUALIZZAZIONE SETUP PALANTIR IN DASHBOARD
         if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
             st.markdown("---"); st.subheader("🤖 Setup Palantir Rilevati")
-            st.markdown("*S-Score ≥ 75, Growth ≥ 20%, PEG < 1.5, RSI < 45, Distanza SMA200 ≤ 5%*")
             st.dataframe(st.session_state.df_palantir, use_container_width=True)
     else:
         st.info(" Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
@@ -868,7 +864,7 @@ with tab2:
     if st.session_state.get('last_update'):
         st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
     else:
-        st.caption("🕐 Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
+        st.caption(" Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
     
     if st.session_state.portafoglio is None:
         portafoglio_salvato = carica_json(PORTAFOGLIO_FILE)
@@ -975,7 +971,7 @@ with tab3:
                 if post_price and post_change:
                    market_msg = f"🌙 After-Hours: ${post_price:.2f} ({post_change:+.2f}%)"
                 elif pre_price and pre_change:
-                   market_msg = f"🌅 Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
+                   market_msg = f" Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
                 else:
                   market_msg = "🌞 Regular Market (o N/D fuori orario)"
                                             
@@ -990,7 +986,7 @@ with tab3:
                 elif "FASE 4" in fase or s_score < 40:
                     segnale = "🔴 SELL - Evita"
                 else:
-                    segnale = "🟡 HOLD - In attesa"
+                    segnale = " HOLD - In attesa"
                 
                 st.session_state.analisi_risultati = {
                     'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
@@ -1013,7 +1009,7 @@ with tab3:
         
         col3, col4 = st.columns(2)
         col3.metric("⚡ S-Score", r['s_score'])
-        col4.metric("📊 Fase", r['fase'])
+        col4.metric(" Fase", r['fase'])
         
         col5, col6 = st.columns(2)
         col5.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
@@ -1030,7 +1026,7 @@ with tab3:
         st.markdown(f"**{r['market_msg']}**")
         
         if r.get('pre_golden_cross'):
-           st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
+           st.success(" **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
         elif r.get('pre_death_cross'):
             st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione!")
             
@@ -1077,18 +1073,71 @@ with tab4:
     
     paper_port = carica_json(PAPER_TRADING_FILE)
     
-    col_btn1, col_btn2 = st.columns([2, 1])
+    col_btn1, col_btn2 = st.columns([3, 1])
     with col_btn1:
-        if st.button("🤖 Scansione AI: Aggiungi fino a 3 Setup Palantir", type="primary"):
-            if st.session_state.df_palantir is None or st.session_state.df_palantir.empty:
-                st.warning("⚠️ Nessun Setup Palantir trovato. Avvia prima una **Scansione** nella Tab Dashboard.")
+        if st.button("🤖 Scansione AI: Cerca su Watchlist + Big Tech (fino a 3 setup)", type="primary"):
+            tickers_personali = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+            tickers_big_tech = [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",") if t.strip()]
+            tutti_tickers = list(set(tickers_personali + tickers_big_tech))
+            
+            progress_bar = st.progress(0)
+            candidati_palantir = []
+            
+            for i, ticker in enumerate(tutti_tickers):
+                progress_bar.progress((i + 1) / len(tutti_tickers))
+                try:
+                    ticker_obj = yf.Ticker(ticker)
+                    df = ticker_obj.history(period=period)
+                    info = ticker_obj.info
+                    if df.empty or len(df) < 200: continue
+                    
+                    prezzo_eur, prezzo_usd, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
+                    if prezzo_eur is None: continue
+                    
+                    s_score = calcola_s_score(info)
+                    fase = rileva_fase_weinstein(df)
+                    
+                    delta = df['Close'].diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                    rs = gain / loss
+                    rsi_oggi = float(100 - (100 / (1 + (gain/loss))).iloc[-1]) if not (gain/loss).empty else 50
+                    
+                    revenue_growth = info.get('revenueGrowth', 0.0) or 0.0
+                    peg_ratio = info.get('pegRatio', 0.0) or 0.0
+                    
+                    sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+                    prezzo_attuale = df['Close'].iloc[-1]
+                    distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
+                    
+                    is_palantir = (s_score >= 75 and 
+                                   revenue_growth >= 0.20 and 
+                                   (peg_ratio > 0 and peg_ratio < 1.5) and 
+                                   rsi_oggi < 45 and 
+                                   distanza_sma200_pct <= 5.0)
+                    
+                    if is_palantir:
+                        candidati_palantir.append({
+                            'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 
+                            'RSI': round(rsi_oggi, 1), 'PEG': round(peg_ratio, 2) if peg_ratio > 0 else 'N/D',
+                            'Rev Growth': f"{revenue_growth*100:.1f}%", 'Distanza SMA200': f"{distanza_sma200_pct:.1f}%"
+                        })
+                except:
+                    pass
+            
+            progress_bar.empty()
+            
+            if not candidati_palantir:
+                st.warning("⚠️ Nessun Setup Palantir trovato nella scansione estesa.")
             else:
-                candidati = st.session_state.df_palantir.to_dict('records')
+                candidati_palantir.sort(key=lambda x: x['S-Score'], reverse=True)
+                top_3 = candidati_palantir[:3]
+                
                 attivi_tickers = [p['Ticker'] for p in paper_port if p.get('Stato') == 'Attivo']
                 
                 nuovi_trade = []
-                for c in candidati:
-                    if c['Ticker'] not in attivi_tickers and len(nuovi_trade) < 3:
+                for c in top_3:
+                    if c['Ticker'] not in attivi_tickers:
                         entry_price = c['Prezzo EUR']
                         nuovi_trade.append({
                             "Ticker": c['Ticker'],
@@ -1103,9 +1152,10 @@ with tab4:
                     paper_port.extend(nuovi_trade)
                     salva_json(PAPER_TRADING_FILE, paper_port)
                     st.success(f"✅ Aggiunti {len(nuovi_trade)} titoli al Paper Trading: {', '.join([t['Ticker'] for t in nuovi_trade])}")
+                    st.info(f"📊 Scansionati {len(tutti_tickers)} titoli. Trovati {len(candidati_palantir)} setup Palantir.")
                     st.rerun()
                 else:
-                    st.info("ℹ️ Tutti i titoli Palantir rilevati sono già in portafoglio come 'Attivi', o il limite di 3 è stato raggiunto.")
+                    st.info("ℹ️ Tutti i titoli Palantir rilevati sono già in portafoglio come 'Attivi'.")
     
     st.markdown("---")
     if paper_port:
