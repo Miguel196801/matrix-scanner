@@ -51,9 +51,8 @@ st.markdown("""
 # GESTIONE FILE
 # ==============================================================================
 PORTAFOGLIO_FILE = "portafoglio.json"
-WATCHLIST_FILE = "watchlist.json"
-STORICO_FILE = "storico_operazioni.json"
 PAPER_TRADING_FILE = "paper_trading.json"
+SEGNALI_FILE = "segnali_storici.json"
 IMPOSTAZIONI_FILE = "impostazioni.json"
 
 def carica_json(file_path):
@@ -69,9 +68,22 @@ def salva_json(file_path, data):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# ==============================================================================
-# PORTAFOGLIO INIZIALE
-# ==============================================================================
+def registra_segnale(ticker, tipo, prezzo):
+    segnali = carica_json(SEGNALI_FILE)
+    oggi = datetime.now().strftime("%Y-%m-%d")
+    for s in segnali:
+        if s['ticker'] == ticker and s['data'] == oggi:
+            return
+    segnali.append({"ticker": ticker, "tipo": tipo, "data": oggi, "prezzo": round(prezzo, 2)})
+    salva_json(SEGNALI_FILE, segnali)
+
+def get_ultimo_segnale(ticker):
+    segnali = carica_json(SEGNALI_FILE)
+    ticker_segnali = [s for s in segnali if s['ticker'] == ticker]
+    if not ticker_segnali: return None
+    ticker_segnali.sort(key=lambda x: x['data'], reverse=True)
+    return ticker_segnali[0]
+
 PORTAFOGLIO_INIZIALE = [
     {"Ticker": "TTWO", "Tipo": "Spot", "Quantita": 3.547945, "Prezzo_Medio": 187.55, "Categoria": "Azione"},
     {"Ticker": "ONDS", "Tipo": "Spot", "Quantita": 29.0, "Prezzo_Medio": 6.22, "Categoria": "Azione"},
@@ -84,10 +96,8 @@ PORTAFOGLIO_INIZIALE = [
     {"Ticker": "CRWD", "Tipo": "PAC", "Quantita": 0.092269, "Prezzo_Medio": 216.76, "PAC_Settimanale": 10.0, "Categoria": "Azione"},
 ]
 
-# LISTA ESTESA BIG TECH & GROWTH PER SCANSIONE AI
 BIG_TECH_GROWTH_LIST = "GOOGL, AMZN, PLTR, META, MSFT, AAPL, TSLA, AVGO, CRM, ADBE, NOW, PANW, FTNT, CRDO, SMCI, ARMR, MRVL, QCOM, MU, INTU"
 
-# Session state
 for key in ['portafoglio', 'last_update', 'dashboard_stats', 'pyramiding_alerts', 
             'scansione_completata', 'df_fortezza', 'df_cavalli', 'df_monitor', 'df_palantir',
             'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'analisi_singola', 'analisi_risultati',
@@ -251,10 +261,10 @@ def calcola_relative_strength(df_ticker, df_spy):
         perf_spy = (df_spy['Close'].iloc[-1] / df_spy['Close'].iloc[-60] - 1) * 100
         rs_diff = perf_ticker - perf_spy
         if rs_diff > 5: return rs_diff, "🟢 Outperforming"
-        elif rs_diff < -5: return rs_diff, " Underperforming"
+        elif rs_diff < -5: return rs_diff, "🔴 Underperforming"
         else: return rs_diff, "🟡 In linea"
     except:
-        return 0.0, " N/D"
+        return 0.0, "⚪ N/D"
 
 def controlla_earnings(ticker_obj):
     try:
@@ -274,11 +284,11 @@ def controlla_earnings(ticker_obj):
         if giorni_mancanti <= 7:
             return giorni_mancanti, f"🔴 UTILI tra {giorni_mancanti}gg", True
         elif giorni_mancanti <= 14:
-            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f"🟡 Utili tra {giorni_mancanti}gg", False
         elif giorni_mancanti <= 30:
             return giorni_mancanti, f"🟢 Utili tra {giorni_mancanti}gg", False
         else:
-            return giorni_mancanti, f" Utili tra {giorni_mancanti}gg", False
+            return giorni_mancanti, f"⚪ Utili tra {giorni_mancanti}gg", False
     except:
         return None, "⚪ N/D", False
 
@@ -293,7 +303,7 @@ def calcola_trailing_stop(df, sma_short, sma_long):
         elif prezzo > sma200:
             return sma200, "SMA 200", f"Trailing: {sma200:.2f} (SMA200)"
         else:
-            return sma200, "ALERTA", f"️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
+            return sma200, "ALERTA", f"⚠️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
     except:
         return None, "N/D", "Errore calcolo"
 
@@ -485,19 +495,29 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         fig.add_hline(y=gap_level, line_dash="dot", line_color="#f59e0b", line_width=2,
                      annotation_text=f"  ️ Target Gap: {gap_level}", annotation_position="bottom left", row=1, col=1)
     
+    # FUNZIONALITÀ A: MARKER BY/SELL DAL JSON
+    segnali = carica_json(SEGNALI_FILE)
+    ticker_segnali = [s for s in segnali if s['ticker'] == ticker]
     by_x, by_y, sell_x, sell_y = [], [], [], []
-    for i in range(sma_long, len(df)):
-        if (abs(df['Close'].iloc[i] - df['SMA_Short'].iloc[i]) / df['SMA_Short'].iloc[i] <= 0.02 and 
-            df['Volume'].iloc[i] > df['Vol_Media_20'].iloc[i] and df['Close'].iloc[i] > df['Open'].iloc[i]):
-            by_x.append(df.index[i]); by_y.append(df['Close'].iloc[i])
-        if (df['Close'].iloc[i] < df['SMA_Long'].iloc[i] and df['Close'].iloc[i-1] >= df['SMA_Long'].iloc[i-1] and df['Volume'].iloc[i] > df['Vol_Media_20'].iloc[i]):
-            sell_x.append(df.index[i]); sell_y.append(df['Close'].iloc[i])
     
+    for s in ticker_segnali:
+        sig_date = pd.to_datetime(s['data']).tz_localize(df.index.tz) if df.index.tz else pd.to_datetime(s['data'])
+        df_dates = df.index.normalize()
+        idx = (df_dates - sig_date).abs().argmin()
+        closest_date = df.index[idx]
+        
+        if s['tipo'] == 'BY':
+            by_x.append(closest_date)
+            by_y.append(df.iloc[idx]['Low'] * 0.98)
+        elif s['tipo'] in ['SELL', 'EVITA']:
+            sell_x.append(closest_date)
+            sell_y.append(df.iloc[idx]['High'] * 1.02)
+
     if by_x:
-        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')), name='▲ BY (Buy)'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=15, color='#00e676', line=dict(width=2, color='#00c853')), name='▲ BY Storico'), row=1, col=1)
     if sell_x:
-        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), name='▼ SELL'), row=1, col=1)
-    
+        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=15, color='#ff1744', line=dict(width=2, color='#d50000')), name='▼ SELL Storico'), row=1, col=1)
+
     colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7, showlegend=False), row=2, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['Vol_Media_20'], line=dict(color='#9c27b0', width=1.5), name='Vol Medio 20', showlegend=False), row=2, col=1)
@@ -514,7 +534,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     )
     return fig
 
-# PUNTO 1: FUNZIONE KILL SWITCH PAC
 def valuta_stato_pac(ticker_obj, df_storico):
     try:
         info = ticker_obj.info
@@ -526,7 +545,7 @@ def valuta_stato_pac(ticker_obj, df_storico):
             return "🔴 PAC SOSPESO"
         return "🟢 PAC ATTIVO"
     except:
-        return " N/D"
+        return "⚪ N/D"
 
 def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     risultati = []
@@ -554,7 +573,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             pnl_eur = valore_attuale - valore_carico
             pnl_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
             
-            trend = " Forte +" if pnl_pct > 5 else (" +" if pnl_pct > 0 else (" -" if pnl_pct > -5 else "🔴 Forte -"))
+            trend = "🟢 Forte +" if pnl_pct > 5 else (" +" if pnl_pct > 0 else (" -" if pnl_pct > -5 else "🔴 Forte -"))
             earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
             
             stato_pac = valuta_stato_pac(ticker_obj, hist) if pos.get('Tipo') == 'PAC' else "N/A"
@@ -616,14 +635,14 @@ eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, 
 budget_psv = st.sidebar.number_input("Budget Spot ($):", min_value=100, max_value=5000, value=500, step=100)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader(" Filtri")
+st.sidebar.subheader("🔒 Filtri")
 filtro_s_score = st.sidebar.checkbox("Escludi S-Score < 60", True)
 filtro_weinstein = st.sidebar.selectbox("Fase Weinstein minima", ["Tutte", "FASE 1 (Accumulazione)", "FASE 2 (Avanzamento)"])
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 filtro_delisting = st.sidebar.checkbox("Blocca titoli <$1", True)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("️ Protocolli Speciali")
+st.sidebar.subheader("👁️ Protocolli Speciali")
 show_insider = st.sidebar.checkbox("Mostra Insider", True)
 show_balene = st.sidebar.checkbox("Mostra Balene", True)
 show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
@@ -755,7 +774,9 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             
             if filtro_delisting and "CRITICO" in rischio_delisting: 
                 stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
-            if ignore_fase_4 and "FASE 4" in fase: continue
+            if ignore_fase_4 and "FASE 4" in fase:
+                registra_segnale(ticker, "SELL", prezzo_eur)
+                continue
             
             is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
             is_fortezza_valida = (s_score >= 60 and "FASE 2" in fase)
@@ -768,9 +789,11 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     pyramiding_alerts.append({'ticker': ticker, 'tipo': pos.get('Tipo', 'Spot'), 'prezzo_attuale': prezzo_eur, 'pyramiding': pyramiding})
             
             if is_cp_valido:
+                registra_segnale(ticker, "BY", prezzo_eur)
                 lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': "🟢 BY", 'Earnings': earnings_msg})
                 stats['by_count'] += 1; stats['by_tickers'].append(ticker)
             elif is_fortezza_valida:
+                if trigger_by: registra_segnale(ticker, "BY", prezzo_eur)
                 stato_by_display = "🟢 BY" if trigger_by else "🟡 HOLD"
                 lista_fortezza.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': stato_by_display, 'Motivo BY': motivo_by, 'Trailing Stop': trailing_desc, 'Earnings': earnings_msg})
                 if trigger_by: stats['by_count'] += 1; stats['by_tickers'].append(ticker)
@@ -806,7 +829,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
 # ==============================================================================
 # TAB PRINCIPALI (AGGIUNTA TAB 4)
 # ==============================================================================
-tab1, tab2, tab3, tab4 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi", " Portfolio Sperimentale AI"])
+tab1, tab2, tab3, tab4 = st.tabs([" Dashboard", "💼 Portafoglio", "🔍 Analisi", "🤖 Portfolio Sperimentale AI"])
 
 with tab1:
     st.subheader("📊 Segnali Operativi Oggi")
@@ -825,7 +848,7 @@ with tab1:
                 
         if st.session_state.get('extended_hours_alerts'):
             st.markdown("---")
-            st.subheader(" ALERT MOVIMENTI ANOMALI (Fuori Orario)")
+            st.subheader("⚡ ALERT MOVIMENTI ANOMALI (Fuori Orario)")
             col_a1, col_a2 = st.columns(2)
             for idx, alert in enumerate(st.session_state.extended_hours_alerts):
                 box_class = "signal-green" if alert['variazione'] > 0 else "signal-red"
@@ -851,10 +874,11 @@ with tab1:
         if st.session_state.get('take_profit_alerts'):
             st.markdown("---"); st.subheader("🎯 ALLERTA TAKE PROFIT")
             for alert in st.session_state.take_profit_alerts:
-                st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ |  Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 📈 Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
 
         if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
             st.markdown("---"); st.subheader("🤖 Setup Palantir Rilevati")
+            st.markdown("*S-Score ≥ 75, Growth ≥ 20%, PEG < 1.5, RSI < 45, Distanza SMA200 ≤ 5%*")
             st.dataframe(st.session_state.df_palantir, use_container_width=True)
     else:
         st.info(" Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
@@ -864,7 +888,7 @@ with tab2:
     if st.session_state.get('last_update'):
         st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
     else:
-        st.caption(" Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
+        st.caption("🕐 Mai aggiornato - Clicca il pulsante per scaricare i prezzi live")
     
     if st.session_state.portafoglio is None:
         portafoglio_salvato = carica_json(PORTAFOGLIO_FILE)
@@ -920,6 +944,16 @@ with tab2:
             if earnings and earnings != "N/D": info_extra += f" | {earnings}"
             if stato_pac != 'N/A': info_extra += f" | {stato_pac}"
             
+            # FUNZIONALITÀ C: ULTIMO SEGNALE NEL PORTAFOGLIO MOBILE
+            ult = get_ultimo_segnale(pos['Ticker'])
+            if ult and prezzo_eur:
+                var_ult = ((prezzo_eur - ult['prezzo']) / ult['prezzo']) * 100
+                if ult['tipo'] == 'BY':
+                    color_text = "#10b981" if var_ult >= 0 else "#ef4444"
+                else:
+                    color_text = "#10b981" if var_ult <= 0 else "#f59e0b"
+                info_extra += f" | <span style='color:{color_text};font-weight:bold'>Ult {ult['tipo']}: {ult['data'][5:]} ({var_ult:+.1f}%)</span>"
+            
             st.markdown(f"""<div class="portfolio-box {box_class}"><div style="display: flex; justify-content: space-between; align-items: flex-start;"><div><div class="portfolio-ticker">{pos['Ticker']}</div><div class="portfolio-info">{info_extra}</div></div><div><div class="{var_class}">{var_display}</div><div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl:+.2f}€</div></div></div></div>""", unsafe_allow_html=True)
         
         if spot:
@@ -971,7 +1005,7 @@ with tab3:
                 if post_price and post_change:
                    market_msg = f"🌙 After-Hours: ${post_price:.2f} ({post_change:+.2f}%)"
                 elif pre_price and pre_change:
-                   market_msg = f" Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
+                   market_msg = f"🌅 Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
                 else:
                   market_msg = "🌞 Regular Market (o N/D fuori orario)"
                                             
@@ -986,7 +1020,7 @@ with tab3:
                 elif "FASE 4" in fase or s_score < 40:
                     segnale = "🔴 SELL - Evita"
                 else:
-                    segnale = " HOLD - In attesa"
+                    segnale = "🟡 HOLD - In attesa"
                 
                 st.session_state.analisi_risultati = {
                     'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
@@ -1009,7 +1043,7 @@ with tab3:
         
         col3, col4 = st.columns(2)
         col3.metric("⚡ S-Score", r['s_score'])
-        col4.metric(" Fase", r['fase'])
+        col4.metric("📊 Fase", r['fase'])
         
         col5, col6 = st.columns(2)
         col5.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
@@ -1026,7 +1060,7 @@ with tab3:
         st.markdown(f"**{r['market_msg']}**")
         
         if r.get('pre_golden_cross'):
-           st.success(" **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
+           st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
         elif r.get('pre_death_cross'):
             st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione!")
             
@@ -1038,6 +1072,36 @@ with tab3:
         if "BY" in r['segnale']: st.success(f"**Segnale**: {r['motivo_by']}")
         elif "HOLD" in r['segnale']: st.warning(f"**Segnale**: {r['motivo_by']}")
         else: st.error("**Segnale**: Titolo in Fase 4 o S-Score troppo basso")
+
+        # FUNZIONALITÀ B: BOX STORICO SEGNALI MATRIX
+        st.markdown("---")
+        st.subheader("📜 STORICO SEGNALI MATRIX")
+        ultimo = get_ultimo_segnale(r['ticker'])
+        if ultimo:
+            prezzo_ult = ultimo['prezzo']
+            data_ult = ultimo['data']
+            tipo_ult = ultimo['tipo']
+            var_pct_ult = ((r['prezzo_eur'] - prezzo_ult) / prezzo_ult) * 100
+            giorni_ult = (datetime.now() - datetime.strptime(data_ult, "%Y-%m-%d")).days
+            
+            if tipo_ult == 'BY':
+                color = "#10b981" if var_pct_ult >= 0 else "#ef4444"
+                msg = "VINCENTE" if var_pct_ult >= 0 else "PERDENTE"
+            else:
+                color = "#10b981" if var_pct_ult <= 0 else "#f59e0b"
+                msg = "EVITATO" if var_pct_ult <= 0 else "MANCATO"
+                
+            st.markdown(f"""
+            <div class="signal-box" style="border-left: 5px solid {color}; background-color: #1e293b;">
+                <h4 style="margin:0; color: {color};">Ultimo Segnale: {tipo_ult} ({msg})</h4>
+                <p style="margin:0.5rem 0; color: #e2e8f0;">
+                    📅 Data: {data_ult} ({giorni_ult}gg fa) | 💶 Prezzo Segnale: {prezzo_ult}€ | Attuale: {r['prezzo_eur']}€<br>
+                    📈 Variazione: <span style="color:{color};font-weight:bold;font-size:1.1rem">{var_pct_ult:+.1f}%</span>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Nessun segnale precedente registrato per questo titolo.")
         
         if st.button(f"📊 Mostra Grafico {r['ticker']}", type="secondary", use_container_width=True):
             st.session_state.grafico_ticker = r['ticker']
