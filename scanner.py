@@ -1129,7 +1129,7 @@ with tab1:
         st.dataframe(st.session_state.df_palantir, use_container_width=True)
     else:
         st.info("Nessun titolo soddisfa i criteri Palantir in questo momento.")
-    else:
+else:
     st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 with tab2:
     st.subheader("💼 Il Mio Portafoglio")
