@@ -1129,8 +1129,8 @@ if st.session_state.get('df_palantir') is not None and not st.session_state.df_p
     st.dataframe(st.session_state.df_palantir, use_container_width=True)
 else:
     st.info("Nessun titolo soddisfa i criteri Palantir in questo momento.")
-    else:
-        st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
+else:
+    st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
 with tab2:
     st.subheader("💼 Il Mio Portafoglio")
