@@ -1127,7 +1127,7 @@ with tab1:
     st.subheader("🤖 Setup Palantir Rilevati")
     if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
         st.dataframe(st.session_state.df_palantir, use_container_width=True)
-    else:
+        else:
         st.info("Nessun titolo soddisfa i criteri Palantir in questo momento.")
 else:
     st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
