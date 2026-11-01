@@ -1362,7 +1362,7 @@ with tab2:
                         </div>
                         <div>
                             <div style="font-size: 1.2rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
-                            <div class="{ 'portfolio-change-positive' if var_pct > 0 else 'portfolio-change-negative' if var_pct < 0 else 'portfolio-change-neutral' }">{var_display}</div>
+                            <div class="{var_class}">{var_display}</div>
                             <div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl_eur:+.2f}€</div>
                         </div>
                     </div>
