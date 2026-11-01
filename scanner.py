@@ -1337,6 +1337,7 @@ with tab2:
                     var_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
                     var_abs_val = pos.get('Variazione_Abs', 0.0) or 0.0
                     var_display = f"{var_symbol} {abs(var_pct):.2f}% ({var_abs_val:+.2f}€)"
+                    var_class = "portfolio-change-positive" if var_pct > 0 else "portfolio-change-negative" if var_pct < 0 else "portfolio-change-neutral"
                 else:
                     var_color = "#94a3b8"
                     var_symbol = "●"
@@ -1361,7 +1362,6 @@ with tab2:
                             <div class="portfolio-info" style="color: {acqu_color};">{acqu_symbol} {var_acquisto:+.1f}% dall'acquisto</div>
                         </div>
                         <div>
-                            <div style="font-size: 1.2rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
                             <div class="{var_class}">{var_display}</div>
                             <div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl_eur:+.2f}€</div>
                         </div>
