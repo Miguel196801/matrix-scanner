@@ -411,7 +411,7 @@ def calcola_g_score_fortezza(df, sma_short, sma_long, fase):
         if prezzo < sma_s and prezzo < sma_l: g_score += 50; bonus_log.append("Compressione (+50)")
         dist_medie = abs(sma_s - sma_l) / sma_l if sma_l != 0 else 0
         if dist_medie < 0.03: g_score += 5; bonus_log.append("Squeeze <3% (+5)")
-        vol_medio = df['Volume'].rolling(window=20).mean()
+        vol_medio = df['Volume'].rolling(window=20).mean().iloc[-1]
         if df['Volume'].iloc[-1] > (vol_medio * 2.0) and df['Close'].iloc[-1] > df['Open'].iloc[-1]:
             g_score += 10; bonus_log.append("Pocket Pivot (+10)")
     return g_score, ", ".join(bonus_log) if bonus_log else "Nessun bonus"
@@ -582,7 +582,6 @@ def calcola_qualita_supporto(df):
         if len(df) < 10: return "N/D", "Dati insufficienti"
         ultimi_3_vol = df['Volume'].iloc[-3:].mean()
         vol_medio_20 = df['Volume'].rolling(window=20).mean().iloc[-1]
-        candele_recenti = df.tail(3)
         ultima_candela = df.iloc[-1]
         range_candela = ultima_candela['High'] - ultima_candela['Low']
         ombra_inferiore = min(ultima_candela['Open'], ultima_candela['Close']) - ultima_candela['Low']
@@ -1123,16 +1122,14 @@ with tab1:
             for alert in st.session_state.take_profit_alerts:
                 st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 📈 Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
 
-    
+        if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
             st.markdown("---")
             st.subheader("🤖 Setup Palantir Rilevati")
-            if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
-                st.dataframe(st.session_state.df_palantir, use_container_width=True)
-        else:
-            st.info("Nessun titolo soddisfa i criteri Palantir in questo momento.")
+            st.dataframe(st.session_state.df_palantir, use_container_width=True)
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
-    with tab2:
+
+with tab2:
     st.subheader("💼 Il Mio Portafoglio")
     if st.session_state.get('last_update'):
         st.caption(f"🕐 Ultimo aggiornamento: {st.session_state.last_update}")
@@ -1179,7 +1176,6 @@ with tab1:
             prezzo_medio = pos.get('Prezzo_Medio', 0)
             quantita = pos.get('Quantita', 0)
             
-            # Variazione dall'acquisto
             if prezzo_medio > 0 and prezzo_eur:
                 var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
             else:
@@ -1216,7 +1212,6 @@ with tab1:
             
             st.markdown(f"""<div class="portfolio-box {box_class}"><div style="display: flex; justify-content: space-between; align-items: flex-start;"><div><div class="portfolio-ticker">{ticker}</div><div class="portfolio-info">{info_extra}</div><div class="portfolio-info" style="color: {acqu_color};">{acqu_symbol} {var_acquisto:+.1f}% dall'acquisto</div></div><div><div class="{var_class}">{var_display}</div><div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl:+.2f}€</div><div class="portfolio-info">{ultimo_segnale}</div></div></div></div>""", unsafe_allow_html=True)
             
-            # EXPANDER CON DETTAGLI E OPERAZIONI
             with st.expander(f"📋 Dettagli e Operazioni - {ticker}"):
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
@@ -1226,7 +1221,6 @@ with tab1:
                 
                 st.markdown("---")
                 
-                # AGGIUNGI QUOTE
                 st.markdown("**➕ Aggiungi Quote**")
                 col_a1, col_a2 = st.columns(2)
                 with col_a1:
@@ -1250,7 +1244,6 @@ with tab1:
                 
                 st.markdown("---")
                 
-                # MODIFICA PREZZO MEDIO
                 st.markdown("**✏️ Modifica Prezzo Medio**")
                 nuovo_medio_manuale = st.number_input(f"Nuovo Medio €", min_value=0.01, step=0.01, value=float(prezzo_medio), key=f"mmedio_{ticker}_{idx_pos}")
                 if st.button(f"💾 Salva Medio {ticker}", key=f"mmedio_save_{ticker}_{idx_pos}"):
@@ -1262,7 +1255,6 @@ with tab1:
                 
                 st.markdown("---")
                 
-                # RIMUOVI
                 if st.button(f"🗑️ Rimuovi {ticker}", key=f"mremove_{ticker}_{idx_pos}"):
                     portafoglio[:] = [p for p in portafoglio if p['Ticker'] != ticker]
                     st.session_state.portafoglio = portafoglio
@@ -1391,7 +1383,6 @@ with tab3:
         st.markdown("---")
         st.markdown('<div class="signal-history-box"><div class="signal-history-title">📊 STORICO SEGNALI MATRIX</div></div>', unsafe_allow_html=True)
         
-        # Ricostruzione automatica se mancano segnali
         ultimo_segnale_check = get_ultimo_segnale(r['ticker'])
         if not ultimo_segnale_check:
             with st.spinner(f"🔄 Ricostruzione segnali storici per {r['ticker']}..."):
