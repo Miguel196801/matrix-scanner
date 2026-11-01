@@ -85,7 +85,7 @@ def salva_json(file_path, data):
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 # ==============================================================================
-# SISTEMA SEGNALI STORICI
+# SISTEMA SEGNALI STORICI (PREZZI IN DOLLARI)
 # ==============================================================================
 def registra_segnale(ticker, tipo_segnale, prezzo_usd, data_segnale=None):
     try:
@@ -375,6 +375,111 @@ def rileva_figura_z(df):
             return True, f"Figura Z confermata ({i} giorni fa)"
     return False, "Nessuna Figura Z"
 
+def calcola_g_score_cavalli_pazzi(df, sma_short, sma_long):
+    g_score = 40
+    bonus_log = []
+    prezzo = df['Close'].iloc[-1]
+    sma_s = df['Close'].rolling(window=sma_short).mean().iloc[-1]
+    sma_l = df['Close'].rolling(window=sma_long).mean().iloc[-1]
+    vol_medio = df['Volume'].rolling(window=20).mean().iloc[-1]
+    if df['Volume'].iloc[-1] > (vol_medio * 2.0) and prezzo > df['Open'].iloc[-1]:
+        g_score += 10; bonus_log.append("Pocket Pivot (+10)")
+    dist_medie = abs(sma_s - sma_l) / sma_l if sma_l != 0 else 0
+    if dist_medie < 0.03:
+        g_score += 5; bonus_log.append("Squeeze <3% (+5)")
+    return g_score, ", ".join(bonus_log) if bonus_log else "Nessun bonus extra"
+
+def calcola_g_score_fortezza(df, sma_short, sma_long, fase):
+    g_score = 0
+    bonus_log = []
+    prezzo = df['Close'].iloc[-1]
+    sma_s = df['Close'].rolling(window=sma_short).mean().iloc[-1]
+    sma_l = df['Close'].rolling(window=sma_long).mean().iloc[-1]
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi_oggi = rsi.iloc[-1] if not rsi.empty else 50
+    if rsi_oggi is None: rsi_oggi = 50
+    if "FASE 2" in fase or "FASE 3" in fase:
+        if prezzo > sma_s > sma_l: g_score += 30; bonus_log.append("Trend perfetto (+30)")
+        if df['Volume'].iloc[-1] > df['Volume'].rolling(window=20).mean().iloc[-1]: g_score += 20; bonus_log.append("Volume sopra media (+20)")
+        if 50 <= rsi_oggi <= 70: g_score += 10; bonus_log.append("RSI sano (+10)")
+        elif rsi_oggi > 70: g_score += 5; bonus_log.append("RSI ipercomprato (+5)")
+    else:
+        if prezzo < sma_s and prezzo < sma_l: g_score += 50; bonus_log.append("Compressione (+50)")
+        dist_medie = abs(sma_s - sma_l) / sma_l if sma_l != 0 else 0
+        if dist_medie < 0.03: g_score += 5; bonus_log.append("Squeeze <3% (+5)")
+        vol_medio = df['Volume'].rolling(window=20).mean()
+        if df['Volume'].iloc[-1] > (vol_medio * 2.0) and df['Close'].iloc[-1] > df['Open'].iloc[-1]:
+            g_score += 10; bonus_log.append("Pocket Pivot (+10)")
+    return g_score, ", ".join(bonus_log) if bonus_log else "Nessun bonus"
+
+def analizza_insider(ticker_obj, info, s_score, fase):
+    alert = "Nessun dato"
+    livello = "NEUTRO"
+    try:
+        insider_trans = ticker_obj.insider_transactions
+        if insider_trans is None or insider_trans.empty: return alert, livello
+        insider_trans = insider_trans.head(10)
+        market_cap = info.get('marketCap', 0) or 0
+        for _, row in insider_trans.iterrows():
+            trans_type = str(row.get('Transaction', '')).upper()
+            if 'PURCHASE' not in trans_type and 'BUY' not in trans_type: continue
+            position = str(row.get('Position', '')).upper()
+            value = row.get('Value', 0) or 0
+            shares = row.get('Shares', 0) or 0
+            is_top = any(x in position for x in ['CEO', 'CHIEF EXECUTIVE', 'PRESIDENT', 'CFO', 'CHIEF FINANCIAL'])
+            if is_top and value > 1000000:
+                alert = position + " ha acquistato $" + str(round(value, 0))
+                livello = "FORTEZZA - BUY >1M$"
+                break
+            if market_cap > 0 and shares > 0:
+                quota_pct = (shares * (value / shares if shares > 0 else 0)) / market_cap * 100
+                if ('CEO' in position or 'PRESIDENT' in position) and quota_pct >= 0.05:
+                    if s_score >= 60 and ("FASE 1" in fase or "FASE 2" in fase):
+                        alert = position + " ha acquistato " + str(round(quota_pct, 3)) + "% MC"
+                        livello = "ESTERNO - BUY >=0.05% MCAP"
+                        break
+    except Exception:
+        return "Errore lettura insider", "NEUTRO"
+    return alert, livello
+
+def analizza_balene(ticker_obj):
+    try:
+        holders = ticker_obj.institutional_holders
+        if holders is None or holders.empty: return "Nessun dato istituzionale"
+        top3 = holders.head(3)
+        holders_list = [row['Holder'] + " (" + str(row['Shares']) + ")" for _, row in top3.iterrows()]
+        return "Top: " + ", ".join(holders_list)
+    except Exception:
+        return "Errore lettura balene"
+
+def analizza_short_squeeze(info):
+    si = info.get('shortPercentOfFloat', 0) or 0
+    si_pct = si * 100
+    dtc = info.get('shortRatio', 0) or 0
+    stato = "POLVERIERA (>20%)" if si_pct > 20 else ("ATTENZIONE (>10%)" if si_pct > 10 else "Normale")
+    return round(si_pct, 2), round(dtc, 2), stato, "SI" if dtc > 4 else "NO"
+
+def verifica_delisting(info, df):
+    prezzo = info.get('regularMarketPrice', 0) or (df['Close'].iloc[-1] if not df.empty else 0)
+    return round(prezzo, 2), "CRITICO: Prezzo < $1" if prezzo < 1.0 else "OK"
+
+def calcola_relative_strength(df_ticker, df_spy):
+    try:
+        if df_ticker is None or df_spy is None or len(df_ticker) < 60 or len(df_spy) < 60:
+            return 0.0, "⚪ N/D"
+        perf_ticker = (df_ticker['Close'].iloc[-1] / df_ticker['Close'].iloc[-60] - 1) * 100
+        perf_spy = (df_spy['Close'].iloc[-1] / df_spy['Close'].iloc[-60] - 1) * 100
+        rs_diff = perf_ticker - perf_spy
+        if rs_diff > 5: return rs_diff, "🟢 Outperforming"
+        elif rs_diff < -5: return rs_diff, "🔴 Underperforming"
+        else: return rs_diff, "🟡 In linea"
+    except:
+        return 0.0, "⚪ N/D"
+
 def controlla_earnings(ticker_obj):
     try:
         earnings_dates = ticker_obj.earnings_dates
@@ -394,10 +499,60 @@ def controlla_earnings(ticker_obj):
             return giorni_mancanti, f"🔴 UTILI tra {giorni_mancanti}gg", True
         elif giorni_mancanti <= 14:
             return giorni_mancanti, f"🟡 Utili tra {giorni_mancanti}gg", False
+        elif giorni_mancanti <= 30:
+            return giorni_mancanti, f"🟢 Utili tra {giorni_mancanti}gg", False
         else:
             return giorni_mancanti, f"⚪ Utili tra {giorni_mancanti}gg", False
     except:
         return None, "⚪ N/D", False
+
+def calcola_trailing_stop(df, sma_short, sma_long):
+    try:
+        if len(df) < sma_long: return None, "N/D", "Dati insufficienti"
+        prezzo = df['Close'].iloc[-1]
+        sma50 = df['Close'].rolling(window=sma_short).mean().iloc[-1]
+        sma200 = df['Close'].rolling(window=sma_long).mean().iloc[-1]
+        if prezzo > sma50:
+            return sma50, "SMA 50", f"Trailing: {sma50:.2f} (SMA50)"
+        elif prezzo > sma200:
+            return sma200, "SMA 200", f"Trailing: {sma200:.2f} (SMA200)"
+        else:
+            return sma200, "ALERTA", f"⚠️ Sotto SMA200 ({sma200:.2f}) - Valuta uscita"
+    except:
+        return None, "N/D", "Errore calcolo"
+
+def verifica_trigger_by_fortezza(df, sma_short, ticker_obj=None):
+    if len(df) < sma_short + 5: return False, "Dati insufficienti", False
+    prezzo = df['Close'].iloc[-1]
+    sma50 = df['Close'].rolling(window=sma_short).mean().iloc[-1]
+    vol_medio = df['Volume'].rolling(window=20).mean().iloc[-1]
+    vol_oggi = df['Volume'].iloc[-1]
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    rsi_oggi = rsi.iloc[-1] if not rsi.empty else 50
+    
+    distanza_sma50 = abs(prezzo - sma50) / sma50 * 100
+    prezzo_vicino_sma50 = distanza_sma50 <= 3.0 or prezzo > sma50
+    volume_ok = vol_oggi > vol_medio
+    rsi_ok = rsi_oggi < 70 if rsi_oggi else True
+    candela_verde = df['Close'].iloc[-1] > df['Open'].iloc[-1]
+    
+    earnings_giorni, earnings_msg, earnings_bloccato = controlla_earnings(ticker_obj) if ticker_obj else (None, "N/D", False)
+    if earnings_bloccato: return False, earnings_msg, True
+    
+    if prezzo_vicino_sma50 and volume_ok and rsi_ok and candela_verde:
+        return True, f"Pullback SMA50 completato (distanza: {distanza_sma50:.1f}%, Vol: {vol_oggi/vol_medio:.2f}x, RSI: {rsi_oggi:.0f})", False
+    else:
+        motivi = []
+        if not prezzo_vicino_sma50:
+            motivi.append(f"Prezzo troppo alto (+{distanza_sma50:.1f}% da SMA50)" if prezzo > sma50 * 1.05 else f"Prezzo sotto SMA50 (-{distanza_sma50:.1f}%)")
+        if not volume_ok: motivi.append(f"Volume bassi ({vol_oggi/vol_medio:.2f}x media)")
+        if not rsi_ok: motivi.append(f"RSI ipercomprato ({rsi_oggi:.0f})")
+        if not candela_verde: motivi.append("Candela rossa")
+        return False, "; ".join(motivi), False
 
 def get_prezzi_corretti(ticker_obj, eurusd_rate):
     info = ticker_obj.info
@@ -414,10 +569,58 @@ def calcola_variazione_giornaliera(ticker_obj):
     try:
         hist = ticker_obj.history(period="2d")
         if len(hist) < 2: return None, None
-        variazione_pct = ((hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2]) * 100
-        return round(variazione_pct, 2), round(hist['Close'].iloc[-1] - hist['Close'].iloc[-2], 2)
+        prezzo_ieri = hist['Close'].iloc[-2]
+        prezzo_oggi = hist['Close'].iloc[-1]
+        variazione_pct = ((prezzo_oggi - prezzo_ieri) / prezzo_ieri) * 100
+        variazione_abs = prezzo_oggi - prezzo_ieri
+        return round(variazione_pct, 2), round(variazione_abs, 2)
     except:
         return None, None
+
+def calcola_qualita_supporto(df):
+    try:
+        if len(df) < 10: return "N/D", "Dati insufficienti"
+        ultimi_3_vol = df['Volume'].iloc[-3:].mean()
+        vol_medio_20 = df['Volume'].rolling(window=20).mean().iloc[-1]
+        candele_recenti = df.tail(3)
+        ultima_candela = df.iloc[-1]
+        range_candela = ultima_candela['High'] - ultima_candela['Low']
+        ombra_inferiore = min(ultima_candela['Open'], ultima_candela['Close']) - ultima_candela['Low']
+        
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi_oggi = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty and not rs.iloc[-1] == 0 else 50
+        
+        punti_positivi, punti_negativi, motivi = 0, 0, []
+        
+        if ultimi_3_vol < vol_medio_20 * 0.8:
+            punti_positivi += 2; motivi.append("Volumi in esaurimento")
+        elif ultimi_3_vol > vol_medio_20 * 1.3:
+            punti_negativi += 2; motivi.append("Volumi aggressivi")
+        
+        if range_candela > 0 and ombra_inferiore / range_candela > 0.5:
+            punti_positivi += 2; motivi.append("Ombra inferiore (rigetto)")
+        
+        if ultima_candela['Close'] > ultima_candela['Open']:
+            punti_positivi += 1; motivi.append("Candela verde")
+        else:
+            punti_negativi += 1; motivi.append("Candela rossa")
+        
+        if rsi_oggi < 35:
+            punti_positivi += 1; motivi.append("RSI ipervenduto")
+        elif rsi_oggi > 60:
+            punti_negativi += 1
+        
+        if punti_positivi >= punti_negativi + 2:
+            return "ALTA", " " + "; ".join(motivi[:3])
+        elif punti_negativi > punti_positivi:
+            return "BASSA", " " + "; ".join(motivi[:3])
+        else:
+            return "MEDIA", "🟡 " + "; ".join(motivi[:3])
+    except:
+        return "N/D", "Errore calcolo"
 
 def rileva_gap_storico(df, soglia_minima_pct=3.0):
     try:
@@ -426,6 +629,7 @@ def rileva_gap_storico(df, soglia_minima_pct=3.0):
         max_gap_sotto, max_gap_size = None, 0
         df_scan = df.copy()
         df_scan['Prev_Close'] = df_scan['Close'].shift(1)
+        
         for idx in range(1, len(df_scan)):
             prev_close = df_scan.iloc[idx-1]['Close']
             open_price = df_scan.iloc[idx]['Open']
@@ -433,45 +637,14 @@ def rileva_gap_storico(df, soglia_minima_pct=3.0):
                 gap_pct = ((prev_close - open_price) / prev_close) * 100
                 if open_price < prezzo_attuale and gap_pct >= soglia_minima_pct:
                     post_gap_lows = df_scan.iloc[idx:]['Low']
-                    if post_gap_lows.min() >= open_price * 0.95:
+                    min_post = post_gap_lows.min()
+                    if min_post >= open_price * 0.95:
                         if gap_pct > max_gap_size:
                             max_gap_size = gap_pct
                             max_gap_sotto = open_price
         return round(max_gap_sotto, 2) if max_gap_sotto else None
     except:
         return None
-
-def verifica_trigger_by_fortezza(df, sma_short, ticker_obj=None):
-    if len(df) < sma_short + 5: return False, "Dati insufficienti", False
-    prezzo = df['Close'].iloc[-1]
-    sma50 = df['Close'].rolling(window=sma_short).mean().iloc[-1]
-    vol_medio = df['Volume'].rolling(window=20).mean().iloc[-1]
-    vol_oggi = df['Volume'].iloc[-1]
-    
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    rsi_oggi = float(100 - (100 / (1 + (gain/loss))).iloc[-1]) if not (gain/loss).empty else 50
-    
-    distanza_sma50 = abs(prezzo - sma50) / sma50 * 100
-    prezzo_vicino_sma50 = distanza_sma50 <= 3.0 or prezzo > sma50
-    volume_ok = vol_oggi > vol_medio
-    rsi_ok = rsi_oggi < 70
-    candela_verde = df['Close'].iloc[-1] > df['Open'].iloc[-1]
-    
-    earnings_giorni, earnings_msg, earnings_bloccato = controlla_earnings(ticker_obj) if ticker_obj else (None, "N/D", False)
-    if earnings_bloccato: return False, earnings_msg, True
-    
-    if prezzo_vicino_sma50 and volume_ok and rsi_ok and candela_verde:
-        return True, f"Pullback SMA50 completato (Vol: {vol_oggi/vol_medio:.2f}x, RSI: {rsi_oggi:.0f})", False
-    else:
-        motivi = []
-        if not prezzo_vicino_sma50: motivi.append(f"Prezzo fuori SMA50 ({distanza_sma50:.1f}%)")
-        if not volume_ok: motivi.append(f"Volume bassi ({vol_oggi/vol_medio:.2f}x)")
-        if not rsi_ok: motivi.append(f"RSI ipercomprato ({rsi_oggi:.0f})")
-        if not candela_verde: motivi.append("Candela rossa")
-        return False, "; ".join(motivi), False
 
 # ==============================================================================
 # FUNZIONE GRAFICO (SOLO ULTIMO BY E ULTIMO SELL)
@@ -586,7 +759,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             hist = ticker_obj.history(period="1y")
             
             if hist.empty:
-                risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "PnL_EUR": None, "PnL_%": None, "Trend": "N/D", "Earnings": "N/D", "Variazione_Pct": None, "Stato_PAC": "N/D", "Ultimo_Segnale": "N/D"})
+                risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "PnL_EUR": None, "PnL_%": None, "Trend": "N/D", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None, "Stato_PAC": "N/D", "Ultimo_Segnale": "N/D"})
                 continue
             
             currency = info.get('currency', 'USD')
@@ -612,10 +785,10 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             risultati.append({**pos, "Prezzo_Attuale_EUR": round(prezzo_eur, 2), "Prezzo_Attuale_USD": round(prezzo_usd, 2),
                              "Valore_Attuale": round(valore_attuale, 2), "Valore_Carico": round(valore_carico, 2),
                              "PnL_EUR": round(pnl_eur, 2), "PnL_%": round(pnl_pct, 2), "Trend": trend, 
-                             "Earnings": earnings_msg, "Variazione_Pct": var_pct, "Stato_PAC": stato_pac, 
-                             "Ultimo_Segnale": ultimo_segnale_display})
+                             "Earnings": earnings_msg, "Variazione_Pct": var_pct, "Variazione_Abs": var_abs, 
+                             "Stato_PAC": stato_pac, "Ultimo_Segnale": ultimo_segnale_display})
         except Exception:
-            risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "PnL_EUR": None, "PnL_%": None, "Trend": "Errore", "Earnings": "N/D", "Variazione_Pct": None, "Stato_PAC": "Errore", "Ultimo_Segnale": "N/D"})
+            risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "PnL_EUR": None, "PnL_%": None, "Trend": "Errore", "Earnings": "N/D", "Variazione_Pct": None, "Variazione_Abs": None, "Stato_PAC": "Errore", "Ultimo_Segnale": "N/D"})
     return risultati
 
 # ==============================================================================
@@ -679,8 +852,16 @@ if st.sidebar.button("🔄 Ricostruisci Segnali Retroattivi (1 anno)"):
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔒 Filtri")
+filtro_s_score = st.sidebar.checkbox("Escludi S-Score < 60", True)
+filtro_weinstein = st.sidebar.selectbox("Fase Weinstein minima", ["Tutte", "FASE 1 (Accumulazione)", "FASE 2 (Avanzamento)"])
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 filtro_delisting = st.sidebar.checkbox("Blocca titoli <$1", True)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("👁️ Protocolli Speciali")
+show_insider = st.sidebar.checkbox("Mostra Insider", True)
+show_balene = st.sidebar.checkbox("Mostra Balene", True)
+show_short = st.sidebar.checkbox("Mostra Short Squeeze", True)
 
 if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width=True):
     impostazioni["lista_ticker_default"] = tickers_input
@@ -694,7 +875,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
         try: st.session_state.spy_data = yf.Ticker("SPY").history(period=period)
         except: st.session_state.spy_data = None
     
-    stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'earnings_warnings': []}
+    stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': [], 'hold_tickers': [], 'sell_tickers': [], 'capital_used': 0, 'earnings_warnings': []}
     pyramiding_alerts, take_profit_alerts, zona_interesse_alerts, extended_hours_alerts = [], [], [], []
     
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
@@ -724,9 +905,20 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             s_score = calcola_s_score(info)
             fase = rileva_fase_weinstein(df)
             figura_z, figura_z_msg = rileva_figura_z(df)
+            g_score_cp, vector_cp = calcola_g_score_cavalli_pazzi(df, sma_short, sma_long)
+            g_score_f, vector_f = calcola_g_score_fortezza(df, sma_short, sma_long, fase)
+            si_pct, dtc, stato_short, trappola = analizza_short_squeeze(info)
+            insider_alert, insider_livello = analizza_insider(ticker_obj, info, s_score, fase)
+            balene_info = analizza_balene(ticker_obj)
+            prezzo_usd_delisting, rischio_delisting = verifica_delisting(info, df)
             trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
+            rs_pct, rs_indicatore = calcola_relative_strength(df, st.session_state.spy_data)
+            trailing_level, trailing_tipo, trailing_desc = calcola_trailing_stop(df, sma_short, sma_long)
             earnings_giorni, earnings_msg, earnings_bloccato2 = controlla_earnings(ticker_obj)
             if earnings_bloccato2: stats['earnings_warnings'].append(f"{ticker} ({earnings_msg})")
+            
+            range52_high = info.get('fiftyTwoWeekHigh')
+            range52_low = info.get('fiftyTwoWeekLow')
             
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -777,24 +969,28 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     gain_pct = ((prezzo_eur / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
                     take_profit_alerts.append({
                         'ticker': ticker, 'rsi': round(rsi_oggi, 1), 'prezzo_attuale_eur': prezzo_eur,
-                        'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot')
+                        'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot'),
+                        'range52_high': range52_high, 'range52_low': range52_low
                     })
             
             # ZONA DI INTERESSE: SOGLIA MOBILE s_score >= 40
             if ticker in ticker_in_portafoglio or s_score >= 40:
                 if s_score >= 40 and distanza_sma200_pct <= 5.0 and (prezzo_attuale >= sma200 or distanza_sma200_pct <= 1.0):
+                    qualita_sup, motivi_qualita = calcola_qualita_supporto(df)
                     zona_interesse_alerts.append({
                         'ticker': ticker, 
                         'prezzo_attuale_eur': prezzo_eur,
                         'sma200_eur': round(sma200 / eurusd_rate if currency == 'USD' else sma200, 2),
                         'distanza_pct': round(distanza_sma200_pct, 1), 
-                        's_score': s_score
+                        's_score': s_score,
+                        'qualita_supporto': qualita_sup, 
+                        'motivi_qualita': motivi_qualita,
+                        'range52_high': range52_high, 
+                        'range52_low': range52_low
                     })
             
-            if filtro_delisting:
-                prezzo_delisting = info.get('regularMarketPrice', 0) or (df['Close'].iloc[-1] if not df.empty else 0)
-                if prezzo_delisting < 1.0:
-                    stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
+            if filtro_delisting and "CRITICO" in rischio_delisting: 
+                stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             if ignore_fase_4 and "FASE 4" in fase: continue
             
             is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
@@ -840,13 +1036,13 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             
             if is_cp_valido:
                 registra_segnale(ticker, 'BY', prezzo_usd, oggi_str)
-                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'Fase': fase, 'Stato BY': "🟢 BY", 'Earnings': earnings_msg})
+                lista_cavalli.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': "🟢 BY", 'Earnings': earnings_msg})
                 stats['by_count'] += 1; stats['by_tickers'].append(ticker)
             elif is_fortezza_valida:
                 if trigger_by:
                     registra_segnale(ticker, 'BY', prezzo_usd, oggi_str)
                 stato_by_display = "🟢 BY" if trigger_by else "🟡 HOLD"
-                lista_fortezza.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'Fase': fase, 'Stato BY': stato_by_display, 'Motivo BY': motivo_by, 'Earnings': earnings_msg})
+                lista_fortezza.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'Prezzo USD': prezzo_usd, 'S-Score': s_score, 'Fase': fase, 'Stato BY': stato_by_display, 'Motivo BY': motivo_by, 'Trailing Stop': trailing_desc, 'Earnings': earnings_msg})
                 if trigger_by: stats['by_count'] += 1; stats['by_tickers'].append(ticker)
                 else: stats['hold_count'] += 1; stats['hold_tickers'].append(ticker)
             elif is_watchlist:
@@ -859,6 +1055,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             pass
             
     progress_bar.empty()
+    stats['capital_used'] = sum(p.get('Capitale_USD', 0) for p in portafoglio_attuale)
     
     st.session_state.dashboard_stats = stats
     st.session_state.pyramiding_alerts = pyramiding_alerts
@@ -919,7 +1116,7 @@ with tab1:
         if st.session_state.get('zona_interesse_alerts'):
             st.markdown("---"); st.subheader("🟡 ZONA DI INTERESSE")
             for alert in st.session_state.zona_interesse_alerts:
-                st.markdown(f"""<div class="signal-box signal-yellow"><h4 style="margin: 0;">🟡 {alert['ticker']} (S-Score: {alert['s_score']})</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 🛡️ SMA200: {alert['sma200_eur']}€ ({alert['distanza_pct']}%)</p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="signal-box signal-yellow"><h4 style="margin: 0;">🟡 {alert['ticker']} (S-Score: {alert['s_score']})</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 🛡️ SMA200: {alert['sma200_eur']}€ ({alert['distanza_pct']}%)<br>⚖️ {alert['motivi_qualita']}</p></div>""", unsafe_allow_html=True)
 
         if st.session_state.get('take_profit_alerts'):
             st.markdown("---"); st.subheader("🎯 ALLERTA TAKE PROFIT")
@@ -993,7 +1190,8 @@ with tab2:
                 if var_pct > 0: var_class, var_symbol = "portfolio-change-positive", "▲"
                 elif var_pct < 0: var_class, var_symbol = "portfolio-change-negative", "▼"
                 else: var_class, var_symbol = "portfolio-change-neutral", "●"
-                var_display = f"{var_symbol} {abs(var_pct):.2f}% ({var_abs:+.2f}€)"
+                var_abs_val = var_abs if var_abs is not None else 0.0
+                var_display = f"{var_symbol} {abs(var_pct):.2f}% ({var_abs_val:+.2f}€)"
             else:
                 var_class, var_display = "portfolio-change-neutral", "N/D"
             
@@ -1189,6 +1387,20 @@ with tab3:
         # STORICO SEGNALI MATRIX
         st.markdown("---")
         st.markdown('<div class="signal-history-box"><div class="signal-history-title">📊 STORICO SEGNALI MATRIX</div></div>', unsafe_allow_html=True)
+        
+        # Ricostruzione automatica se mancano segnali
+        ultimo_segnale_check = get_ultimo_segnale(r['ticker'])
+        if not ultimo_segnale_check:
+            with st.spinner(f"🔄 Ricostruzione segnali storici per {r['ticker']}..."):
+                try:
+                    segnali_aggiunti = ricostruisci_segnali_retroattivi(r['ticker'], anni_indietro=1)
+                    if segnali_aggiunti > 0:
+                        st.success(f"✅ Trovati {segnali_aggiunti} segnali storici per {r['ticker']}")
+                        st.rerun()
+                    else:
+                        st.info(f"ℹ️ Nessun segnale storico trovato per {r['ticker']} negli ultimi 12 mesi")
+                except Exception as e:
+                    st.error(f"❌ Errore ricostruzione: {e}")
         
         ultimo_segnale = get_ultimo_segnale(r['ticker'])
         if ultimo_segnale:
