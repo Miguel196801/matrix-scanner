@@ -1123,9 +1123,12 @@ with tab1:
             for alert in st.session_state.take_profit_alerts:
                 st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin: 0;">🔴 {alert['ticker']} - RSI: {alert['rsi']}</h4><p style="margin: 0.5rem 0;">💶 {alert['prezzo_attuale_eur']}€ | 📈 Gain: <span style="color: #10b981; font-weight: bold;">{alert['gain_pct']:+.1f}%</span></p></div>""", unsafe_allow_html=True)
 
-        if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
-            st.markdown("---"); st.subheader("🤖 Setup Palantir Rilevati")
-            st.dataframe(st.session_state.df_palantir, use_container_width=True)
+st.markdown("---")
+st.subheader("🤖 Setup Palantir Rilevati")
+if st.session_state.get('df_palantir') is not None and not st.session_state.df_palantir.empty:
+    st.dataframe(st.session_state.df_palantir, use_container_width=True)
+else:
+    st.info("Nessun titolo soddisfa i criteri Palantir in questo momento.")
     else:
         st.info("👆 Clicca **🔴 AVVIA SCANSIONE** nella sidebar per vedere i segnali.")
 
