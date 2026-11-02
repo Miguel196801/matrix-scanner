@@ -304,7 +304,6 @@ def parse_catalizzatori(testo):
                     pass
     return catalizzatori
 
-# FIX 1: S-SCORE ROBUSTO (Allineato al Desktop)
 def calcola_s_score(info):
     score = 50
     try:
@@ -445,7 +444,6 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
             fase = rileva_fase_weinstein(df)
             prezzo_eur = round((df['Close'].iloc[-1] / eurusd_rate) if info.get('currency', 'USD') == 'USD' else df['Close'].iloc[-1], 2)
             
-            # FIX 5: OVERRIDE GIGANTI IPERVENDUTI
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -876,16 +874,16 @@ def verifica_trigger_by_fortezza(df, sma_short, ticker_obj=None):
         if not candela_verde: motivi.append("Candela rossa")
         return False, "; ".join(motivi), False
 
-def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d'):
-    df = yf.Ticker(ticker).history(period=period)
+def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d', interval='1d'):
+    df = yf.Ticker(ticker).history(period=period, interval=interval)
     if df.empty: return None
     
-    if timeframe == '1wk':
+    if timeframe == '1wk' and interval == '1d':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
-    df['SMA_Short'] = df['Close'].rolling(window=sma_short).mean()
-    df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean()
-    df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
+    df['SMA_Short'] = df['Close'].rolling(window=min(sma_short, len(df))).mean()
+    df['SMA_Long'] = df['Close'].rolling(window=min(sma_long, len(df))).mean()
+    df['Vol_Media_20'] = df['Volume'].rolling(window=min(20, len(df))).mean()
     
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -1147,7 +1145,6 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     gain_pct = ((prezzo_eur / pos['Prezzo_Medio']) - 1) * 100 if pos['Prezzo_Medio'] > 0 else 0
                     take_profit_alerts.append({'ticker': ticker, 'rsi': round(rsi_oggi, 1), 'prezzo_attuale_eur': prezzo_eur, 'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot')})
             
-            # SPECIFICITÀ MOBILE: Soglia Zona di Interesse = 40
             if ticker in ticker_in_portafoglio or s_score >= 40:
                 if s_score >= 40 and distanza_sma200_pct <= 5.0 and (prezzo_attuale >= sma200 or distanza_sma200_pct <= 1.0):
                     zona_interesse_alerts.append({
@@ -1295,7 +1292,6 @@ with tab2:
             col2.metric("📈 P&L Totale", f"€ {totale_pnl:,.0f}", f"{totale_pnl_pct:+.1f}%")
             st.markdown("---")
             
-            # MOTORE DI RIBILANCIAMENTO MENSILE
             st.markdown("### 📊 Motore di Ribilanciamento Mensile")
             if st.button("📊 Genera Piano di Rotazione", type="secondary", use_container_width=True):
                 with st.spinner("🔄 Analisi in corso..."):
@@ -1319,14 +1315,13 @@ with tab2:
                     for item in piano['monitor']:
                         st.markdown(f"""<div class="signal-box signal-yellow"><strong>{item['ticker']}</strong> (Score: {item['score']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 
-                # FIX 5: SEZIONE DA COMPRARE GARANTITA
                 if piano['acquisti']:
                     st.markdown("#### 🟢 Da Comprare (Score > 75 o Override)")
                     for item in piano['acquisti']:
                         box_class = "signal-yellow" if item['stato_mercato'] == 'sospeso' else "signal-green"
                         st.markdown(f"""<div class="signal-box {box_class}"><strong>{item['ticker']}</strong> (Score: {item['score']}, €{item['prezzo_eur']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 else:
-                    st.info("🟢 Nessun titolo da comprare al momento (nessun score > 75 o override ipervenduto rilevato).")
+                    st.info("🟢 Nessun titolo da comprare al momento.")
                 
                 st.markdown("---")
                 st.subheader("💡 AZIONE CONSIGLIATA DAL SISTEMA")
@@ -1357,6 +1352,8 @@ with tab2:
             for idx_pos, pos in enumerate(portafoglio):
                 ticker = pos['Ticker']
                 prezzo_eur = pos.get('Prezzo_Attuale_EUR')
+                var_pct = pos.get('Variazione_Pct')
+                var_abs = pos.get('Variazione_Abs', 0) or 0
                 pnl_pct = pos.get('PnL_%', 0) or 0
                 stato_pac = pos.get('Stato_PAC', 'N/A')
                 ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
@@ -1369,8 +1366,20 @@ with tab2:
                 else:
                     var_acquisto = 0
                 
-                pnl_symbol = "▲" if pnl_pct > 0 else "▼" if pnl_pct < 0 else "●"
-                pnl_color = "#10b981" if pnl_pct > 0 else "#ef4444" if pnl_pct < 0 else "#94a3b8"
+                # FIX 3: ALTO A DESTRA = % variazione GIORNO
+                if var_pct is not None:
+                    var_day_color = "#10b981" if var_pct > 0 else "#ef4444"
+                    var_day_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
+                    var_day_display = f"{var_day_symbol} {abs(var_pct):.2f}% ({var_abs:+.2f}€)"
+                else:
+                    var_day_color = "#94a3b8"
+                    var_day_symbol = "●"
+                    var_day_display = "N/D"
+                
+                # BASSO A SINISTRA = % dall'acquisto
+                if var_acquisto > 0: acqu_color, acqu_symbol = "#10b981", "▲"
+                elif var_acquisto < 0: acqu_color, acqu_symbol = "#ef4444", "▼"
+                else: acqu_color, acqu_symbol = "#94a3b8", "●"
                 
                 if pnl_pct > 0: border_color = "#10b981"
                 elif pnl_pct < 0: border_color = "#ef4444"
@@ -1378,25 +1387,42 @@ with tab2:
                 
                 prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
                 
-                # FIX 3: UI CARD PORTAFOGLIO PULITA (Solo in basso a sinistra)
+                # FIX 3: UI CARD CORRETTA
                 st.markdown(f"""
                 <div class="portfolio-box" style="border-left-color: {border_color};">
-                    <div>
-                        <div class="portfolio-ticker">{ticker}</div>
-                        <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
-                        <div class="portfolio-info" style="color: {pnl_color}; font-weight: bold; margin-top: 0.5rem;">
-                            {pnl_symbol} {abs(pnl_pct):.2f}% | {pnl_eur:+.2f}€ dall'acquisto
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <div class="portfolio-ticker">{ticker}</div>
+                            <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
+                            <div class="portfolio-info" style="color: {acqu_color}; font-weight: bold; margin-top: 0.5rem;">
+                                {acqu_symbol} {var_acquisto:+.1f}% | {pnl_eur:+.2f}€ dall'acquisto
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.2rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
+                            <div style="color: {var_day_color}; font-size: 1.1rem; font-weight: bold;">{var_day_display} oggi</div>
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # FIX 2: NOME TITOLO COME BOTTONE PER APRIRE ANALISI
+                # FIX 2: LINK PORTAFOGLIO → ANALISI
                 if st.button(f"🔍 {ticker}", key=f"btn_analisi_{ticker}", use_container_width=True):
-                    st.session_state.analisi_ticker_precompilato = ticker
-                    st.rerun()
+                    st.session_state['analisi_ticker_precompilato'] = ticker
+                    st.switch_tab("🔍 Analisi")
                 
                 with st.expander(f"📋 Operazioni - {ticker}"):
+                    # FIX: AGGIUNTI DATI POSIZIONE
+                    col_info1, col_info2, col_info3 = st.columns(3)
+                    with col_info1:
+                        st.metric("Quantità", f"{quantita:.6f}")
+                    with col_info2:
+                        st.metric("Prezzo Medio", f"€ {prezzo_medio:.2f}")
+                    with col_info3:
+                        st.metric("Valore Totale", f"€ {prezzo_eur * quantita:.2f}" if prezzo_eur else "N/D")
+                    
+                    st.markdown("---")
+                    
                     col_a1, col_a2 = st.columns(2)
                     with col_a1:
                         nuova_qta = st.number_input("Qta", min_value=0.0001, step=0.0001, key=f"mqta_{ticker}_{idx_pos}")
@@ -1425,10 +1451,9 @@ with tab2:
 
 with tab3:
     st.subheader("🔍 Analisi Singola")
+    
+    # FIX 2: GESTIONE TICKER PRECOMPILATO
     default_ticker = st.session_state.get('analisi_ticker_precompilato', "ADBE")
-    if 'analisi_ticker_precompilato' in st.session_state:
-        del st.session_state.analisi_ticker_precompilato
-        
     ticker_input = st.text_input("Ticker:", value=default_ticker)
     
     if st.button("🔎 Analizza", type="primary", use_container_width=True):
@@ -1454,6 +1479,30 @@ with tab3:
                 sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
                 sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
                 
+                # Calcola RSI
+                delta = df['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi_val = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty else 50
+                
+                # Supporto e Resistenza
+                supporto = round(df.tail(60)['Low'].min(), 2)
+                resistenza = round(df.tail(60)['High'].max(), 2)
+                
+                # After-Hours / Pre-Market
+                pm_price = info.get('preMarketPrice')
+                pm_change = info.get('preMarketChangePercent')
+                am_price = info.get('postMarketPrice')
+                am_change = info.get('postMarketChangePercent')
+                
+                if am_price and am_change:
+                    market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
+                elif pm_price and pm_change:
+                    market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
+                else:
+                    market_extra = "🌞 Regular Market"
+                
                 if trigger_by: segnale = "🟢 BY - Acquista"
                 elif "FASE 4" in fase or s_score < 40: segnale = "🔴 SELL - Evita"
                 elif s_score >= 60 and "FASE 2" in fase: segnale = "🟡 HOLD - Monitora"
@@ -1463,7 +1512,8 @@ with tab3:
                     'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
                     's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
                     'earnings_msg': earnings_msg, 'motivo_by': motivo_by, 'var_pct': var_pct, 'var_abs': var_abs,
-                    'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd
+                    'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd, 'rsi': round(rsi_val, 1),
+                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra
                 }
         except Exception as e:
             st.error(f"Errore: {e}")
@@ -1478,13 +1528,18 @@ with tab3:
         col3, col4 = st.columns(2)
         col3.metric("⚡ S-Score", r['s_score'])
         col4.metric("📊 Fase", r['fase'])
+        col5, col6 = st.columns(2)
+        col5.metric("📈 RSI", r['rsi'])
+        col6.metric("📊 Volume Ratio", f"{r['vol_ratio']:.2f}x")
         
         if r.get('var_pct') is not None:
             var_color = "#10b981" if r['var_pct'] > 0 else "#ef4444"
             st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
         
+        st.markdown(f"**{r['market_extra']}**")
         st.markdown(f"**SMA 50:** ${r['sma50_usd']:.2f} | **SMA 200:** ${r['sma200_usd']:.2f}")
-        st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f} | **Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
+        st.markdown(f"**🛡️ Sup:** ${r['supporto']:.2f} | **🎯 Res:** ${r['resistenza']:.2f}")
+        st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'} | **Prossimi Utili:** {r['earnings_msg']}")
         
         if "BY" in r['segnale']: st.success(f"**Motivo**: {r['motivo_by']}")
         elif "HOLD" in r['segnale']: st.warning(f"**Motivo**: {r['motivo_by']}")
@@ -1586,9 +1641,15 @@ with tab3:
         tf_choice = st.radio("Periodo:", list(tf_options.keys()), horizontal=True, index=5)
         tf_value = tf_options[tf_choice]
         
-        # FIX 4: SCALA GRAFICO 1GG (Fetch 5d per evitare candela singola gigante)
-        fetch_period = '5d' if tf_choice == "1GG" else tf_value
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, fetch_period, 50, 200, timeframe=tf_value)
+        # FIX 4: GRAFICO 1GG CON DATI INTRADAY
+        if tf_choice == "1GG":
+            fetch_period = '5d'
+            interval = '15m'
+        else:
+            fetch_period = tf_value
+            interval = '1d'
+        
+        fig = genera_grafico_baleine(st.session_state.grafico_ticker, fetch_period, 50, 200, timeframe=tf_value, interval=interval)
         if fig:
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         if st.button("✖️ Chiudi grafico", use_container_width=True):
