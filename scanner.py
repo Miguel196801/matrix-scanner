@@ -1307,11 +1307,40 @@ with tab2:
                     for item in piano['vendite']:
                         st.markdown(f"""<div class="signal-box signal-red"><strong>{item['ticker']}</strong> (Score: {item['score']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 
+                if piano['monitor']:
+                    st.markdown("#### 🟡 Da Monitorare / Accumulo")
+                    for item in piano['monitor']:
+                        st.markdown(f"""<div class="signal-box signal-yellow"><strong>{item['ticker']}</strong> (Score: {item['score']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
+                
                 if piano['acquisti']:
-                    st.markdown("#### 🟢 Da Comprare")
+                    st.markdown("#### 🟢 Da Comprare (Score > 75 o Override)")
                     for item in piano['acquisti']:
                         box_class = "signal-yellow" if item['stato_mercato'] == 'sospeso' else "signal-green"
                         st.markdown(f"""<div class="signal-box {box_class}"><strong>{item['ticker']}</strong> (Score: {item['score']}, €{item['prezzo_eur']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
+                
+                st.markdown("---")
+                st.subheader("💡 AZIONE CONSIGLIATA DAL SISTEMA")
+                consigli = []
+                if piano['vendite']:
+                    tickers_vendita = ", ".join([v['ticker'] for v in piano['vendite'][:3]])
+                    consigli.append(f"1. **Ottimizza:** Valuta la vendita di {tickers_vendita} per liberare liquidità e generare minusvalenze fiscali compensabili.")
+                
+                accumuli = [m['ticker'] for m in piano['monitor'] if "Rimbalzo" in m.get('messaggio', '')]
+                if accumuli:
+                    consigli.append(f"2. **Tieni d'occhio:** {', '.join(accumuli)} sono in fase di accumulo e pronti a ripartire. Non vendere.")
+                
+                if piano['semaforo'] == 'rosso':
+                    consigli.append("3. **Mercato:** Il mercato è in fase difensiva. Gli acquisti di nuovi titoli sono sospesi. Ricontrolla tra 7 giorni o quando il VIX scende sotto 25.")
+                elif piano['acquisti']:
+                    attivi = [a['ticker'] for a in piano['acquisti'] if a['stato_mercato'] == 'attivo']
+                    if attivi:
+                        consigli.append(f"3. **Nuove Entrate:** {', '.join(attivi)} mostrano setup validi. Valuta l'ingresso con nuova liquidità.")
+                
+                if not consigli:
+                    consigli.append("Mantieni la rotta. Il portafoglio è ben bilanciato rispetto alle condizioni attuali di mercato.")
+                
+                for c in consigli:
+                    st.info(c)
             
             st.markdown("---")
             
@@ -1322,7 +1351,6 @@ with tab2:
                 pnl_pct = pos.get('PnL_%', 0) or 0
                 stato_pac = pos.get('Stato_PAC', 'N/A')
                 ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
-                trend = pos.get('Trend', 'N/D')
                 prezzo_medio = pos.get('Prezzo_Medio', 0)
                 quantita = pos.get('Quantita', 0)
                 pnl_eur = pos.get('PnL_EUR', 0) or 0
@@ -1342,6 +1370,7 @@ with tab2:
                     var_color = "#94a3b8"
                     var_symbol = "●"
                     var_display = "N/D"
+                    var_class = "portfolio-change-neutral"
                 
                 if var_acquisto > 0: acqu_color, acqu_symbol = "#10b981", "▲"
                 elif var_acquisto < 0: acqu_color, acqu_symbol = "#ef4444", "▼"
@@ -1356,18 +1385,22 @@ with tab2:
                 st.markdown(f"""
                 <div class="portfolio-box" style="border-left-color: {border_color};">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
+                        <div style="flex: 1;">
                             <div class="portfolio-ticker">{ticker}</div>
                             <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
                             <div class="portfolio-info" style="color: {acqu_color};">{acqu_symbol} {var_acquisto:+.1f}% dall'acquisto</div>
                         </div>
-                        <div>
+                        <div style="text-align: right;">
                             <div class="{var_class}">{var_display}</div>
                             <div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl_eur:+.2f}€</div>
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                if st.button("🔍 Apri Analisi", key=f"btn_analisi_{ticker}", use_container_width=True):
+                    st.session_state.analisi_ticker_precompilato = ticker
+                    st.rerun()
                 
                 with st.expander(f"📋 Operazioni - {ticker}"):
                     col_a1, col_a2 = st.columns(2)
@@ -1398,7 +1431,11 @@ with tab2:
 
 with tab3:
     st.subheader("🔍 Analisi Singola")
-    ticker_input = st.text_input("Ticker:", value="ADBE")
+    default_ticker = st.session_state.get('analisi_ticker_precompilato', "ADBE")
+    if 'analisi_ticker_precompilato' in st.session_state:
+        del st.session_state.analisi_ticker_precompilato
+        
+    ticker_input = st.text_input("Ticker:", value=default_ticker)
     
     if st.button("🔎 Analizza", type="primary", use_container_width=True):
         ticker_s = ticker_input.strip().upper()
@@ -1449,8 +1486,8 @@ with tab3:
         col4.metric("📊 Fase", r['fase'])
         
         if r.get('var_pct') is not None:
-            var_color = "green" if r['var_pct'] > 0 else "red"
-            st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}%</span>")
+            var_color = "#10b981" if r['var_pct'] > 0 else "#ef4444"
+            st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
         
         st.markdown(f"**SMA 50:** ${r['sma50_usd']:.2f} | **SMA 200:** ${r['sma200_usd']:.2f}")
         st.markdown(f"**Volume Ratio:** {r['vol_ratio']:.2f} | **Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'}")
@@ -1485,6 +1522,22 @@ with tab3:
                     for item in scenari['vendita_loss']: st.success(item['messaggio'])
                 if scenari['nuova_liquidita']:
                     st.success("**OPZIONE MIGLIORE.** Preservi il portafoglio esistente.")
+                
+                st.markdown("---")
+                st.markdown("### 🏁 CONSIGLIO FINALE DEL SISTEMA")
+                if scenari['nuova_liquidita'] and not scenari['vendita_loss'] and not scenari['hold_catalizzatore']:
+                    st.success(f"🎯 **Visti gli scenari, consigliamo l'acquisto di {risultato['titolo']} con NUOVA LIQUIDITÀ di {risultato['importo']}€.** I titoli in gain sono in fase di ripresa e non vanno toccati. Procedi con l'acquisto.")
+                elif scenari['vendita_loss'] or scenari['hold_catalizzatore']:
+                    loss_tickers = ", ".join([v['ticker'] for v in scenari['vendita_loss'][:2]])
+                    hold_tickers = ", ".join([v['ticker'] for v in scenari['hold_catalizzatore'][:2]])
+                    msg_parts = []
+                    if hold_tickers:
+                        msg_parts.append(f"**NON VENDERE** {hold_tickers} (catalizzatore imminente).")
+                    if loss_tickers:
+                        msg_parts.append(f"Valuta prima di vendere {loss_tickers} per ottimizzazione fiscale.")
+                    st.warning(f"⚠️ {' '.join(msg_parts)} Se decidi di non vendere, procedi pure con la nuova liquidità.")
+                else:
+                    st.info("Valuta attentamente le opzioni sopra prima di procedere.")
         
         # STORICO SEGNALI
         st.markdown("---")
@@ -1534,9 +1587,14 @@ with tab3:
     if st.session_state.get('grafico_ticker'):
         st.markdown("---")
         st.subheader(f"📊 {st.session_state.grafico_ticker}")
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, "1y", 50, 200, timeframe='1d')
+        
+        tf_options = {"1GG": "1d", "5GG": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "1A": "1y"}
+        tf_choice = st.radio("Periodo:", list(tf_options.keys()), horizontal=True, index=5)
+        tf_value = tf_options[tf_choice]
+        
+        fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_value, 50, 200, timeframe=tf_value)
         if fig:
-            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False})
+            st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         if st.button("✖️ Chiudi grafico", use_container_width=True):
             st.session_state.grafico_ticker = None
             st.rerun()
