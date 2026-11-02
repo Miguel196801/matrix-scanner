@@ -304,6 +304,31 @@ def parse_catalizzatori(testo):
                     pass
     return catalizzatori
 
+# FIX 1: S-SCORE ROBUSTO (Allineato al Desktop)
+def calcola_s_score(info):
+    score = 50
+    try:
+        cr = float(info.get('currentRatio') or 1.0)
+        if cr > 2.0: score += 15
+        elif cr > 1.5: score += 10
+        elif cr < 1.0: score -= 15
+        
+        de = float(info.get('debtToEquity') or 50.0)
+        if de < 30: score += 15
+        elif de < 50: score += 10
+        elif de > 100: score -= 15
+        
+        pm = float(info.get('profitMargins') or 0.0)
+        if pm > 0.15: score += 10
+        elif pm > 0.05: score += 5
+        
+        rg = float(info.get('revenueGrowth') or 0.0)
+        if rg > 0.10: score += 10
+        elif rg > 0: score += 5
+    except Exception:
+        pass
+    return max(0, min(100, score))
+
 def calcola_score_ribilanciamento(ticker, df, info, insider_data=None):
     score = 0
     fase = rileva_fase_weinstein(df)
@@ -420,7 +445,7 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
             fase = rileva_fase_weinstein(df)
             prezzo_eur = round((df['Close'].iloc[-1] / eurusd_rate) if info.get('currency', 'USD') == 'USD' else df['Close'].iloc[-1], 2)
             
-            # OVERRIDE GIGANTI IPERVENDUTI
+            # FIX 5: OVERRIDE GIGANTI IPERVENDUTI
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -717,24 +742,6 @@ def ricostruisci_segnali_retroattivi(ticker, anni_indietro=1):
     except Exception as e:
         print(f"Errore ricostruzione {ticker}: {e}")
         return 0
-
-def calcola_s_score(info):
-    score = 50
-    cr = info.get('currentRatio', 1.0) or 1.0
-    if cr > 2.0: score += 15
-    elif cr > 1.5: score += 10
-    elif cr < 1.0: score -= 15
-    de = info.get('debtToEquity', 50.0) or 50.0
-    if de < 30: score += 15
-    elif de < 50: score += 10
-    elif de > 100: score -= 15
-    pm = info.get('profitMargins', 0.0) or 0.0
-    if pm > 0.15: score += 10
-    elif pm > 0.05: score += 5
-    rg = info.get('revenueGrowth', 0.0) or 0.0
-    if rg > 0.10: score += 10
-    elif rg > 0: score += 5
-    return max(0, min(100, score))
 
 def rileva_fase_weinstein(df):
     if len(df) < 200: return "Dati insufficienti"
@@ -1312,11 +1319,14 @@ with tab2:
                     for item in piano['monitor']:
                         st.markdown(f"""<div class="signal-box signal-yellow"><strong>{item['ticker']}</strong> (Score: {item['score']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 
+                # FIX 5: SEZIONE DA COMPRARE GARANTITA
                 if piano['acquisti']:
                     st.markdown("#### 🟢 Da Comprare (Score > 75 o Override)")
                     for item in piano['acquisti']:
                         box_class = "signal-yellow" if item['stato_mercato'] == 'sospeso' else "signal-green"
                         st.markdown(f"""<div class="signal-box {box_class}"><strong>{item['ticker']}</strong> (Score: {item['score']}, €{item['prezzo_eur']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
+                else:
+                    st.info("🟢 Nessun titolo da comprare al momento (nessun score > 75 o override ipervenduto rilevato).")
                 
                 st.markdown("---")
                 st.subheader("💡 AZIONE CONSIGLIATA DAL SISTEMA")
@@ -1347,7 +1357,6 @@ with tab2:
             for idx_pos, pos in enumerate(portafoglio):
                 ticker = pos['Ticker']
                 prezzo_eur = pos.get('Prezzo_Attuale_EUR')
-                var_pct = pos.get('Variazione_Pct')
                 pnl_pct = pos.get('PnL_%', 0) or 0
                 stato_pac = pos.get('Stato_PAC', 'N/A')
                 ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
@@ -1360,21 +1369,8 @@ with tab2:
                 else:
                     var_acquisto = 0
                 
-                if var_pct is not None:
-                    var_color = "#10b981" if var_pct > 0 else "#ef4444"
-                    var_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
-                    var_abs_val = pos.get('Variazione_Abs', 0.0) or 0.0
-                    var_display = f"{var_symbol} {abs(var_pct):.2f}% ({var_abs_val:+.2f}€)"
-                    var_class = "portfolio-change-positive" if var_pct > 0 else "portfolio-change-negative" if var_pct < 0 else "portfolio-change-neutral"
-                else:
-                    var_color = "#94a3b8"
-                    var_symbol = "●"
-                    var_display = "N/D"
-                    var_class = "portfolio-change-neutral"
-                
-                if var_acquisto > 0: acqu_color, acqu_symbol = "#10b981", "▲"
-                elif var_acquisto < 0: acqu_color, acqu_symbol = "#ef4444", "▼"
-                else: acqu_color, acqu_symbol = "#94a3b8", "●"
+                pnl_symbol = "▲" if pnl_pct > 0 else "▼" if pnl_pct < 0 else "●"
+                pnl_color = "#10b981" if pnl_pct > 0 else "#ef4444" if pnl_pct < 0 else "#94a3b8"
                 
                 if pnl_pct > 0: border_color = "#10b981"
                 elif pnl_pct < 0: border_color = "#ef4444"
@@ -1382,23 +1378,21 @@ with tab2:
                 
                 prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
                 
+                # FIX 3: UI CARD PORTAFOGLIO PULITA (Solo in basso a sinistra)
                 st.markdown(f"""
                 <div class="portfolio-box" style="border-left-color: {border_color};">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="flex: 1;">
-                            <div class="portfolio-ticker">{ticker}</div>
-                            <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
-                            <div class="portfolio-info" style="color: {acqu_color};">{acqu_symbol} {var_acquisto:+.1f}% dall'acquisto</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div class="{var_class}">{var_display}</div>
-                            <div class="portfolio-pnl">{pnl_pct:+.1f}% | {pnl_eur:+.2f}€</div>
+                    <div>
+                        <div class="portfolio-ticker">{ticker}</div>
+                        <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
+                        <div class="portfolio-info" style="color: {pnl_color}; font-weight: bold; margin-top: 0.5rem;">
+                            {pnl_symbol} {abs(pnl_pct):.2f}% | {pnl_eur:+.2f}€ dall'acquisto
                         </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                if st.button("🔍 Apri Analisi", key=f"btn_analisi_{ticker}", use_container_width=True):
+                # FIX 2: NOME TITOLO COME BOTTONE PER APRIRE ANALISI
+                if st.button(f"🔍 {ticker}", key=f"btn_analisi_{ticker}", use_container_width=True):
                     st.session_state.analisi_ticker_precompilato = ticker
                     st.rerun()
                 
@@ -1592,7 +1586,9 @@ with tab3:
         tf_choice = st.radio("Periodo:", list(tf_options.keys()), horizontal=True, index=5)
         tf_value = tf_options[tf_choice]
         
-        fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_value, 50, 200, timeframe=tf_value)
+        # FIX 4: SCALA GRAFICO 1GG (Fetch 5d per evitare candela singola gigante)
+        fetch_period = '5d' if tf_choice == "1GG" else tf_value
+        fig = genera_grafico_baleine(st.session_state.grafico_ticker, fetch_period, 50, 200, timeframe=tf_value)
         if fig:
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         if st.button("✖️ Chiudi grafico", use_container_width=True):
