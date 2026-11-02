@@ -682,7 +682,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if timeframe == '1wk' and interval == '1d':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
-    # FIX 4: SMA solo su dati daily (non intraday)
+    # FIX: SMA solo su dati daily (non intraday)
     if not hide_sma:
         df['SMA_Short'] = df['Close'].rolling(window=min(sma_short, len(df))).mean()
         df['SMA_Long'] = df['Close'].rolling(window=min(sma_long, len(df))).mean()
@@ -720,6 +720,30 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if gap_level:
         fig.add_hline(y=gap_level, line_dash="dot", line_color="#f59e0b", line_width=2, annotation_text=f" Gap: {gap_level}", row=1, col=1)
     
+    # FIX: MARKER BY/SELL (solo quando SMA visibili)
+    if not hide_sma:
+        by_x, by_y, sell_x, sell_y = [], [], [], []
+        for i in range(sma_long, len(df)):
+            if (abs(df['Close'].iloc[i] - df['SMA_Short'].iloc[i]) / df['SMA_Short'].iloc[i] <= 0.02 and 
+                df['Volume'].iloc[i] > df['Vol_Media_20'].iloc[i] and df['Close'].iloc[i] > df['Open'].iloc[i]):
+                by_x.append(df.index[i])
+                by_y.append(df['Close'].iloc[i])
+            
+            if (df['Close'].iloc[i] < df['SMA_Long'].iloc[i] and 
+                df['Close'].iloc[i-1] >= df['SMA_Long'].iloc[i-1] and 
+                df['Volume'].iloc[i] > df['Vol_Media_20'].iloc[i]):
+                sell_x.append(df.index[i])
+                sell_y.append(df['Close'].iloc[i])
+        
+        if by_x:
+            fig.add_trace(go.Scatter(x=[by_x[-1]], y=[by_y[-1]], mode='markers', 
+                        marker=dict(symbol='triangle-up', size=18, color='#00e676', line=dict(width=2, color='#00c853')), 
+                        name='▲ Ultimo BY'))
+        if sell_x:
+            fig.add_trace(go.Scatter(x=[sell_x[-1]], y=[sell_y[-1]], mode='markers', 
+                        marker=dict(symbol='triangle-down', size=18, color='#ff1744', line=dict(width=2, color='#d50000')), 
+                        name='▼ Ultimo SELL'))
+    
     colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7), row=2, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=1.5), name='RSI 14'), row=3, col=1)
@@ -730,7 +754,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0', size=11),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5, bgcolor='rgba(15, 23, 42, 0.9)'))
     return fig
-
 def valuta_stato_pac(info, df_storico):
     try:
         s_score = calcola_s_score(info)
