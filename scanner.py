@@ -124,29 +124,41 @@ def calcola_semaforo_mercato():
 # FIX 1: S-SCORE (UNA SOLA DEFINIZIONE, ROBUSTA)
 # ==============================================================================
 def calcola_s_score(info):
-    score = 50
+    score = 50  # Base score
     try:
-        cr = float(info.get('currentRatio') or 1.0)
-        if cr > 2.0: score += 15
-        elif cr > 1.5: score += 10
-        elif cr < 1.0: score -= 15
+        # Recupera i dati con fallback su valori default
+        cr = info.get('currentRatio')
+        de = info.get('debtToEquity')
+        pm = info.get('profitMargins')
+        rg = info.get('revenueGrowth')
         
-        de = float(info.get('debtToEquity') or 50.0)
-        if de < 30: score += 15
-        elif de < 50: score += 10
-        elif de > 100: score -= 15
+        # Current Ratio
+        if cr is not None:
+            if cr > 2.0: score += 15
+            elif cr > 1.5: score += 10
+            elif cr < 1.0: score -= 15
         
-        pm = float(info.get('profitMargins') or 0.0)
-        if pm > 0.15: score += 10
-        elif pm > 0.05: score += 5
+        # Debt to Equity
+        if de is not None:
+            if de < 30: score += 15
+            elif de < 50: score += 10
+            elif de > 100: score -= 15
         
-        rg = float(info.get('revenueGrowth') or 0.0)
-        if rg > 0.10: score += 10
-        elif rg > 0: score += 5
-    except Exception:
+        # Profit Margins
+        if pm is not None:
+            if pm > 0.15: score += 10
+            elif pm > 0.05: score += 5
+        
+        # Revenue Growth
+        if rg is not None:
+            if rg > 0.10: score += 10
+            elif rg > 0: score += 5
+            
+    except Exception as e:
+        print(f"Errore nel calcolo S-Score: {e}")
         pass
+    
     return max(0, min(100, score))
-
 # ==============================================================================
 # MODULO 2: SIMULATORE DI ACQUISTO
 # ==============================================================================
