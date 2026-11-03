@@ -121,7 +121,7 @@ def calcola_semaforo_mercato():
         return {'stato': 'giallo', 'spy_prezzo': None, 'spy_sma10': None, 'vix': None, 'messaggio': f'Errore: {str(e)}'}
 
 # ==============================================================================
-# FIX 1: S-SCORE (UNA SOLA DEFINIZIONE, ROBUSTA)
+# FIX 1: S-SCORE DEFINITIVO CON FALLBACK
 # ==============================================================================
 def calcola_s_score(info, ticker=None):
     # Dizionario di sicurezza per i titoli principali
@@ -143,7 +143,7 @@ def calcola_s_score(info, ticker=None):
     try:
         # 1. Se abbiamo il ticker, usalo per il fallback
         if ticker:
-            ticker_upper = ticker.strip().upper()
+            ticker_upper = str(ticker).strip().upper()
             if ticker_upper in fallback_scores:
                 return fallback_scores[ticker_upper]
         
@@ -181,7 +181,8 @@ def calcola_s_score(info, ticker=None):
         # 4. Se non abbiamo né ticker né dati, restituisci 50
         return 50
     except:
-        return 50    
+        return 50
+
 # ==============================================================================
 # MODULO 2: SIMULATORE DI ACQUISTO
 # ==============================================================================
@@ -943,7 +944,7 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean()
             df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
             vol_ratio = df.iloc[-1]['Volume'] / df.iloc[-1]['Vol_Media_20'] if df.iloc[-1]['Vol_Media_20'] > 0 else 0
-            s_score = calcola_s_score(info)
+            s_score = calcola_s_score(info, ticker)
             fase = rileva_fase_weinstein(df)
             figura_z, _ = rileva_figura_z(df)
             trigger_by, motivo_by, earnings_bloccato = verifica_trigger_by_fortezza(df, sma_short, ticker_obj)
@@ -1339,7 +1340,7 @@ with tab3:
                 df['SMA_Short'] = df['Close'].rolling(window=50).mean()
                 df['SMA_Long'] = df['Close'].rolling(window=200).mean()
                 vol_ratio = df.iloc[-1]['Volume'] / df['Volume'].rolling(window=20).mean().iloc[-1] if df['Volume'].rolling(window=20).mean().iloc[-1] > 0 else 0
-                s_score = calcola_s_score(info)
+                s_score = calcola_s_score(info, ticker_s)
                 fase = rileva_fase_weinstein(df)
                 figura_z, _ = rileva_figura_z(df)
                 trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
@@ -1370,7 +1371,9 @@ with tab3:
                     's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
                     'earnings_msg': earnings_msg, 'motivo_by': motivo_by, 'var_pct': var_pct, 'var_abs': var_abs,
                     'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd, 'rsi': round(rsi_val, 1),
-                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra
+                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra,
+                    'volume_oggi': int(df['Volume'].iloc[-1]),
+                    'volume_medio': int(df['Volume'].rolling(window=20).mean().iloc[-1])
                 }
         except Exception: pass
     
@@ -1387,7 +1390,7 @@ with tab3:
                 df['SMA_Short'] = df['Close'].rolling(window=50).mean()
                 df['SMA_Long'] = df['Close'].rolling(window=200).mean()
                 vol_ratio = df.iloc[-1]['Volume'] / df['Volume'].rolling(window=20).mean().iloc[-1] if df['Volume'].rolling(window=20).mean().iloc[-1] > 0 else 0
-                s_score = calcola_s_score(info)
+                s_score = calcola_s_score(info, ticker_s)
                 fase = rileva_fase_weinstein(df)
                 figura_z, _ = rileva_figura_z(df)
                 trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
@@ -1418,7 +1421,9 @@ with tab3:
                     's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
                     'earnings_msg': earnings_msg, 'motivo_by': motivo_by, 'var_pct': var_pct, 'var_abs': var_abs,
                     'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd, 'rsi': round(rsi_val, 1),
-                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra
+                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra,
+                    'volume_oggi': int(df['Volume'].iloc[-1]),
+                    'volume_medio': int(df['Volume'].rolling(window=20).mean().iloc[-1])
                 }
         except Exception as e:
             st.error(f"Errore: {e}")
@@ -1436,6 +1441,11 @@ with tab3:
         col5, col6 = st.columns(2)
         col5.metric("📈 RSI", r['rsi'])
         col6.metric("📊 Volume Ratio", f"{r['vol_ratio']:.2f}x")
+        
+        # FIX 2: RIPRISTINO VOLUME OGGI E VOLUME MEDIO
+        col7, col8 = st.columns(2)
+        col7.metric("📊 Volume Oggi", f"{r.get('volume_oggi', 'N/D'):,}" if isinstance(r.get('volume_oggi'), (int, float)) else r.get('volume_oggi', 'N/D'))
+        col8.metric("📊 Volume Medio", f"{r.get('volume_medio', 'N/D'):,}" if isinstance(r.get('volume_medio'), (int, float)) else r.get('volume_medio', 'N/D'))
         
         if r.get('var_pct') is not None:
             var_color = "#10b981" if r['var_pct'] > 0 else "#ef4444"
@@ -1593,7 +1603,7 @@ with tab5:
                 if df.empty or len(df) < 200: continue
                 prezzo_eur, _, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
                 if prezzo_eur is None: continue
-                s_score = calcola_s_score(info)
+                s_score = calcola_s_score(info, ticker)
                 fase = rileva_fase_weinstein(df)
                 delta = df['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
