@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 warnings.filterwarnings('ignore')
 
-st.set_page_config(page_title="MATRIX Mobile V6.0", layout="wide", page_icon="🛡️")
+st.set_page_config(page_title="MATRIX Mobile V6.1", layout="wide", page_icon="🛡️")
 
 # ==============================================================================
 # CONFIGURAZIONE MOBILE (UI COMPATTA)
@@ -225,7 +225,7 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
         return {'errore': str(e)}
 
 # ==============================================================================
-# MODULO 3: MOTORE DI RIBILANCIAMENTO
+# MODULO 3: MOTORE DI RIBILANCIAMENTO (CON PRIORITÀ V6.1)
 # ==============================================================================
 def parse_catalizzatori(testo):
     catalizzatori = {}
@@ -336,11 +336,16 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
             fase = rileva_fase_weinstein(df)
             prezzo_eur = round((df['Close'].iloc[-1] / eurusd_rate) if info.get('currency', 'USD') == 'USD' else df['Close'].iloc[-1], 2)
             
+            # Calcoli per la priorità
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             rsi_val = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty else 50
+            
+            sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+            prezzo_attuale = df['Close'].iloc[-1]
+            distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
             
             s_score = calcola_s_score(info)
             is_extreme_oversold = (s_score >= 85 and rsi_val < 30)
@@ -350,15 +355,42 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
                     msg = "⚠️ Titolo pronto all'acquisto, ma acquisti sospesi per mercato ribassista. Ricontrolla tra 7 giorni."
                     if is_extreme_oversold:
                         msg = "⚠️ Rimbalzo Tecnico Estremo: Titolo ipervenduto con fondamentali solidi. Alto rischio/alto rendimento. Valuta ingresso con position sizing ridotto. (Acquisti sospesi per mercato ribassista)."
-                    acquisti.append({'ticker': ticker, 'score': score, 'fase': fase, 'prezzo_eur': prezzo_eur, 'stato_mercato': 'sospeso', 'messaggio': msg})
+                    acquisti.append({
+                        'ticker': ticker, 'score': score, 'fase': fase, 'prezzo_eur': prezzo_eur, 
+                        'stato_mercato': 'sospeso', 'messaggio': msg,
+                        's_score': s_score, 'rsi': rsi_val, 'distanza_sma': distanza_sma200_pct
+                    })
                 else:
                     msg = "✅ Setup valido e mercato favorevole."
                     if is_extreme_oversold:
                         msg = "⚠️ Rimbalzo Tecnico Estremo: Titolo ipervenduto con fondamentali solidi. Alto rischio/alto rendimento. Valuta ingresso con position sizing ridotto."
-                    acquisti.append({'ticker': ticker, 'score': score, 'fase': fase, 'prezzo_eur': prezzo_eur, 'stato_mercato': 'attivo', 'messaggio': msg})
+                    acquisti.append({
+                        'ticker': ticker, 'score': score, 'fase': fase, 'prezzo_eur': prezzo_eur, 
+                        'stato_mercato': 'attivo', 'messaggio': msg,
+                        's_score': s_score, 'rsi': rsi_val, 'distanza_sma': distanza_sma200_pct
+                    })
         except: continue
 
-    return {'vendite': sorted(vendite, key=lambda x: x['score']), 'monitor': sorted(monitor, key=lambda x: x['score'], reverse=True), 'acquisti': sorted(acquisti, key=lambda x: x['score'], reverse=True), 'semaforo': semaforo['stato']}
+    # LOGICA DI PRIORITÀ V6.1: Ordina per S-Score (decrescente), poi RSI (crescente), poi Distanza SMA (crescente)
+    acquisti_sorted = sorted(acquisti, key=lambda x: (-x['s_score'], x['rsi'], x['distanza_sma']))
+    
+    # Assegna i badge di priorità
+    for idx, item in enumerate(acquisti_sorted):
+        rank = idx + 1
+        if rank == 1: badge = "🥇 PRIORITÀ 1"
+        elif rank == 2: badge = "🥈 PRIORITÀ 2"
+        elif rank == 3: badge = "🥉 PRIORITÀ 3"
+        else: badge = f"🎯 PRIORITÀ {rank}"
+        
+        upside_msg = " | Upside stimato: Alto" if item.get('s_score', 0) >= 85 and item.get('rsi', 50) < 30 else ""
+        item['badge'] = f"{badge}{upside_msg}"
+
+    return {
+        'vendite': sorted(vendite, key=lambda x: x['score']), 
+        'monitor': sorted(monitor, key=lambda x: x['score'], reverse=True), 
+        'acquisti': acquisti_sorted, 
+        'semaforo': semaforo['stato']
+    }
 
 # ==============================================================================
 # SISTEMA SEGNALI STORICI
@@ -682,7 +714,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if timeframe == '1wk' and interval == '1d':
         df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
     
-    # FIX: SMA solo su dati daily (non intraday)
     if not hide_sma:
         df['SMA_Short'] = df['Close'].rolling(window=min(sma_short, len(df))).mean()
         df['SMA_Long'] = df['Close'].rolling(window=min(sma_long, len(df))).mean()
@@ -720,7 +751,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if gap_level:
         fig.add_hline(y=gap_level, line_dash="dot", line_color="#f59e0b", line_width=2, annotation_text=f" Gap: {gap_level}", row=1, col=1)
     
-    # FIX: MARKER BY/SELL (solo quando SMA visibili)
     if not hide_sma:
         by_x, by_y, sell_x, sell_y = [], [], [], []
         for i in range(sma_long, len(df)):
@@ -754,6 +784,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0', size=11),
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5, bgcolor='rgba(15, 23, 42, 0.9)'))
     return fig
+
 def valuta_stato_pac(info, df_storico):
     try:
         s_score = calcola_s_score(info)
@@ -812,7 +843,7 @@ else:
 
 st.markdown(f'''
 <div class="header-box">
-    <h1>🛡️ MATRIX Mobile V6.0</h1>
+    <h1>🛡️ MATRIX Mobile V6.1</h1>
     <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Scanner Operativo Blindato</p>
     <p style="margin: 0.8rem 0 0 0; font-size: 1rem; font-weight: bold; color: {sem_color};">{sem_display}</p>
 </div>
@@ -1047,13 +1078,17 @@ with tab2:
                     st.markdown("#### 🟡 Da Monitorare / Accumulo")
                     for item in piano['monitor']:
                         st.markdown(f"""<div class="signal-box signal-yellow"><strong>{item['ticker']}</strong> (Score: {item['score']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
+                
+                # FIX V6.1: SEZIONE DA COMPRARE CON BADGE PRIORITÀ
                 if piano['acquisti']:
-                    st.markdown("#### 🟢 Da Comprare (Score > 75 o Override)")
+                    st.markdown("#### 🟢 Da Comprare (Ordinato per Priorità)")
                     for item in piano['acquisti']:
                         box_class = "signal-yellow" if item['stato_mercato'] == 'sospeso' else "signal-green"
-                        st.markdown(f"""<div class="signal-box {box_class}"><strong>{item['ticker']}</strong> (Score: {item['score']}, €{item['prezzo_eur']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
+                        badge = item.get('badge', '')
+                        st.markdown(f"""<div class="signal-box {box_class}"><strong>{badge} {item['ticker']}</strong> (Score: {item['score']}, €{item['prezzo_eur']})<br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 else:
                     st.info("🟢 Nessun titolo da comprare al momento.")
+                
                 st.markdown("---")
                 st.subheader("💡 AZIONE CONSIGLIATA DAL SISTEMA")
                 consigli = []
@@ -1092,7 +1127,6 @@ with tab2:
                 else:
                     var_acquisto = 0
                 
-                # ALTO A DESTRA: % variazione GIORNO
                 if var_pct is not None:
                     var_day_color = "#10b981" if var_pct > 0 else "#ef4444"
                     var_day_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
@@ -1101,7 +1135,6 @@ with tab2:
                     var_day_color = "#94a3b8"
                     var_day_display = "N/D"
                 
-                # BASSO A SINISTRA: % dall'acquisto
                 if var_acquisto > 0: acqu_color, acqu_symbol = "#10b981", "▲"
                 elif var_acquisto < 0: acqu_color, acqu_symbol = "#ef4444", "▼"
                 else: acqu_color, acqu_symbol = "#94a3b8", "●"
@@ -1130,7 +1163,6 @@ with tab2:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # FIX 2: LINK PORTAFOGLIO → ANALISI (Opzione B)
                 if st.button(f"🔍 {ticker}", key=f"btn_analisi_{ticker}", use_container_width=True):
                     st.session_state['analisi_ticker_precompilato'] = ticker
                     st.rerun()
@@ -1142,8 +1174,6 @@ with tab2:
                     with col_info3: st.metric("Valore Totale", f"€ {prezzo_eur * quantita:.2f}" if prezzo_eur else "N/D")
                     
                     st.markdown("---")
-                    
-                    # FIX 5: SEZIONE VENDITA QUOTE (completa come Desktop)
                     st.markdown("**➖ Vendi Quote**")
                     modalita_vendita = st.radio(
                         f"Modalità vendita {ticker}",
@@ -1259,16 +1289,12 @@ with tab2:
 
 with tab3:
     st.subheader("🔍 Analisi Singola")
-    
-    # FIX 2: TICKER PRECOMPILATO DA PORTAFOGLIO
     default_ticker = st.session_state.get('analisi_ticker_precompilato', "ADBE")
     ticker_input = st.text_input("Ticker:", value=default_ticker)
     
-    # Auto-analisi se ticker precompilato
     if 'analisi_ticker_precompilato' in st.session_state and st.session_state.analisi_ticker_precompilato:
         ticker_s = st.session_state.analisi_ticker_precompilato
         del st.session_state.analisi_ticker_precompilato
-        # Forza l'analisi automatica
         try:
             ticker_obj = yf.Ticker(ticker_s)
             df = ticker_obj.history(period="1y")
@@ -1297,12 +1323,9 @@ with tab3:
                 pm_change = info.get('preMarketChangePercent')
                 am_price = info.get('postMarketPrice')
                 am_change = info.get('postMarketChangePercent')
-                if am_price and am_change:
-                    market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
-                elif pm_price and pm_change:
-                    market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
-                else:
-                    market_extra = "🌞 Regular Market"
+                if am_price and am_change: market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
+                elif pm_price and pm_change: market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
+                else: market_extra = "🌞 Regular Market"
                 if trigger_by: segnale = "🟢 BY - Acquista"
                 elif "FASE 4" in fase or s_score < 40: segnale = "🔴 SELL - Evita"
                 elif s_score >= 60 and "FASE 2" in fase: segnale = "🟡 HOLD - Monitora"
@@ -1348,12 +1371,9 @@ with tab3:
                 pm_change = info.get('preMarketChangePercent')
                 am_price = info.get('postMarketPrice')
                 am_change = info.get('postMarketChangePercent')
-                if am_price and am_change:
-                    market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
-                elif pm_price and pm_change:
-                    market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
-                else:
-                    market_extra = "🌞 Regular Market"
+                if am_price and am_change: market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
+                elif pm_price and pm_change: market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
+                else: market_extra = "🌞 Regular Market"
                 if trigger_by: segnale = "🟢 BY - Acquista"
                 elif "FASE 4" in fase or s_score < 40: segnale = "🔴 SELL - Evita"
                 elif s_score >= 60 and "FASE 2" in fase: segnale = "🟡 HOLD - Monitora"
@@ -1395,7 +1415,6 @@ with tab3:
         elif "HOLD" in r['segnale']: st.warning(f"**Motivo**: {r['motivo_by']}")
         else: st.error("**Motivo**: Titolo in Fase 4 o S-Score troppo basso")
         
-        # SIMULATORE DI ACQUISTO
         st.markdown("---")
         st.subheader("💰 Simulatore di Acquisto")
         col_sim1, col_sim2 = st.columns([2, 1])
@@ -1432,7 +1451,6 @@ with tab3:
                 else:
                     st.info("Valuta attentamente le opzioni sopra prima di procedere.")
         
-        # STORICO SEGNALI
         st.markdown("---")
         st.markdown('<div class="signal-history-box"><div class="signal-history-title">📊 STORICO SEGNALI</div></div>', unsafe_allow_html=True)
         ultimo_segnale_check = get_ultimo_segnale(r['ticker'])
@@ -1483,7 +1501,6 @@ with tab3:
         tf_choice = st.radio("Periodo:", list(tf_options.keys()), horizontal=True, index=5)
         tf_value = tf_options[tf_choice]
         
-        # FIX 4: GRAFICO 1GG CON DATI INTRADAY E SMA NASCOSTE
         if tf_choice == "1GG":
             fetch_period, interval, hide_sma = '5d', '15m', True
         else:
