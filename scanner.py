@@ -123,6 +123,14 @@ def calcola_semaforo_mercato():
 # ==============================================================================
 # FIX 1: S-SCORE (UNA SOLA DEFINIZIONE, ROBUSTA)
 # ==============================================================================
+# DEBUG: Stampa cosa riceve la funzione
+st.write("🔍 DEBUG - Dati ricevuti da Yahoo Finance:")
+st.write(f"Ticker: {ticker_s}")
+st.write(f"Current Ratio: {info.get('currentRatio')}")
+st.write(f"Debt to Equity: {info.get('debtToEquity')}")
+st.write(f"Profit Margins: {info.get('profitMargins')}")
+st.write(f"Revenue Growth: {info.get('revenueGrowth')}")
+st.write(f"Tutti i dati disponibili (prime 10 chiavi): {list(info.keys())[:10]}")
 def calcola_s_score(info):
     score = 50
     try:
