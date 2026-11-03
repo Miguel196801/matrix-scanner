@@ -123,8 +123,8 @@ def calcola_semaforo_mercato():
 # ==============================================================================
 # FIX 1: S-SCORE (UNA SOLA DEFINIZIONE, ROBUSTA)
 # ==============================================================================
-def calcola_s_score(info):
-    # Fallback per titoli noti se Yahoo non restituisce dati
+def calcola_s_score(info, ticker=None):
+    # Dizionario di sicurezza per i titoli principali
     fallback_scores = {
         'META': 90, 'NVDA': 100, 'MSFT': 95, 'AAPL': 90,
         'GOOGL': 90, 'AMZN': 85, 'PLTR': 80, 'ADBE': 85,
@@ -133,39 +133,55 @@ def calcola_s_score(info):
         'MRVL': 75, 'CRDO': 70, 'TSLA': 70, 'AMD': 80,
         'NKE': 75, 'CRWD': 80, 'SOFI': 65, 'VRT': 70,
         'TTWO': 70, 'ONDS': 60, 'APP': 65, 'TTD': 65,
-        'APLD': 60, 'ADBE': 85
+        'APLD': 60, 'BBAI': 55, 'IONQ': 60, 'RKLB': 65,
+        'SOUN': 60, 'ASTS': 55, 'ZETA': 60, 'NU': 75,
+        'MCD': 85, 'DIS': 75, 'SBUX': 70, 'PEP': 80,
+        'INTC': 65, 'NBIS': 60, 'WDC': 70, 'COHR': 70,
+        'LLY': 90, 'GLW': 75, 'TXN': 80
     }
     
     try:
-        symbol = info.get('symbol', '')
-        if symbol:
-            symbol = symbol.upper()
-            if symbol in fallback_scores:
-                return fallback_scores[symbol]
+        # 1. Se abbiamo il ticker, usalo per il fallback
+        if ticker:
+            ticker_upper = ticker.strip().upper()
+            if ticker_upper in fallback_scores:
+                return fallback_scores[ticker_upper]
         
-        # Calcolo normale se i dati ci sono
-        score = 50
-        cr = info.get('currentRatio', 1.0) or 1.0
-        if cr > 2.0: score += 15
-        elif cr > 1.5: score += 10
-        elif cr < 1.0: score -= 15
+        # 2. Altrimenti prova a estrarre il simbolo da info
+        symbol = str(info.get('symbol', '')).upper()
+        if symbol and symbol in fallback_scores:
+            return fallback_scores[symbol]
         
-        de = info.get('debtToEquity', 50.0) or 50.0
-        if de < 30: score += 15
-        elif de < 50: score += 10
-        elif de > 100: score -= 15
+        # 3. Se i dati fondamentali ci sono, calcola normalmente
+        cr = info.get('currentRatio')
+        pm = info.get('profitMargins')
         
-        pm = info.get('profitMargins', 0.0) or 0.0
-        if pm > 0.15: score += 10
-        elif pm > 0.05: score += 5
+        if cr is not None or pm is not None:
+            score = 50
+            cr_val = float(cr or 1.0)
+            if cr_val > 2.0: score += 15
+            elif cr_val > 1.5: score += 10
+            elif cr_val < 1.0: score -= 15
+            
+            de_val = float(info.get('debtToEquity', 50.0) or 50.0)
+            if de_val < 30: score += 15
+            elif de_val < 50: score += 10
+            elif de_val > 100: score -= 15
+            
+            pm_val = float(pm or 0.0)
+            if pm_val > 0.15: score += 10
+            elif pm_val > 0.05: score += 5
+            
+            rg_val = float(info.get('revenueGrowth', 0.0) or 0.0)
+            if rg_val > 0.10: score += 10
+            elif rg_val > 0: score += 5
+            
+            return max(0, min(100, score))
         
-        rg = info.get('revenueGrowth', 0.0) or 0.0
-        if rg > 0.10: score += 10
-        elif rg > 0: score += 5
-        
-        return max(0, min(100, score))
-    except:
+        # 4. Se non abbiamo né ticker né dati, restituisci 50
         return 50
+    except:
+        return 50    
 # ==============================================================================
 # MODULO 2: SIMULATORE DI ACQUISTO
 # ==============================================================================
@@ -220,7 +236,7 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
                 if len(hist_pos) >= 30:
                     trend_30gg = ((hist_pos['Close'].iloc[-1] / hist_pos['Close'].iloc[-30]) - 1) * 100
                 
-                s_score = calcola_s_score(info_pos)
+                s_score = calcola_s_score(info_pos, ticker_pos)
                 fase = rileva_fase_weinstein(hist_pos)
                 kill_switch = ("FASE 4" in fase or s_score < 50)
                 
@@ -271,7 +287,7 @@ def calcola_score_ribilanciamento(ticker, df, info, insider_data=None):
     elif "FASE 1" in fase: score += 20
     elif "FASE 3" in fase: score += 10
     
-    s_score = calcola_s_score(info)
+    s_score = calcola_s_score(info, ticker)
     score += (s_score / 100) * 25
     
     if len(df) >= 30:
@@ -366,7 +382,7 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
             prezzo_attuale = df['Close'].iloc[-1]
             distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
             
-            s_score = calcola_s_score(info)
+            s_score = calcola_s_score(info, ticker)
             is_extreme_oversold = (s_score >= 85 and rsi_val < 30)
             
             if score > 75 or is_extreme_oversold:
@@ -806,7 +822,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
 
 def valuta_stato_pac(info, df_storico):
     try:
-        s_score = calcola_s_score(info)
+        s_score = calcola_s_score(info, df_storico.attrs.get('ticker', ''))
         fase = rileva_fase_weinstein(df_storico)
         rev_growth = info.get('revenueGrowth', 0.0) or 0.0
         if "FASE 4" in fase or s_score < 50 or rev_growth < 0: return "🔴 PAC SOSPESO"
