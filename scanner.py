@@ -1346,22 +1346,25 @@ with tab2:
             
             # MODIFICA 5: PIANO DI ALLOCAZIONE DINAMICA
             st.markdown("---")
-            st.subheader("💰 Piano di Allocazione Dinamica")
-            if st.button("💰 Genera Piano di Allocazione", type="secondary", use_container_width=True):
-                with st.spinner("🔄 Calcolo allocazione ottimale..."):
-                    liquidita_reale = calcola_liquidita_totale()
-                    liquidita_totale_alloc = liquidita_reale + 500
-                    piano_alloc = genera_piano_allocazione(portafoglio, liquidita_totale_alloc, eurusd_rate)
-                    st.session_state.piano_allocazione = piano_alloc
-            if st.session_state.get('piano_allocazione'):
-                piano = st.session_state.piano_allocazione
-                st.markdown(f"**Liquidità Totale Disponibile:** € {liquidita_totale_alloc:,.2f}")
-                st.markdown(f"**BY FABIO attivi:** {piano['by_fabio_count']} | **PAC ottimali:** {piano['pac_ottimali_count']} | **Breakout imminenti:** {piano['watchlist_breakout_count']}")
-                if piano['allocazioni']:
-                    df_alloc = pd.DataFrame(piano['allocazioni'])
-                    df_alloc.columns = ['Ticker', 'Importo (€)', 'Motivazione', 'Priorità']
-                    st.dataframe(df_alloc, use_container_width=True, height=200)
-                st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
+    st.subheader("💰 Piano di Allocazione Dinamica")
+    if st.button("💰 Genera Piano di Allocazione", type="secondary", use_container_width=True):
+        with st.spinner("🔄 Calcolo allocazione ottimale..."):
+        liquidita_reale = calcola_liquidita_totale()
+        liquidita_totale_alloc = liquidita_reale + 500  # Liquidità vendite + PAC mensile
+        piano_alloc = genera_piano_allocazione(portafoglio, liquidita_totale_alloc, eurusd_rate)
+        st.session_state.piano_allocazione = piano_alloc
+        st.session_state.liquidita_totale_alloc = liquidita_totale_alloc  # SALVA ANCHE QUESTA!
+
+    if st.session_state.get('piano_allocazione'):
+        piano = st.session_state.piano_allocazione
+        liquidita_totale_alloc = st.session_state.get('liquidita_totale_alloc', 0)  # RECUPERA DA SESSION STATE
+        st.markdown(f"**Liquidità Totale Disponibile:** € {liquidita_totale_alloc:,.2f}")
+        st.markdown(f"**BY FABIO attivi:** {piano['by_fabio_count']} | **PAC ottimali:** {piano['pac_ottimali_count']} | **Breakout imminenti:** {piano['watchlist_breakout_count']}")
+    if piano['allocazioni']:
+        df_alloc = pd.DataFrame(piano['allocazioni'])
+        df_alloc.columns = ['Ticker', 'Importo (€)', 'Motivazione', 'Priorità']
+        st.dataframe(df_alloc, use_container_width=True, height=200)
+        st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
             
             st.markdown("---")
             
