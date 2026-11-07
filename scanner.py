@@ -1694,8 +1694,6 @@ with tab_portafoglio:
 
         st.markdown("---")
         # FIX 3: 3 Pallini dei Target e BY FABIO indicator
-        insider_tracker = carica_insider_tracker()
-        insider_tickers_set = set(item['Ticker'] for item in insider_tracker)
         
         for idx_pos, pos in enumerate(portafoglio):
             ticker = pos['Ticker']
@@ -1747,7 +1745,7 @@ with tab_portafoglio:
             
             trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
             by_fabio_indicator = '<span class="by-fabio-badge" title="Ingresso matematicamente validato: Fortezza + Grafico">🟢 BY FABIO</span>' if trigger_by_fabio else ''
-            insider_indicator = '<span class="insider-fire">🔥</span>' if ticker in insider_tickers_set else ''
+            
             
             st.markdown(f"""
             <div class="portfolio-box" style="border-left-color: {border_color};">
