@@ -1368,17 +1368,17 @@ with tab2:
             
         st.markdown("---")
             
-            for idx_pos, pos in enumerate(portafoglio):
-                ticker = pos['Ticker']
-                prezzo_eur = pos.get('Prezzo_Attuale_EUR')
-                var_pct = pos.get('Variazione_Pct')
-                var_abs = pos.get('Variazione_Abs', 0) or 0
-                pnl_pct = pos.get('PnL_%', 0) or 0
-                stato_pac = pos.get('Stato_PAC', 'N/A')
-                ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
-                prezzo_medio = pos.get('Prezzo_Medio', 0)
-                quantita = pos.get('Quantita', 0)
-                pnl_eur = pos.get('PnL_EUR', 0) or 0
+        for idx_pos, pos in enumerate(portafoglio):
+            ticker = pos['Ticker']
+            prezzo_eur = pos.get('Prezzo_Attuale_EUR')
+            var_pct = pos.get('Variazione_Pct')
+            var_abs = pos.get('Variazione_Abs', 0) or 0
+            pnl_pct = pos.get('PnL_%', 0) or 0
+            stato_pac = pos.get('Stato_PAC', 'N/A')
+            ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
+            prezzo_medio = pos.get('Prezzo_Medio', 0)
+            quantita = pos.get('Quantita', 0)
+            pnl_eur = pos.get('PnL_EUR', 0) or 0
                 
                 if prezzo_medio > 0 and prezzo_eur:
                     var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
