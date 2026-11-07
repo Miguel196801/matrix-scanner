@@ -1349,11 +1349,11 @@ with tab2:
     st.subheader("💰 Piano di Allocazione Dinamica")
     if st.button("💰 Genera Piano di Allocazione", type="secondary", use_container_width=True):
         with st.spinner("🔄 Calcolo allocazione ottimale..."):
-        liquidita_reale = calcola_liquidita_totale()
-        liquidita_totale_alloc = liquidita_reale + 500  # Liquidità vendite + PAC mensile
-        piano_alloc = genera_piano_allocazione(portafoglio, liquidita_totale_alloc, eurusd_rate)
-        st.session_state.piano_allocazione = piano_alloc
-        st.session_state.liquidita_totale_alloc = liquidita_totale_alloc  # SALVA ANCHE QUESTA!
+            liquidita_reale = calcola_liquidita_totale()
+            liquidita_totale_alloc = liquidita_reale + 500  # Liquidità vendite + PAC mensile
+            piano_alloc = genera_piano_allocazione(portafoglio, liquidita_totale_alloc, eurusd_rate)
+            st.session_state.piano_allocazione = piano_alloc
+            st.session_state.liquidita_totale_alloc = liquidita_totale_alloc  # SALVA ANCHE QUESTA!
 
     if st.session_state.get('piano_allocazione'):
         piano = st.session_state.piano_allocazione
