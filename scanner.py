@@ -1360,10 +1360,10 @@ with tab2:
         liquidita_totale_alloc = st.session_state.get('liquidita_totale_alloc', 0)  # RECUPERA DA SESSION STATE
         st.markdown(f"**Liquidità Totale Disponibile:** € {liquidita_totale_alloc:,.2f}")
         st.markdown(f"**BY FABIO attivi:** {piano['by_fabio_count']} | **PAC ottimali:** {piano['pac_ottimali_count']} | **Breakout imminenti:** {piano['watchlist_breakout_count']}")
-    if piano['allocazioni']:
-        df_alloc = pd.DataFrame(piano['allocazioni'])
-        df_alloc.columns = ['Ticker', 'Importo (€)', 'Motivazione', 'Priorità']
-        st.dataframe(df_alloc, use_container_width=True, height=200)
+        if piano['allocazioni']:
+            df_alloc = pd.DataFrame(piano['allocazioni'])
+            df_alloc.columns = ['Ticker', 'Importo (€)', 'Motivazione', 'Priorità']
+            st.dataframe(df_alloc, use_container_width=True, height=200)
         st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
             
         st.markdown("---")
