@@ -1366,7 +1366,7 @@ with tab2:
         st.dataframe(df_alloc, use_container_width=True, height=200)
         st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
             
-            st.markdown("---")
+        st.markdown("---")
             
             for idx_pos, pos in enumerate(portafoglio):
                 ticker = pos['Ticker']
