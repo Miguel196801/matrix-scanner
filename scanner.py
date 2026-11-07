@@ -1380,8 +1380,8 @@ with tab2:
             quantita = pos.get('Quantita', 0)
             pnl_eur = pos.get('PnL_EUR', 0) or 0
                 
-                if prezzo_medio > 0 and prezzo_eur:
-                    var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
+            if prezzo_medio > 0 and prezzo_eur:
+                var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
                 else:
                     var_acquisto = 0
                 
