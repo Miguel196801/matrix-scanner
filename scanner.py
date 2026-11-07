@@ -1382,8 +1382,8 @@ with tab2:
                 
             if prezzo_medio > 0 and prezzo_eur:
                 var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
-                else:
-                    var_acquisto = 0
+            else:
+                var_acquisto = 0
                 
                 if var_pct is not None:
                     var_day_color = "#10b981" if var_pct > 0 else "#ef4444"
