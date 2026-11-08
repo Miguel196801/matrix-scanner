@@ -2,6 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import math
 import warnings
 import json
@@ -29,6 +31,7 @@ footer {visibility: hidden;}
 .signal-green { background-color: #064e3b; border-left: 4px solid #10b981; color: #d1fae5; }
 .signal-yellow { background-color: #451a03; border-left: 4px solid #f59e0b; color: #fef3c7; }
 .signal-red { background-color: #450a0a; border-left: 4px solid #ef4444; color: #fee2e2; }
+.signal-blue { background-color: #1e3a5f; border-left: 4px solid #3b82f6; color: #dbeafe; }
 .signal-history-box { background-color: #1e293b; border-radius: 8px; padding: 1rem; margin: 1rem 0; border: 2px solid #334155; }
 .signal-history-title { color: #f8fafc; font-size: 1rem; font-weight: bold; margin-bottom: 0.5rem; }
 .target-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
@@ -134,7 +137,7 @@ def calcola_s_score(info, ticker=None):
     except: return 50
 
 # ==============================================================================
-# WEINSTEIN AVANZATO
+# WEINSTEIN AVANZATO (Slope SMA200)
 # ==============================================================================
 def rileva_fase_weinstein(df):
     if len(df) < 200: return "Dati insufficienti"
@@ -853,7 +856,7 @@ with tab2:
             col2.metric("📈 P&L Totale", f"€ {totale_pnl:,.0f}", f"{totale_pnl_pct:+.1f}%")
             st.markdown("---")
             
-            # === DASHBOARD LIQUIDITÀ & PATRIMONIO ===
+            # Dashboard Liquidità & Patrimonio
             st.markdown("### 🏦 Dashboard Liquidità & Patrimonio")
             liquidita_totale = calcola_liquidita_totale()
             riepilogo_fiscale = calcola_riepilogo_fiscale(None)
@@ -867,7 +870,7 @@ with tab2:
                 st.metric("📊 Rendimento Totale", f"{pnl_percentuale:+.2f}%", help=f"Su capitale: € {totale_carico:,.2f}")
             st.markdown("---")
             
-            # === PODC ===
+            # PODC
             st.markdown("### 🛡️ Protocollo di Ottimizzazione Dinamica del Capitale (PODC)")
             if st.button("🛡️ Avvia Protocollo Ottimizzazione (PODC)", type="primary", use_container_width=True):
                 with st.spinner("🔄 Analisi efficienza capitale in corso..."):
@@ -904,7 +907,7 @@ with tab2:
                 with col_liq2: st.metric("🎯 Capitale liberabile", f"€ {capitale_proposto:,.2f}")
                 with col_liq3: st.metric("🏦 TOTALE DISPONIBILE", f"€ {totale_disponibile:,.2f}")
 
-            # === MOTORE DI RIBILANCIAMENTO MENSILE ===
+            # Motore di Ribilanciamento Mensile
             st.markdown("---")
             st.markdown("### 📊 Motore di Ribilanciamento Mensile")
             if st.button("📊 Genera Piano di Rotazione", type="secondary", use_container_width=True):
@@ -945,7 +948,7 @@ with tab2:
                 else:
                     st.info("Mantieni la rotta. Il portafoglio è ben bilanciato.")
 
-            # === PIANO DI ALLOCAZIONE DINAMICA ===
+            # Piano di Allocazione Dinamica
             st.markdown("---")
             st.subheader("💰 Piano di Allocazione Dinamica")
             if st.button("💰 Genera Piano di Allocazione", type="secondary", use_container_width=True):
@@ -967,7 +970,7 @@ with tab2:
                 st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
             
             st.markdown("---")
-            # === LOOP PORTAFOGLIO CON PALLINI E BY FABIO ===
+            # Loop Portafoglio con 3 Pallini Target e BY FABIO
             for idx_pos, pos in enumerate(portafoglio):
                 ticker = pos['Ticker']
                 prezzo_eur = pos.get('Prezzo_Attuale_EUR')
@@ -1130,7 +1133,7 @@ with tab2:
 with tab3:
     st.subheader("🔍 Analisi Singola")
     
-    # TASTO ESCI IN ALTO
+    # TASTO ESCI
     if st.button("← Torna al Portafoglio", key="btn_torna_portafoglio", use_container_width=True):
         st.session_state.analisi_risultati = None
         st.session_state.grafico_ticker = None
@@ -1271,7 +1274,7 @@ with tab3:
         col5.metric("📈 RSI", r['rsi'])
         col6.metric("📊 Volume Ratio", f"{r['vol_ratio']:.2f}x")
         
-        # FIX: Volume Oggi e Medio
+        # Volume Oggi e Medio
         col7, col8 = st.columns(2)
         col7.metric("📊 Volume Oggi", f"{r.get('volume_oggi', 'N/D'):,}" if isinstance(r.get('volume_oggi'), (int, float)) else r.get('volume_oggi', 'N/D'))
         col8.metric("📊 Volume Medio", f"{r.get('volume_medio', 'N/D'):,}" if isinstance(r.get('volume_medio'), (int, float)) else r.get('volume_medio', 'N/D'))
@@ -1370,6 +1373,100 @@ with tab3:
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         if st.button("✖️ Chiudi grafico", use_container_width=True):
             st.session_state.grafico_ticker = None
-            st.rerun()    
+            st.rerun()
+
+with tab4:
+    st.subheader("📋 Registro Vendite & Fiscalità")
+    anno_filter = st.selectbox("📅 Anno:", ["Tutti"] + [str(y) for y in range(2024, 2028)], index=2)
+    anno_val = None if anno_filter == "Tutti" else int(anno_filter)
+    riepilogo = calcola_riepilogo_fiscale(anno_val)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("💰 Gain", f"€ {riepilogo['gain_totale']:+.2f}")
+    col2.metric("📉 Loss", f"€ {riepilogo['loss_totale']:+.2f}")
+    col3.metric("✅ Netto", f"€ {riepilogo['netto_reale']:+.2f}")
+    st.markdown("---")
+    registro = carica_json(REGISTRO_VENDITE_FILE)
+    if anno_val: registro = [v for v in registro if v.get('Data', '').startswith(str(anno_val))]
+    if registro:
+        df_registro = pd.DataFrame(registro)
+        df_display = df_registro[['id', 'Data', 'Ticker', 'Qta_Venduta', 'Prezzo_Medio', 'Prezzo_Vendita', 'PnL_Lordo', 'PnL_Pct', 'Tasse', 'PnL_Netto']].copy()
+        df_display.columns = ['ID', 'Data', 'Ticker', 'Qta', 'P.Medio', 'P.Vendita', 'P&L Lordo', 'P&L %', 'Tasse', 'P&L Netto']
+        st.dataframe(df_display, use_container_width=True, height=300)
+        col_act1, col_act2 = st.columns(2)
+        with col_act1:
+            if st.button("🗑️ Reset Completo Registro"):
+                if reset_registro_vendite():
+                    st.success("✅ Resettato")
+                    st.rerun()
+        with col_act2:
+            st.info(f"Pool Minusvalenze: € {riepilogo['pool_minusvalenze']:.2f}")
+    else:
+        st.info("📭 Nessuna vendita registrata.")
+
+with tab5:
+    st.subheader("🤖 Portfolio Sperimentale AI")
+    st.markdown("Setup Palantir: S-Score ≥ 75, Growth ≥ 20%, PEG < 1.5, RSI < 45, Distanza SMA 200 ≤ 5%.")
+    paper_port = carica_json(PAPER_TRADING_FILE)
+    if st.button("🤖 Scansione AI (Big Tech)", type="primary", use_container_width=True):
+        tickers_big_tech = [t.strip().upper() for t in "GOOGL, AMZN, PLTR, META, MSFT, AAPL, TSLA, AVGO, CRM, ADBE, NOW, PANW, FTNT, CRDO, SMCI, ARMR, MRVL, QCOM, MU, INTU".split(",")]
+        progress_bar = st.progress(0)
+        candidati = []
+        for i, ticker in enumerate(tickers_big_tech):
+            progress_bar.progress((i + 1) / len(tickers_big_tech))
+            try:
+                ticker_obj = yf.Ticker(ticker)
+                df = ticker_obj.history(period="1y")
+                info = ticker_obj.info
+                if df.empty or len(df) < 200: continue
+                prezzo_eur, _, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
+                if prezzo_eur is None: continue
+                s_score = calcola_s_score(info, ticker)
+                fase = rileva_fase_weinstein(df)
+                delta = df['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi_oggi = float(100 - (100 / (1 + (gain/loss))).iloc[-1]) if not (gain/loss).empty else 50
+                revenue_growth = info.get('revenueGrowth', 0.0) or 0.0
+                peg_ratio = info.get('pegRatio', 0.0) or 0.0
+                sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+                prezzo_attuale = df['Close'].iloc[-1]
+                distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
+                if s_score >= 75 and revenue_growth >= 0.20 and (peg_ratio > 0 and peg_ratio < 1.5) and rsi_oggi < 45 and distanza_sma200_pct <= 5.0:
+                    candidati.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'RSI': round(rsi_oggi, 1)})
+            except: pass
+        progress_bar.empty()
+        if candidati:
+            for c in candidati[:3]:
+                if not any(p['Ticker'] == c['Ticker'] and p.get('Stato') == 'Attivo' for p in paper_port):
+                    paper_port.append({"Ticker": c['Ticker'], "Entry": round(c['Prezzo EUR'], 2), "Stop_Loss": round(c['Prezzo EUR'] * 0.92, 2), "Target": round(c['Prezzo EUR'] * 1.20, 2), "Data_Ingresso": datetime.now().strftime("%Y-%m-%d"), "Stato": "Attivo"})
+            salva_json(PAPER_TRADING_FILE, paper_port)
+            st.success(f"✅ Aggiunti {len(candidati[:3])} titoli")
+            st.rerun()
         else:
+            st.warning("⚠️ Nessun Setup Palantir trovato.")
+    if paper_port:
+        df_paper = pd.DataFrame(paper_port)
+        pnl_virtuali = []
+        for idx, row in df_paper.iterrows():
+            if row['Stato'] == 'Attivo':
+                try:
+                    current_price = yf.Ticker(row['Ticker']).history(period='1d')['Close'].iloc[-1]
+                    pnl_virtuali.append(f"{((current_price - row['Entry']) / row['Entry']) * 100:+.1f}%")
+                except: pnl_virtuali.append("N/D")
+            else: pnl_virtuali.append("Chiuso")
+        df_paper['P&L Virtuale'] = pnl_virtuali
+        st.dataframe(df_paper[['Ticker', 'Entry', 'Stop_Loss', 'Target', 'Stato', 'P&L Virtuale']], use_container_width=True, height=300)
+        ticker_attivi = [p['Ticker'] for p in paper_port if p.get('Stato') == 'Attivo']
+        if ticker_attivi:
+            ticker_da_chiudere = st.selectbox("Chiudi Posizione:", ticker_attivi)
+            if st.button("Chiudi"):
+                for p in paper_port:
+                    if p['Ticker'] == ticker_da_chiudere and p.get('Stato') == 'Attivo':
+                        p['Stato'] = 'Chiuso'
+                        p['Data_Uscita'] = datetime.now().strftime("%Y-%m-%d")
+                salva_json(PAPER_TRADING_FILE, paper_port)
+                st.success("✅ Chiusa")
+                st.rerun()
+    else:
         st.info("📭 Portfolio vuoto.")
