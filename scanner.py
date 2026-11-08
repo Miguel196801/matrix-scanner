@@ -1370,5 +1370,6 @@ with tab3:
             st.plotly_chart(fig, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': True})
         if st.button("✖️ Chiudi grafico", use_container_width=True):
             st.session_state.grafico_ticker = None
-            st.rerun()    else:
+            st.rerun()    
+        else:
         st.info("📭 Portfolio vuoto.")
