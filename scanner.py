@@ -608,6 +608,47 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     return risultati
 
 # ==============================================================================
+# FUNZIONE GRAFICO (QUESTA ERA MANCANTE!)
+# ==============================================================================
+def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d', interval='1d', hide_sma=False):
+    df = yf.Ticker(ticker).history(period=period, interval=interval)
+    if df.empty: return None
+    if timeframe == '1wk' and interval == '1d':
+        df = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
+    if not hide_sma:
+        df['SMA_Short'] = df['Close'].rolling(window=min(sma_short, len(df))).mean()
+        df['SMA_Long'] = df['Close'].rolling(window=min(sma_long, len(df))).mean()
+    df['Vol_Media_20'] = df['Volume'].rolling(window=min(20, len(df))).mean()
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+    recent_df = df.tail(60)
+    supporto = recent_df['Low'].min()
+    resistenza = recent_df['High'].max()
+    prezzo_attuale = df['Close'].iloc[-1]
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.65, 0.2, 0.15],
+                       subplot_titles=(f'{ticker} ${prezzo_attuale:.2f} - {timeframe.upper()}', 'Volumi', 'RSI'))
+    fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Prezzo',
+        increasing_line_color='#00e676', increasing_fillcolor='#00e676', decreasing_line_color='#ff1744', decreasing_fillcolor='#ff1744'), row=1, col=1)
+    if not hide_sma:
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#ff9800', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2196f3', width=1.5), name=f'SMA {sma_long}'), row=1, col=1)
+    if prezzo_medio_eur is not None:
+        fig.add_hline(y=prezzo_medio_eur, line_dash="dot", line_color="#00e676", line_width=2, annotation_text=f" Medio: €{prezzo_medio_eur:.2f}", row=1, col=1)
+    fig.add_hline(y=supporto, line_dash="dash", line_color="#00e676", line_width=1.5, annotation_text=f" Sup: {supporto:.2f}", row=1, col=1)
+    fig.add_hline(y=resistenza, line_dash="dash", line_color="#ff1744", line_width=1.5, annotation_text=f" Res: {resistenza:.2f}", row=1, col=1)
+    colors = ['#00e676' if df['Close'].iloc[i] >= df['Open'].iloc[i] else '#ff1744' for i in range(len(df))]
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume', opacity=0.7), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#ff1744', width=1.5), name='RSI 14'), row=3, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color="#ff1744", row=3, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="#00e676", row=3, col=1)
+    fig.update_layout(height=800, xaxis_rangeslider_visible=False, template="plotly_dark",
+        paper_bgcolor='#0f172a', plot_bgcolor='#1e293b', font=dict(color='#e2e8f0', size=11),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5, bgcolor='rgba(15, 23, 42, 0.9)'))
+    return fig
+
+# ==============================================================================
 # INIZIALIZZAZIONE SESSION STATE
 # ==============================================================================
 for key in ['dashboard_stats', 'pyramiding_alerts', 'take_profit_alerts', 'zona_interesse_alerts', 'extended_hours_alerts', 'df_palantir', 'df_fortezza', 'df_cavalli', 'df_monitor', 'scansione_completata', 'analisi_risultati', 'grafico_ticker', 'piano_ribilanciamento', 'portafoglio', 'last_update', 'analisi_ticker_precompilato', 'piano_allocazione', 'risultato_podc', 'liquidita_totale_alloc']:
@@ -862,42 +903,42 @@ with tab2:
             riepilogo_fiscale = calcola_riepilogo_fiscale(None)
             patrimonio_totale = liquidita_totale + totale_valore
             col_pat1, col_pat2, col_pat3, col_pat4 = st.columns(4)
-            with col_pat1: st.metric("💰 Liquidità Netta", f"€ {liquidita_totale:,.2f}", help="Incassi netti da vendite")
-            with col_pat2: st.metric("📈 Valore Portafoglio", f"€ {totale_valore:,.2f}", help="Valore attuale posizioni")
-            with col_pat3: st.metric("🏦 Patrimonio Totale", f"€ {patrimonio_totale:,.2f}", help="Liquidità + Portafoglio")
+            with col_pat1: st.metric("💰 Liquidità Netta", f"€ {liquidita_totale:,.2f}")
+            with col_pat2: st.metric("📈 Valore Portafoglio", f"€ {totale_valore:,.2f}")
+            with col_pat3: st.metric("🏦 Patrimonio Totale", f"€ {patrimonio_totale:,.2f}")
             with col_pat4:
                 pnl_percentuale = ((patrimonio_totale / totale_carico) - 1) * 100 if totale_carico > 0 else 0
-                st.metric("📊 Rendimento Totale", f"{pnl_percentuale:+.2f}%", help=f"Su capitale: € {totale_carico:,.2f}")
+                st.metric("📊 Rendimento Totale", f"{pnl_percentuale:+.2f}%")
             st.markdown("---")
             
             # PODC
-            st.markdown("### 🛡️ Protocollo di Ottimizzazione Dinamica del Capitale (PODC)")
-            if st.button("🛡️ Avvia Protocollo Ottimizzazione (PODC)", type="primary", use_container_width=True):
-                with st.spinner("🔄 Analisi efficienza capitale in corso..."):
+            st.markdown("### 🛡️ Protocollo di Ottimizzazione (PODC)")
+            if st.button("🛡️ Avvia PODC", type="primary", use_container_width=True):
+                with st.spinner("🔄 Analisi..."):
                     st.session_state.risultato_podc = avvia_podc(portafoglio, eurusd_rate, catalizzatori_input)
             if st.session_state.get('risultato_podc'):
                 res = st.session_state.risultato_podc
-                st.markdown("#### 🛡️ PROTOCOLLO DI OTTIMIZZAZIONE (PODC)")
+                st.markdown("#### 🛡️ PODC")
                 if not res['suggestions'] and not res['gain_analyzed']:
-                    st.info("✅ Nessuna ottimizzazione necessaria al momento.")
+                    st.info("✅ Nessuna ottimizzazione necessaria.")
                 else:
                     for sug in res['suggestions']:
                         st.markdown(f"""
                         <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border-left: 4px solid #10b981; margin-bottom: 1rem;">
-                            <p style="margin: 0.2rem 0;"><strong>1. LIBERA:</strong> Vendi {sug['sell_pct']}% di {sug['sell_ticker']} → Libera <strong>€{sug['capital_freed']:.2f}</strong>.</p>
-                            <p style="margin: 0.2rem 0;"><strong>2. MEDIA:</strong> Usa €{sug['capital_freed']:.2f} per {sug['buy_ticker']}.</p>
-                            <p style="margin: 0.2rem 0;"><strong>3. RISULTATO:</strong> Prezzo medio scende a <strong>€{sug['new_avg']:.2f}</strong>. PnL passa a <strong style="color: #10b981;">{sug['new_pnl']:.1f}%</strong>.</p>
+                            <p style="margin: 0.2rem 0;"><strong>1. LIBERA:</strong> Vendi {sug['sell_pct']}% di {sug['sell_ticker']} → €{sug['capital_freed']:.2f}</p>
+                            <p style="margin: 0.2rem 0;"><strong>2. MEDIA:</strong> Usa €{sug['capital_freed']:.2f} per {sug['buy_ticker']}</p>
+                            <p style="margin: 0.2rem 0;"><strong>3. RISULTATO:</strong> Medio scende a €{sug['new_avg']:.2f}. PnL: <strong style="color: #10b981;">{sug['new_pnl']:.1f}%</strong></p>
                         </div>
                         """, unsafe_allow_html=True)
-                st.markdown("#### 📊 RIEPILOGO ANALISI PODC:")
-                st.markdown(f"**✅ Titoli in Gain analizzati:** {len(res['gain_analyzed'])}")
+                st.markdown("#### 📊 RIEPILOGO PODC:")
+                st.markdown(f"**✅ Gain analizzati:** {len(res['gain_analyzed'])}")
                 for g in res['gain_analyzed']: st.markdown(f"- **{g['ticker']}**: {g['reason']}")
-                st.markdown(f"<br>**❌ Titoli in Loss NON candidati:** {len(res['loss_rejected'])}", unsafe_allow_html=True)
+                st.markdown(f"**❌ Loss rifiutati:** {len(res['loss_rejected'])}")
                 for r_item in res['loss_rejected']: st.markdown(f"- **{r_item['ticker']}**: {r_item['reason']}")
-                st.markdown(f"<br>**🎯 Candidati validi per media:** {len(res['loss_candidates'])}", unsafe_allow_html=True)
+                st.markdown(f"**🎯 Candidati media:** {len(res['loss_candidates'])}")
                 for c in res['loss_candidates']:
-                    hypothetical_new_avg = ((c['qty'] * c['prezzo_medio']) + res['total_capital_freed']) / (c['qty'] + (res['total_capital_freed'] / c['prezzo_attuale'])) if res['total_capital_freed'] > 0 else c['prezzo_medio']
-                    st.markdown(f"- **{c['ticker']}**: S-Score {c['s_score']}, Fase {c['fase']}, RSI {c['rsi']:.1f}, Prezzo medio attuale €{c['prezzo_medio']:.2f}, Nuovo prezzo medio ipotetico €{hypothetical_new_avg:.2f}")
+                    new_avg = ((c['qty'] * c['prezzo_medio']) + res['total_capital_freed']) / (c['qty'] + (res['total_capital_freed'] / c['prezzo_attuale'])) if res['total_capital_freed'] > 0 else c['prezzo_medio']
+                    st.markdown(f"- **{c['ticker']}**: S-Score {c['s_score']}, Fase {c['fase']}, RSI {c['rsi']:.1f}, Medio attuale €{c['prezzo_medio']:.2f}, Nuovo medio €{new_avg:.2f}")
                 liquidita_reale = calcola_liquidita_totale()
                 capitale_proposto = res['total_capital_freed']
                 totale_disponibile = liquidita_reale + capitale_proposto
@@ -905,23 +946,23 @@ with tab2:
                 col_liq1, col_liq2, col_liq3 = st.columns(3)
                 with col_liq1: st.metric("💵 Liquidità reale", f"€ {liquidita_reale:,.2f}")
                 with col_liq2: st.metric("🎯 Capitale liberabile", f"€ {capitale_proposto:,.2f}")
-                with col_liq3: st.metric("🏦 TOTALE DISPONIBILE", f"€ {totale_disponibile:,.2f}")
+                with col_liq3: st.metric("🏦 TOTALE", f"€ {totale_disponibile:,.2f}")
 
-            # Motore di Ribilanciamento Mensile
+            # Motore di Ribilanciamento
             st.markdown("---")
             st.markdown("### 📊 Motore di Ribilanciamento Mensile")
             if st.button("📊 Genera Piano di Rotazione", type="secondary", use_container_width=True):
-                with st.spinner("🔄 Analisi in corso..."):
+                with st.spinner("🔄 Analisi..."):
                     semaforo = calcola_semaforo_mercato()
                     catalizzatori = {}
                     if catalizzatori_input:
                         for item in catalizzatori_input.split(';'):
                             if ':' in item:
-                                ticker, resto = item.split(':', 1)
+                                ticker_cat, resto = item.split(':', 1)
                                 match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', resto)
                                 if match:
                                     anno = '20' + match.group(3) if len(match.group(3)) == 2 else match.group(3)
-                                    try: catalizzatori[ticker.strip().upper()] = datetime(int(anno), int(match.group(2)), int(match.group(1)))
+                                    try: catalizzatori[ticker_cat.strip().upper()] = datetime(int(anno), int(match.group(2)), int(match.group(1)))
                                     except: pass
                     esclusioni_list = [t.strip().upper() for t in esclusioni_input.split(",") if t.strip()]
                     piano = {'vendite': [], 'monitor': [], 'acquisti': [], 'semaforo': semaforo['stato']}
@@ -942,17 +983,17 @@ with tab2:
                     for item in piano['monitor']:
                         st.markdown(f"""<div class="signal-box signal-yellow"><strong>{item['ticker']}</strong><br><small>{item.get('messaggio', '')}</small></div>""", unsafe_allow_html=True)
                 st.markdown("---")
-                st.subheader("💡 AZIONE CONSIGLIATA DAL SISTEMA")
+                st.subheader("💡 AZIONE CONSIGLIATA")
                 if piano['vendite']:
-                    st.info(f"1. **Ottimizza:** Valuta la vendita di {', '.join([v['ticker'] for v in piano['vendite'][:3]])} per liberare liquidità.")
+                    st.info(f"1. **Ottimizza:** Valuta vendita di {', '.join([v['ticker'] for v in piano['vendite'][:3]])}")
                 else:
-                    st.info("Mantieni la rotta. Il portafoglio è ben bilanciato.")
+                    st.info("Mantieni la rotta. Portafoglio bilanciato.")
 
             # Piano di Allocazione Dinamica
             st.markdown("---")
             st.subheader("💰 Piano di Allocazione Dinamica")
             if st.button("💰 Genera Piano di Allocazione", type="secondary", use_container_width=True):
-                with st.spinner("🔄 Calcolo allocazione ottimale..."):
+                with st.spinner("🔄 Calcolo..."):
                     liquidita_reale = calcola_liquidita_totale()
                     liquidita_totale_alloc = liquidita_reale + 500
                     piano_alloc = genera_piano_allocazione(portafoglio, liquidita_totale_alloc, eurusd_rate)
@@ -970,7 +1011,7 @@ with tab2:
                 st.metric("💵 Liquidità Residua", f"€ {piano['liquidita_residua']:,.2f}")
             
             st.markdown("---")
-            # Loop Portafoglio con 3 Pallini Target e BY FABIO
+            # Loop Portafoglio con 3 Pallini Target + BY FABIO + Expander Target
             for idx_pos, pos in enumerate(portafoglio):
                 ticker = pos['Ticker']
                 prezzo_eur = pos.get('Prezzo_Attuale_EUR')
@@ -979,6 +1020,7 @@ with tab2:
                 pnl_pct = pos.get('PnL_%', 0) or 0
                 stato_pac = pos.get('Stato_PAC', 'N/A')
                 ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
+                trend = pos.get('Trend', 'N/D')
                 prezzo_medio = pos.get('Prezzo_Medio', 0)
                 quantita = pos.get('Quantita', 0)
                 pnl_eur = pos.get('PnL_EUR', 0) or 0
@@ -1004,20 +1046,20 @@ with tab2:
                 if targets:
                     target_raggiunti = sum(1 for p in [targets['prog1'], targets['prog2'], targets['prog3']] if p >= 100.0)
                     if target_raggiunti == 0:
-                        dots_html = '<span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span>' * 3
+                        dots_html = '<span class="target-dot target-dot-pending"></span>' * 3
                     elif target_raggiunti == 1:
-                        dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 2"></span><span class="target-dot target-dot-pending" title="Target 3"></span>'
+                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-pending"></span><span class="target-dot target-dot-pending"></span>'
                     elif target_raggiunti == 2:
-                        dots_html = '<span class="target-dot target-dot-achieved" title="Target 1"></span><span class="target-dot target-dot-achieved" title="Target 2"></span><span class="target-dot target-dot-pending" title="Target 3"></span>'
+                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-pending"></span>'
                     else:
-                        dots_html = '<span class="target-dot target-dot-achieved" title="Target 1"></span><span class="target-dot target-dot-achieved" title="Target 2"></span><span class="target-dot target-dot-achieved" title="Target 3"></span>'
+                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span>'
                     dots_display = f'{dots_html} <span class="target-tooltip">{target_raggiunti}/3</span>'
                 else:
                     dots_display = '<span class="target-tooltip">N/D</span>'
                 
                 # BY FABIO Badge
                 trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
-                by_fabio_indicator = '<span class="by-fabio-badge" title="Ingresso matematicamente validato">🟢 BY FABIO</span>' if trigger_by_fabio else ''
+                by_fabio_indicator = '<span class="by-fabio-badge">🟢 BY FABIO</span>' if trigger_by_fabio else ''
                 
                 st.markdown(f"""
                 <div class="portfolio-box" style="border-left-color: {border_color};">
@@ -1028,6 +1070,7 @@ with tab2:
                             <div class="portfolio-info" style="color: {acqu_color}; font-weight: bold; margin-top: 0.5rem;">
                                 {acqu_symbol} {var_acquisto:+.1f}% | {pnl_eur:+.2f}€ {dots_display}
                             </div>
+                            <div class="portfolio-info" style="color: {var_day_color}; margin-top: 0.3rem;">{trend}</div>
                         </div>
                         <div style="text-align: right;">
                             <div style="font-size: 1.2rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
@@ -1041,6 +1084,28 @@ with tab2:
                     st.session_state['analisi_ticker_precompilato'] = ticker
                     st.rerun()
                 
+                # ✅ EXPANDER TARGET E STOP LOSS (AGGIUNTO)
+                with st.expander(f"🎯 Target e Stop Loss - {ticker}"):
+                    if targets:
+                        st.markdown(f"""
+                        <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
+                            <h4 style="margin-top:0; color: #f59e0b; font-size: 1rem;">🎯 TARGET DI PREZZO (Resistenze):</h4>
+                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T1:</strong> €{targets['t1']} (+{targets['upside1']}%) | Prog: {targets['prog1']}%</p>
+                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T2:</strong> €{targets['t2']} (+{targets['upside2']}%) | Prog: {targets['prog2']}%</p>
+                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T3:</strong> €{targets['t3']} (+{targets['upside3']}%) | Prog: {targets['prog3']}%</p>
+                            <hr style="border-color: #334155; margin: 0.5rem 0;">
+                            <h4 style="margin-top:0; color: #ef4444; font-size: 1rem;">🛡️ STOP LOSS: €{targets['sl']} ({targets['sl_down']}%)</h4>
+                            <ul style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0;">
+                                <li>⚠️ Target 1 raggiunto → sposta stop a €{prezzo_medio:.2f} (break-even)</li>
+                                <li>⚠️ Target 2 raggiunto → sposta stop a €{targets['t1']}</li>
+                                <li>⚠️ Target 3 raggiunto → sposta stop a €{targets['t2']}</li>
+                            </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.info("Dati insufficienti per calcolare i target.")
+                
+                # Expander Operazioni
                 with st.expander(f"📋 Operazioni - {ticker}"):
                     col_info1, col_info2, col_info3 = st.columns(3)
                     with col_info1: st.metric("Quantità", f"{quantita:.6f}")
@@ -1075,18 +1140,9 @@ with tab2:
                         st.markdown(f"""
                         <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #334155;">
                             <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                                <div>
-                                    <div style="color: #94a3b8; font-size: 0.9rem;">P&L Lordo</div>
-                                    <div style="color: {'#10b981' if pnl_lordo_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div>
-                                </div>
-                                <div>
-                                    <div style="color: #94a3b8; font-size: 0.9rem;">Tasse stimate (26%)</div>
-                                    <div style="color: #ef4444; font-size: 1.3rem; font-weight: bold;">€ -{tasse_sim:.2f}</div>
-                                </div>
-                                <div>
-                                    <div style="color: #94a3b8; font-size: 0.9rem;">Netto reale</div>
-                                    <div style="color: {'#10b981' if pnl_netto_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_netto_prev:+.2f}</div>
-                                </div>
+                                <div><div style="color: #94a3b8; font-size: 0.9rem;">P&L Lordo</div><div style="color: {'#10b981' if pnl_lordo_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div></div>
+                                <div><div style="color: #94a3b8; font-size: 0.9rem;">Tasse (26%)</div><div style="color: #ef4444; font-size: 1.3rem; font-weight: bold;">€ -{tasse_sim:.2f}</div></div>
+                                <div><div style="color: #94a3b8; font-size: 0.9rem;">Netto reale</div><div style="color: {'#10b981' if pnl_netto_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_netto_prev:+.2f}</div></div>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1274,7 +1330,6 @@ with tab3:
         col5.metric("📈 RSI", r['rsi'])
         col6.metric("📊 Volume Ratio", f"{r['vol_ratio']:.2f}x")
         
-        # Volume Oggi e Medio
         col7, col8 = st.columns(2)
         col7.metric("📊 Volume Oggi", f"{r.get('volume_oggi', 'N/D'):,}" if isinstance(r.get('volume_oggi'), (int, float)) else r.get('volume_oggi', 'N/D'))
         col8.metric("📊 Volume Medio", f"{r.get('volume_medio', 'N/D'):,}" if isinstance(r.get('volume_medio'), (int, float)) else r.get('volume_medio', 'N/D'))
