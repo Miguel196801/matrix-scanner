@@ -1284,343 +1284,216 @@ with tab2:
             st.markdown("---")
             # Loop Portafoglio con 3 Pallini Target + BY FABIO + Expander Target
             for idx_pos, pos in enumerate(portafoglio):
-                ticker = pos['Ticker']
-                prezzo_eur = pos.get('Prezzo_Attuale_EUR')
-                var_pct = pos.get('Variazione_Pct')
-                var_abs = pos.get('Variazione_Abs', 0) or 0
-                pnl_pct = pos.get('PnL_%', 0) or 0
-                stato_pac = pos.get('Stato_PAC', 'N/A')
-                ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
-                trend = pos.get('Trend', 'N/D')
-                prezzo_medio = pos.get('Prezzo_Medio', 0)
-                quantita = pos.get('Quantita', 0)
-                pnl_eur = pos.get('PnL_EUR', 0) or 0
-                var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100 if (prezzo_medio > 0 and prezzo_eur) else 0
-                if var_pct is not None:
-                    var_day_color = "#10b981" if var_pct > 0 else "#ef4444"
-                    var_day_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
-                    var_day_display = f"{var_day_symbol} {abs(var_pct):.2f}% ({var_abs:+.2f}€)"
-                else:
-                    var_day_color = "#94a3b8"
-                    var_day_display = "N/D"
-                if var_acquisto > 0: acqu_color, acqu_symbol = "#10b981", "▲"
-                elif var_acquisto < 0: acqu_color, acqu_symbol = "#ef4444", "▼"
-                else: acqu_color, acqu_symbol = "#94a3b8", "●"
-                if pnl_pct > 0: border_color = "#10b981"
-                elif pnl_pct < 0: border_color = "#ef4444"
-                else: border_color = "#64748b"
-                prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
-                
-                # 3 Pallini Target
-                ticker_obj = yf.Ticker(ticker)
-                targets = calcola_target(ticker_obj, prezzo_medio, prezzo_eur)
-                if targets:
-                    target_raggiunti = sum(1 for p in [targets['prog1'], targets['prog2'], targets['prog3']] if p >= 100.0)
-                    if target_raggiunti == 0:
-                        dots_html = '<span class="target-dot target-dot-pending"></span>' * 3
-                    elif target_raggiunti == 1:
-                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-pending"></span><span class="target-dot target-dot-pending"></span>'
-                    elif target_raggiunti == 2:
-                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-pending"></span>'
-                    else:
-                        dots_html = '<span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span><span class="target-dot target-dot-achieved"></span>'
-                    dots_display = f'{dots_html} <span class="target-tooltip">{target_raggiunti}/3</span>'
-                else:
-                    dots_display = '<span class="target-tooltip">N/D</span>'
-                
-                # BY FABIO Badge
-                trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
-                by_fabio_indicator = '<span class="by-fabio-badge">🟢 BY FABIO</span>' if trigger_by_fabio else ''
-                
-                st.markdown(f"""
-                <div class="portfolio-box" style="border-left-color: {border_color};">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="flex: 1;">
-                            <div class="portfolio-ticker">{ticker} {by_fabio_indicator}</div>
-                            <div class="portfolio-info">{stato_pac} | {ultimo_segnale}</div>
-                            <div class="portfolio-info" style="color: {acqu_color}; font-weight: bold; margin-top: 0.5rem;">
-                                {acqu_symbol} {var_acquisto:+.1f}% | {pnl_eur:+.2f}€ {dots_display}
-                            </div>
-                            <div class="portfolio-info" style="color: {var_day_color}; margin-top: 0.3rem;">{trend}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 1.2rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
-                            <div style="color: {var_day_color}; font-size: 1.1rem; font-weight: bold;">{var_day_display} oggi</div>
-                        </div>
+    ticker = pos['Ticker']
+    prezzo_eur = pos.get('Prezzo_Attuale_EUR')
+    var_pct = pos.get('Variazione_Pct')
+    pnl_pct = pos.get('PnL_%', 0) or 0
+    stato_pac = pos.get('Stato_PAC', 'N/A')
+    ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
+    trend = pos.get('Trend', 'N/D')
+    earnings = pos.get('Earnings', 'N/D')
+    prezzo_medio = pos.get('Prezzo_Medio', 0)
+    quantita = pos.get('Quantita', 0)
+    pnl_eur = pos.get('PnL_EUR', 0) or 0
+    
+    if prezzo_medio > 0 and prezzo_eur:
+        var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
+    else:
+        var_acquisto = 0
+    
+    if var_pct is not None:
+        var_color = "#10b981" if var_pct > 0 else "#ef4444"
+        var_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
+        var_display = f"{var_symbol} {var_pct:+.2f}%"
+    else:
+        var_color = "#94a3b8"
+        var_symbol = "●"
+        var_display = "N/D"
+    
+    if var_acquisto > 0:
+        acqu_color = "#10b981"
+        acqu_symbol = "▲"
+    elif var_acquisto < 0:
+        acqu_color = "#ef4444"
+        acqu_symbol = "▼"
+    else:
+        acqu_color = "#94a3b8"
+        acqu_symbol = "●"
+    
+    if pnl_pct > 0: border_color = "#10b981"
+    elif pnl_pct < 0: border_color = "#ef4444"
+    else: border_color = "#64748b"
+    
+    prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
+    
+    if pnl_eur > 0:
+        pnl_netto = pnl_eur * 0.74
+        netto_label = f"+€ {pnl_netto:.2f} netto"
+    elif pnl_eur < 0:
+        pnl_netto = pnl_eur
+        netto_label = f"-€ {abs(pnl_netto):.2f} netto"
+    else:
+        pnl_netto = 0
+        netto_label = "€ 0.00 netto"
+    
+    ticker_obj = yf.Ticker(ticker)
+    targets = calcola_target(ticker_obj, prezzo_medio, prezzo_eur)
+    if targets:
+        target_raggiunti = sum(1 for p in [targets['prog1'], targets['prog2'], targets['prog3']] if p >= 100.0)
+        if target_raggiunti == 0:
+            dots_html = '<span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span>'
+        elif target_raggiunti == 1:
+            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 2 non raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
+        elif target_raggiunti == 2:
+            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
+        else:
+            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 3 raggiunto"></span>'
+        dots_display = f'{dots_html} <span class="target-tooltip">{target_raggiunti}/3 Target</span>'
+    else:
+        dots_display = '<span class="target-tooltip">N/D</span>'
+    
+    trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
+    by_fabio_indicator = '<span class="by-fabio-badge" title="Ingresso matematicamente validato: Fortezza + Grafico">🟢 BY FABIO</span>' if trigger_by_fabio else ''
+    
+    st.markdown(f"""
+    <div style="background-color: #1e293b; border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; border-left: 5px solid {border_color};">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="flex: 1; min-width: 150px; border-right: 1px solid #334155; padding-right: 1rem;">
+                <div style="font-size: 1.6rem; color: #f8fafc; font-weight: bold;">{ticker} {by_fabio_indicator}</div>
+                <div style="font-size: 1rem; color: #94a3b8; margin-top: 0.3rem;">{stato_pac}</div>
+            </div>
+            <div style="flex: 2; min-width: 200px; border-right: 1px solid #334155; padding-right: 1rem; text-align: center;">
+                <div style="font-size: 1.4rem; color: #f8fafc; font-weight: bold;">€ {prezzo_display}</div>
+                <div style="color: {var_color}; font-size: 1.1rem; font-weight: bold; margin-top: 0.3rem;">{var_display} oggi</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.2rem;">
+                    <div style="color: {acqu_color}; font-size: 1rem;">{acqu_symbol} {var_acquisto:+.1f}% | {netto_label} dall'acquisto</div>
+                    <div style="font-size: 0.9rem;">{dots_display}</div>
+                </div>
+            </div>
+            <div style="flex: 1; min-width: 150px; text-align: right;">
+                <div style="font-size: 1rem; color: #cbd5e1;">{ultimo_segnale}</div>
+                <div style="font-size: 1rem; color: #cbd5e1; margin-top: 0.3rem;">{trend}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    with st.expander(f"🎯 Target e Stop Loss - {ticker}"):
+        if targets:
+            st.markdown(f"""
+            <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
+                <h4 style="margin-top:0; color: #f59e0b;">🎯 TARGET DI PREZZO (Basati su resistenze grafiche):</h4>
+                <p style="margin: 0.2rem 0;">• <strong>Target 1:</strong> € {targets['t1']} (Upside: +{targets['upside1']}% | Progresso: {targets['prog1']}%)</p>
+                <p style="margin: 0.2rem 0;">• <strong>Target 2:</strong> € {targets['t2']} (Upside: +{targets['upside2']}% | Progresso: {targets['prog2']}%)</p>
+                <p style="margin: 0.2rem 0;">• <strong>Target 3:</strong> € {targets['t3']} (Upside: +{targets['upside3']}% | Progresso: {targets['prog3']}%)</p>
+                <hr style="border-color: #334155; margin: 0.5rem 0;">
+                <h4 style="margin-top:0; color: #ef4444;">🛡️ STOP LOSS DINAMICO: € {targets['sl']} ({targets['sl_down']}% dal prezzo attuale)</h4>
+                <ul style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 0;">
+                    <li>⚠️ Quando raggiungi Target 1 → sposta stop a € {prezzo_medio:.2f} (break-even)</li>
+                    <li>⚠️ Quando raggiungi Target 2 → sposta stop a € {targets['t1']}</li>
+                    <li>⚠️ Quando raggiungi Target 3 → sposta stop a € {targets['t2']}</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Dati insufficienti per calcolare i target.")
+    
+    with st.expander(f"📋 Dettagli e Operazioni - {ticker}"):
+        col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+        with col_d1: st.metric("Quantità", f"{quantita:.6f}")
+        with col_d2: st.metric("Prezzo Medio", f"€ {prezzo_medio:.2f}")
+        with col_d3: st.metric("P&L €", f"€ {pnl_eur:.2f}")
+        with col_d4: st.metric("P&L %", f"{pnl_pct:+.2f}%")
+        st.caption(f"📅 Prossimi Utili: {earnings}")
+        st.markdown("---")
+        st.markdown("**➕ Aggiungi Quote**")
+        col_a1, col_a2, col_a3 = st.columns([1, 1, 1])
+        with col_a1:
+            nuova_qta = st.number_input(f"Nuova Qta", min_value=0.0001, step=0.0001, key=f"qta_{ticker}_{idx_pos}")
+        with col_a2:
+            nuovo_prezzo_acq = st.number_input(f"Prezzo Acquisto €", min_value=0.01, step=0.01, key=f"prezzo_acq_{ticker}_{idx_pos}")
+        with col_a3:
+            st.write(""); st.write("")
+            if st.button(f"✅ Conferma Aggiunta", key=f"add_{ticker}_{idx_pos}"):
+                if nuova_qta > 0 and nuovo_prezzo_acq > 0:
+                    vecchio_medio = pos['Prezzo_Medio']
+                    nuovo_medio = ((quantita * vecchio_medio) + (nuova_qta * nuovo_prezzo_acq)) / (quantita + nuova_qta)
+                    pos['Quantita'] = round(quantita + nuova_qta, 6)
+                    pos['Prezzo_Medio'] = round(nuovo_medio, 4)
+                    salva_json(PORTAFOGLIO_FILE, portafoglio)
+                    st.session_state.portafoglio = portafoglio
+                    st.success(f"✅ Aggiunte {nuova_qta} quote di {ticker}. Nuovo medio: €{nuovo_medio:.4f}")
+                    st.rerun()
+        st.markdown("---")
+        st.markdown("**➖ Vendi Quote**")
+        modalita_vendita = st.radio(f"Modalità vendita {ticker}", ["📊 Percentuale (%)", "🔢 Quantità specifica"], horizontal=True, key=f"modalita_{ticker}_{idx_pos}")
+        qta_da_vendere = 0
+        if modalita_vendita == "📊 Percentuale (%)":
+            pct_vendita = st.slider(f"Percentuale da vendere", min_value=1.0, max_value=100.0, value=100.0, step=1.0, key=f"pct_{ticker}_{idx_pos}")
+            qta_da_vendere = quantita * (pct_vendita / 100.0)
+            st.info(f"📊 Venderai {pct_vendita:.0f}% = {qta_da_vendere:.6f} quote")
+        else:
+            qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
+        prezzo_vendita = st.number_input(f"Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
+        if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
+            pnl_lordo_prev = (prezzo_vendita - prezzo_medio) * qta_da_vendere
+            pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
+            minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
+            oggi_str = datetime.now().strftime("%Y-%m-%d")
+            minusvalenze_usate_sim = 0
+            tasse_sim = 0
+            if pnl_lordo_prev > 0:
+                residuo = pnl_lordo_prev
+                for mv in sorted(minusvalenze_disp, key=lambda x: x.get('Scadenza', '9999-12-31')):
+                    if mv.get('Scadenza', '') >= oggi_str and mv.get('Importo', 0) > 0:
+                        usa = min(mv['Importo'], residuo)
+                        minusvalenze_usate_sim += usa
+                        residuo -= usa
+                        if residuo <= 0: break
+                tasse_sim = residuo * ALIQUOTA_TASSE
+            pnl_netto_prev = pnl_lordo_prev - tasse_sim
+            st.markdown(f"""
+            <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #334155;">
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <div style="color: #94a3b8; font-size: 0.9rem;">P&L Lordo</div>
+                        <div style="color: {'#10b981' if pnl_lordo_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div>
+                    </div>
+                    <div>
+                        <div style="color: #94a3b8; font-size: 0.9rem;">Tasse stimate (26%)</div>
+                        <div style="color: #ef4444; font-size: 1.3rem; font-weight: bold;">€ -{tasse_sim:.2f}</div>
+                    </div>
+                    <div>
+                        <div style="color: #94a3b8; font-size: 0.9rem;">Netto reale</div>
+                        <div style="color: {'#10b981' if pnl_netto_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_netto_prev:+.2f}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                if st.button(f"🔍 {ticker}", key=f"btn_analisi_{ticker}", use_container_width=True):
-                    st.session_state['analisi_ticker_precompilato'] = ticker
-                    st.rerun()
-                
-                # ✅ EXPANDER TARGET E STOP LOSS
-                with st.expander(f"🎯 Target e Stop Loss - {ticker}"):
-                    if targets:
-                        st.markdown(f"""
-                        <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
-                            <h4 style="margin-top:0; color: #f59e0b; font-size: 1rem;">🎯 TARGET DI PREZZO (Resistenze):</h4>
-                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T1:</strong> €{targets['t1']} (+{targets['upside1']}%) | Prog: {targets['prog1']}%</p>
-                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T2:</strong> €{targets['t2']} (+{targets['upside2']}%) | Prog: {targets['prog2']}%</p>
-                            <p style="margin: 0.2rem 0; font-size: 0.9rem;">• <strong>T3:</strong> €{targets['t3']} (+{targets['upside3']}%) | Prog: {targets['prog3']}%</p>
-                            <hr style="border-color: #334155; margin: 0.5rem 0;">
-                            <h4 style="margin-top:0; color: #ef4444; font-size: 1rem;">🛡️ STOP LOSS: €{targets['sl']} ({targets['sl_down']}%)</h4>
-                            <ul style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0;">
-                                <li>⚠️ Target 1 raggiunto → sposta stop a €{prezzo_medio:.2f} (break-even)</li>
-                                <li>⚠️ Target 2 raggiunto → sposta stop a €{targets['t1']}</li>
-                                <li>⚠️ Target 3 raggiunto → sposta stop a €{targets['t2']}</li>
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.info("Dati insufficienti per calcolare i target.")
-                
-                # Expander Operazioni
-                with st.expander(f"📋 Operazioni - {ticker}"):
-                    col_info1, col_info2, col_info3 = st.columns(3)
-                    with col_info1: st.metric("Quantità", f"{quantita:.6f}")
-                    with col_info2: st.metric("Prezzo Medio", f"€ {prezzo_medio:.2f}")
-                    with col_info3: st.metric("Valore Totale", f"€ {prezzo_eur * quantita:.2f}" if prezzo_eur else "N/D")
-                    st.markdown("---")
-                    st.markdown("**➖ Vendi Quote**")
-                    modalita_vendita = st.radio(f"Modalità vendita {ticker}", ["📊 Percentuale (%)", "🔢 Quantità specifica"], horizontal=True, key=f"modalita_vend_{ticker}_{idx_pos}")
-                    qta_da_vendere = 0
-                    if modalita_vendita == "📊 Percentuale (%)":
-                        pct_vendita = st.slider(f"Percentuale da vendere", min_value=1.0, max_value=100.0, value=100.0, step=1.0, key=f"pct_vend_{ticker}_{idx_pos}")
-                        qta_da_vendere = quantita * (pct_vendita / 100.0)
-                        st.info(f"📊 Venderai {pct_vendita:.0f}% = {qta_da_vendere:.6f} quote")
-                    else:
-                        qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
-                    prezzo_vendita = st.number_input(f"Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
-                    if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
-                        pnl_lordo_prev = (prezzo_vendita - prezzo_medio) * qta_da_vendere
-                        pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
-                        minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
-                        oggi_str = datetime.now().strftime("%Y-%m-%d")
-                        tasse_sim = 0
-                        if pnl_lordo_prev > 0:
-                            residuo = pnl_lordo_prev
-                            for mv in sorted(minusvalenze_disp, key=lambda x: x.get('Scadenza', '9999-12-31')):
-                                if mv.get('Scadenza', '') >= oggi_str and mv.get('Importo', 0) > 0:
-                                    usa = min(mv['Importo'], residuo)
-                                    residuo -= usa
-                                    if residuo <= 0: break
-                            tasse_sim = residuo * 0.26
-                        pnl_netto_prev = pnl_lordo_prev - tasse_sim
-                        st.markdown(f"""
-                        <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #334155;">
-                            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                                <div><div style="color: #94a3b8; font-size: 0.9rem;">P&L Lordo</div><div style="color: {'#10b981' if pnl_lordo_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div></div>
-                                <div><div style="color: #94a3b8; font-size: 0.9rem;">Tasse (26%)</div><div style="color: #ef4444; font-size: 1.3rem; font-weight: bold;">€ -{tasse_sim:.2f}</div></div>
-                                <div><div style="color: #94a3b8; font-size: 0.9rem;">Netto reale</div><div style="color: {'#10b981' if pnl_netto_prev > 0 else '#ef4444'}; font-size: 1.3rem; font-weight: bold;">€ {pnl_netto_prev:+.2f}</div></div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
-                            if qta_da_vendere <= quantita:
-                                risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
-                                if risultato:
-                                    pos['Quantita'] = round(quantita - qta_da_vendere, 6)
-                                    if pos['Quantita'] <= 0:
-                                        portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
-                                    st.session_state.portafoglio = portafoglio
-                                    salva_json(PORTAFOGLIO_FILE, portafoglio)
-                                    st.success(f"✅ Vendute {qta_da_vendere:.6f} quote di {ticker}. P&L Netto: €{risultato['pnl_netto']:+.2f}")
-                                    st.rerun()
-                            else:
-                                st.error("Quantità da vendere superiore alle quote disponibili")
-                    st.markdown("---")
-                    st.markdown("**➕ Aggiungi Quote**")
-                    col_a1, col_a2 = st.columns(2)
-                    with col_a1:
-                        nuova_qta = st.number_input("Qta", min_value=0.0001, step=0.0001, key=f"mqta_{ticker}_{idx_pos}")
-                    with col_a2:
-                        nuovo_prezzo_acq = st.number_input("Prezzo €", min_value=0.01, step=0.01, key=f"mprezzo_{ticker}_{idx_pos}")
-                    if st.button(f"✅ Aggiungi", key=f"madd_{ticker}_{idx_pos}"):
-                        if nuova_qta > 0 and nuovo_prezzo_acq > 0:
-                            vecchio_medio = pos['Prezzo_Medio']
-                            nuovo_medio = ((quantita * vecchio_medio) + (nuova_qta * nuovo_prezzo_acq)) / (quantita + nuova_qta)
-                            pos['Quantita'] = round(quantita + nuova_qta, 6)
-                            pos['Prezzo_Medio'] = round(nuovo_medio, 4)
-                            salva_json(PORTAFOGLIO_FILE, portafoglio)
-                            st.session_state.portafoglio = portafoglio
-                            st.success(f"✅ Aggiunte. Nuovo medio: €{nuovo_medio:.4f}")
-                            st.rerun()
-                    st.markdown("---")
-                    if st.button(f"🗑️ Rimuovi", key=f"mremove_{ticker}_{idx_pos}"):
-                        portafoglio[:] = [p for p in portafoglio if p['Ticker'] != ticker]
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
+                if qta_da_vendere <= quantita:
+                    risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
+                    if risultato:
+                        pos['Quantita'] = round(quantita - qta_da_vendere, 6)
+                        if pos['Quantita'] <= 0:
+                            portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
                         st.session_state.portafoglio = portafoglio
                         salva_json(PORTAFOGLIO_FILE, portafoglio)
-                        st.success(f"✅ {ticker} rimosso")
+                        st.success(f"✅ Vendute {qta_da_vendere:.6f} quote di {ticker}. P&L Netto: €{risultato['pnl_netto']:+.2f}")
                         st.rerun()
-    else:
-        st.info("Portafoglio vuoto.")
+                else:
+                    st.error("Quantità da vendere superiore alle quote disponibili")
+        st.markdown("---")
+        if st.button(f"🗑️ Rimuovi {ticker} dal Portafoglio", key=f"remove_{ticker}_{idx_pos}"):
+            portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
+            st.session_state.portafoglio = portafoglio
+            salva_json(PORTAFOGLIO_FILE, portafoglio)
+            st.success(f"✅ {ticker} rimosso dal portafoglio")
+            st.rerun()
 
-with tab3:
-    st.subheader("🔍 Analisi Singola")
-    
-    # TASTO ESCI
-    if st.button("← Torna al Portafoglio", key="btn_torna_portafoglio", use_container_width=True):
-        st.session_state.analisi_risultati = None
-        st.session_state.grafico_ticker = None
-        st.rerun()
-    
-    default_ticker = st.session_state.get('analisi_ticker_precompilato', "ADBE")
-    ticker_input = st.text_input("Ticker:", value=default_ticker)
-    
-    if 'analisi_ticker_precompilato' in st.session_state and st.session_state.analisi_ticker_precompilato:
-        ticker_s = st.session_state.analisi_ticker_precompilato
-        del st.session_state.analisi_ticker_precompilato
-        try:
-            ticker_obj = yf.Ticker(ticker_s)
-            df = ticker_obj.history(period="1y")
-            info = ticker_obj.info
-            if not df.empty and len(df) >= 50:
-                prezzo_eur, prezzo_usd, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
-                df['SMA_Short'] = df['Close'].rolling(window=50).mean()
-                df['SMA_Long'] = df['Close'].rolling(window=200).mean()
-                vol_ratio = df.iloc[-1]['Volume'] / df['Volume'].rolling(window=20).mean().iloc[-1] if df['Volume'].rolling(window=20).mean().iloc[-1] > 0 else 0
-                s_score = calcola_s_score(info, ticker_s)
-                fase = rileva_fase_weinstein(df)
-                figura_z, _ = rileva_figura_z(df)
-                trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
-                trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(df, 50, ticker_obj)
-                earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
-                var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
-                sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
-                sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
-                delta = df['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                rsi_val = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty else 50
-                supporto = round(df.tail(60)['Low'].min(), 2)
-                resistenza = round(df.tail(60)['High'].max(), 2)
-                pm_price = info.get('preMarketPrice')
-                pm_change = info.get('preMarketChangePercent')
-                am_price = info.get('postMarketPrice')
-                am_change = info.get('postMarketChangePercent')
-                if am_price and am_change: market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
-                elif pm_price and pm_change: market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
-                else: market_extra = "🌞 Regular Market"
-                distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
-                pre_golden_cross = distanza_medie_pct < 3.0 and sma50_usd < sma200_usd
-                pre_death_cross = distanza_medie_pct < 3.0 and sma50_usd > sma200_usd
-                if trigger_by_fabio: segnale = "🟢 BY FABIO - Ingresso Matematico"
-                elif trigger_by: segnale = "🟢 BY - Acquista"
-                elif "FASE 4" in fase or s_score < 40: segnale = "🔴 SELL - Evita"
-                elif s_score >= 60 and "FASE 2" in fase: segnale = "🟡 HOLD - Monitora"
-                else: segnale = "🟡 HOLD - In attesa"
-                motivo_display = motivo_by_fabio if trigger_by_fabio else motivo_by
-                st.session_state.analisi_risultati = {
-                    'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
-                    's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
-                    'earnings_msg': earnings_msg, 'motivo_by': motivo_display, 'var_pct': var_pct, 'var_abs': var_abs,
-                    'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd, 'rsi': round(rsi_val, 1),
-                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra,
-                    'volume_oggi': int(df['Volume'].iloc[-1]),
-                    'volume_medio': int(df['Volume'].rolling(window=20).mean().iloc[-1]),
-                    'trigger_by_fabio': trigger_by_fabio,
-                    'pre_golden_cross': pre_golden_cross,
-                    'pre_death_cross': pre_death_cross
-                }
-        except Exception: pass
-    
-    if st.button("🔎 Analizza", type="primary", use_container_width=True):
-        ticker_s = ticker_input.strip().upper()
-        try:
-            ticker_obj = yf.Ticker(ticker_s)
-            df = ticker_obj.history(period="1y")
-            info = ticker_obj.info
-            if df.empty or len(df) < 50:
-                st.error("Dati insufficienti")
-            else:
-                prezzo_eur, prezzo_usd, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
-                df['SMA_Short'] = df['Close'].rolling(window=50).mean()
-                df['SMA_Long'] = df['Close'].rolling(window=200).mean()
-                vol_ratio = df.iloc[-1]['Volume'] / df['Volume'].rolling(window=20).mean().iloc[-1] if df['Volume'].rolling(window=20).mean().iloc[-1] > 0 else 0
-                s_score = calcola_s_score(info, ticker_s)
-                fase = rileva_fase_weinstein(df)
-                figura_z, _ = rileva_figura_z(df)
-                trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
-                trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(df, 50, ticker_obj)
-                earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
-                var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
-                sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
-                sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
-                delta = df['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                rsi_val = float(100 - (100 / (1 + rs)).iloc[-1]) if not rs.empty else 50
-                supporto = round(df.tail(60)['Low'].min(), 2)
-                resistenza = round(df.tail(60)['High'].max(), 2)
-                pm_price = info.get('preMarketPrice')
-                pm_change = info.get('preMarketChangePercent')
-                am_price = info.get('postMarketPrice')
-                am_change = info.get('postMarketChangePercent')
-                if am_price and am_change: market_extra = f"🌙 After-Hours: ${am_price:.2f} ({am_change:+.2f}%)"
-                elif pm_price and pm_change: market_extra = f"🌅 Pre-Market: ${pm_price:.2f} ({pm_change:+.2f}%)"
-                else: market_extra = "🌞 Regular Market"
-                distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
-                pre_golden_cross = distanza_medie_pct < 3.0 and sma50_usd < sma200_usd
-                pre_death_cross = distanza_medie_pct < 3.0 and sma50_usd > sma200_usd
-                if trigger_by_fabio: segnale = "🟢 BY FABIO - Ingresso Matematico"
-                elif trigger_by: segnale = "🟢 BY - Acquista"
-                elif "FASE 4" in fase or s_score < 40: segnale = "🔴 SELL - Evita"
-                elif s_score >= 60 and "FASE 2" in fase: segnale = "🟡 HOLD - Monitora"
-                else: segnale = "🟡 HOLD - In attesa"
-                motivo_display = motivo_by_fabio if trigger_by_fabio else motivo_by
-                st.session_state.analisi_risultati = {
-                    'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
-                    's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
-                    'earnings_msg': earnings_msg, 'motivo_by': motivo_display, 'var_pct': var_pct, 'var_abs': var_abs,
-                    'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd, 'rsi': round(rsi_val, 1),
-                    'supporto': supporto, 'resistenza': resistenza, 'market_extra': market_extra,
-                    'volume_oggi': int(df['Volume'].iloc[-1]),
-                    'volume_medio': int(df['Volume'].rolling(window=20).mean().iloc[-1]),
-                    'trigger_by_fabio': trigger_by_fabio,
-                    'pre_golden_cross': pre_golden_cross,
-                    'pre_death_cross': pre_death_cross
-                }
-        except Exception as e:
-            st.error(f"Errore: {e}")
-    
-    if st.session_state.get('analisi_risultati'):
-        r = st.session_state.analisi_risultati
-        st.markdown(f"### {r['ticker']} - {r['segnale']}")
-        
-        col1, col2 = st.columns(2)
-        col1.metric("💶 Prezzo EUR", f"€ {r['prezzo_eur']:.2f}")
-        col2.metric("💵 Prezzo USD", f"$ {r['prezzo_usd']:.2f}")
-        col3, col4 = st.columns(2)
-        col3.metric("⚡ S-Score", r['s_score'])
-        col4.metric("📊 Fase", r['fase'])
-        col5, col6 = st.columns(2)
-        col5.metric("📈 RSI", r['rsi'])
-        col6.metric("📊 Volume Ratio", f"{r['vol_ratio']:.2f}x")
-        
-        col7, col8 = st.columns(2)
-        col7.metric("📊 Volume Oggi", f"{r.get('volume_oggi', 'N/D'):,}" if isinstance(r.get('volume_oggi'), (int, float)) else r.get('volume_oggi', 'N/D'))
-        col8.metric("📊 Volume Medio", f"{r.get('volume_medio', 'N/D'):,}" if isinstance(r.get('volume_medio'), (int, float)) else r.get('volume_medio', 'N/D'))
-        
-        if r.get('var_pct') is not None:
-            var_color = "#10b981" if r['var_pct'] > 0 else "#ef4444"
-            st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span>", unsafe_allow_html=True)
-        
-        st.markdown(f"**{r['market_extra']}**")
-        st.markdown(f"**SMA 50:** ${r['sma50_usd']:.2f} | **SMA 200:** ${r['sma200_usd']:.2f}")
-        st.markdown(f"**🛡️ Sup:** ${r['supporto']:.2f} | **🎯 Res:** ${r['resistenza']:.2f}")
-        st.markdown(f"**Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'} | **Prossimi Utili:** {r['earnings_msg']}")
-        
-        if r.get('pre_golden_cross'): st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
-        elif r.get('pre_death_cross'): st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione!")
-        
-        if "BY FABIO" in r['segnale']: st.success(f"**🟢 BY FABIO**: {r['motivo_by']}")
-        elif "BY" in r['segnale']: st.success(f"**Motivo**: {r['motivo_by']}")
-        elif "HOLD" in r['segnale']: st.warning(f"**Motivo**: {r['motivo_by']}")
-        else: st.error("**Motivo**: Titolo in Fase 4 o S-Score troppo basso")
+# ⚠️ IMPORTANTE: Questo else deve essere allineato con l'if iniziale del portafoglio
+else:
+    st.info("👆 Clicca **🔄 Aggiorna Quotazioni** per vedere i dati.")
         
         # Target Grafici
         port_att = st.session_state.get('portafoglio') or carica_json(PORTAFOGLIO_FILE) or []
