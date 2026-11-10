@@ -1,1 +1,16 @@
-
+[
+    {
+        "id": 1,
+        "Data": "2026-11-07",
+        "Ticker": "APP",
+        "Qta_Venduta": 0.4,
+        "Prezzo_Medio": 239.58,
+        "Prezzo_Vendita": 345.85,
+        "PnL_Lordo": 42.51,
+        "PnL_Pct": 44.36,
+        "Minusvalenze_Usate": 0.0,
+        "Tasse": 11.05,
+        "PnL_Netto": 31.46,
+        "Tipo": "plusvalenza"
+    }
+]
