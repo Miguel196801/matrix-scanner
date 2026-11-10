@@ -1,1 +1,914 @@
-
+[
+    {
+        "Ticker": "AMZN",
+        "Tipo": "SELL",
+        "Data": "2026-10-31",
+        "Prezzo": 240.35
+    },
+    {
+        "Ticker": "INTC",
+        "Tipo": "SELL",
+        "Data": "2026-10-31",
+        "Prezzo": 65.76
+    },
+    {
+        "Ticker": "IREN",
+        "Tipo": "BY",
+        "Data": "2026-10-06",
+        "Prezzo": 41.28
+    },
+    {
+        "Ticker": "IREN",
+        "Tipo": "SELL",
+        "Data": "2026-09-25",
+        "Prezzo": 44.12
+    },
+    {
+        "Ticker": "GOOGL",
+        "Tipo": "BY",
+        "Data": "2026-08-28",
+        "Prezzo": 346.37
+    },
+    {
+        "Ticker": "GOOGL",
+        "Tipo": "BY",
+        "Data": "2026-09-14",
+        "Prezzo": 349.39
+    },
+    {
+        "Ticker": "GOOGL",
+        "Tipo": "SELL",
+        "Data": "2026-09-09",
+        "Prezzo": 330.65
+    },
+    {
+        "Ticker": "GOOGL",
+        "Tipo": "SELL",
+        "Data": "2026-10-01",
+        "Prezzo": 338.24
+    },
+    {
+        "Ticker": "MELI",
+        "Tipo": "BY",
+        "Data": "2026-09-10",
+        "Prezzo": 1906.24
+    },
+    {
+        "Ticker": "MELI",
+        "Tipo": "BY",
+        "Data": "2026-10-05",
+        "Prezzo": 1860.61
+    },
+    {
+        "Ticker": "MELI",
+        "Tipo": "SELL",
+        "Data": "2026-09-15",
+        "Prezzo": 1828.94
+    },
+    {
+        "Ticker": "QCOM",
+        "Tipo": "BY",
+        "Data": "2026-08-31",
+        "Prezzo": 169.56
+    },
+    {
+        "Ticker": "QCOM",
+        "Tipo": "SELL",
+        "Data": "2026-10-30",
+        "Prezzo": 164.79
+    },
+    {
+        "Ticker": "INTC",
+        "Tipo": "BY",
+        "Data": "2026-09-14",
+        "Prezzo": 97.19
+    },
+    {
+        "Ticker": "INTC",
+        "Tipo": "SELL",
+        "Data": "2026-10-22",
+        "Prezzo": 85.49
+    },
+    {
+        "Ticker": "INTC",
+        "Tipo": "SELL",
+        "Data": "2026-10-30",
+        "Prezzo": 65.76
+    },
+    {
+        "Ticker": "NBIS",
+        "Tipo": "SELL",
+        "Data": "2026-10-16",
+        "Prezzo": 165.47
+    },
+    {
+        "Ticker": "DIS",
+        "Tipo": "BY",
+        "Data": "2026-09-23",
+        "Prezzo": 103.46
+    },
+    {
+        "Ticker": "DIS",
+        "Tipo": "BY",
+        "Data": "2026-09-28",
+        "Prezzo": 105.59
+    },
+    {
+        "Ticker": "DIS",
+        "Tipo": "SELL",
+        "Data": "2026-09-18",
+        "Prezzo": 102.67
+    },
+    {
+        "Ticker": "DIS",
+        "Tipo": "SELL",
+        "Data": "2026-10-01",
+        "Prezzo": 101.33
+    },
+    {
+        "Ticker": "CRWD",
+        "Tipo": "BY",
+        "Data": "2026-08-21",
+        "Prezzo": 191.95
+    },
+    {
+        "Ticker": "TXN",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 269.55
+    },
+    {
+        "Ticker": "TXN",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 270.09
+    },
+    {
+        "Ticker": "TXN",
+        "Tipo": "BY",
+        "Data": "2026-10-16",
+        "Prezzo": 275.14
+    },
+    {
+        "Ticker": "PEP",
+        "Tipo": "BY",
+        "Data": "2026-09-02",
+        "Prezzo": 139.03
+    },
+    {
+        "Ticker": "PEP",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 138.45
+    },
+    {
+        "Ticker": "PEP",
+        "Tipo": "BY",
+        "Data": "2026-10-16",
+        "Prezzo": 131.49
+    },
+    {
+        "Ticker": "GLW",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 165.96
+    },
+    {
+        "Ticker": "GLW",
+        "Tipo": "SELL",
+        "Data": "2026-09-14",
+        "Prezzo": 143.6
+    },
+    {
+        "Ticker": "GLW",
+        "Tipo": "SELL",
+        "Data": "2026-10-12",
+        "Prezzo": 147.28
+    },
+    {
+        "Ticker": "SOFI",
+        "Tipo": "BY",
+        "Data": "2026-10-27",
+        "Prezzo": 16.4
+    },
+    {
+        "Ticker": "FTNT",
+        "Tipo": "BY",
+        "Data": "2026-10-19",
+        "Prezzo": 171.5
+    },
+    {
+        "Ticker": "FTNT",
+        "Tipo": "BY",
+        "Data": "2026-10-20",
+        "Prezzo": 170.93
+    },
+    {
+        "Ticker": "WDC",
+        "Tipo": "SELL",
+        "Data": "2026-10-08",
+        "Prezzo": 393.31
+    },
+    {
+        "Ticker": "META",
+        "Tipo": "BY",
+        "Data": "2026-09-02",
+        "Prezzo": 592.38
+    },
+    {
+        "Ticker": "META",
+        "Tipo": "SELL",
+        "Data": "2026-10-26",
+        "Prezzo": 630.56
+    },
+    {
+        "Ticker": "AVGO",
+        "Tipo": "BY",
+        "Data": "2026-10-06",
+        "Prezzo": 375.81
+    },
+    {
+        "Ticker": "AVGO",
+        "Tipo": "BY",
+        "Data": "2026-10-28",
+        "Prezzo": 351.81
+    },
+    {
+        "Ticker": "AVGO",
+        "Tipo": "SELL",
+        "Data": "2026-09-02",
+        "Prezzo": 366.57
+    },
+    {
+        "Ticker": "AVGO",
+        "Tipo": "SELL",
+        "Data": "2026-10-08",
+        "Prezzo": 360.14
+    },
+    {
+        "Ticker": "CRDO",
+        "Tipo": "BY",
+        "Data": "2026-09-25",
+        "Prezzo": 210.97
+    },
+    {
+        "Ticker": "CRDO",
+        "Tipo": "BY",
+        "Data": "2026-10-01",
+        "Prezzo": 210.17
+    },
+    {
+        "Ticker": "CRDO",
+        "Tipo": "SELL",
+        "Data": "2026-09-02",
+        "Prezzo": 165.22
+    },
+    {
+        "Ticker": "CRDO",
+        "Tipo": "SELL",
+        "Data": "2026-10-14",
+        "Prezzo": 179.23
+    },
+    {
+        "Ticker": "CRDO",
+        "Tipo": "SELL",
+        "Data": "2026-10-22",
+        "Prezzo": 162.77
+    },
+    {
+        "Ticker": "SMCI",
+        "Tipo": "SELL",
+        "Data": "2026-10-16",
+        "Prezzo": 31.63
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-08-20",
+        "Prezzo": 31.86
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 30.43
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-09-24",
+        "Prezzo": 29.28
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-09-30",
+        "Prezzo": 29.79
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-10-15",
+        "Prezzo": 29.38
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-10-20",
+        "Prezzo": 29.21
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "BY",
+        "Data": "2026-10-28",
+        "Prezzo": 29.32
+    },
+    {
+        "Ticker": "ADBE",
+        "Tipo": "BY",
+        "Data": "2026-09-11",
+        "Prezzo": 252.23
+    },
+    {
+        "Ticker": "ADBE",
+        "Tipo": "BY",
+        "Data": "2026-09-17",
+        "Prezzo": 252.67
+    },
+    {
+        "Ticker": "ADBE",
+        "Tipo": "BY",
+        "Data": "2026-10-20",
+        "Prezzo": 256.73
+    },
+    {
+        "Ticker": "ADBE",
+        "Tipo": "SELL",
+        "Data": "2026-09-04",
+        "Prezzo": 266.51
+    },
+    {
+        "Ticker": "ADBE",
+        "Tipo": "SELL",
+        "Data": "2026-10-27",
+        "Prezzo": 248.36
+    },
+    {
+        "Ticker": "ASTS",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 66.12
+    },
+    {
+        "Ticker": "ASTS",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 61.89
+    },
+    {
+        "Ticker": "ASTS",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 63.69
+    },
+    {
+        "Ticker": "ASTS",
+        "Tipo": "BY",
+        "Data": "2026-10-06",
+        "Prezzo": 63.12
+    },
+    {
+        "Ticker": "TSLA",
+        "Tipo": "BY",
+        "Data": "2026-08-21",
+        "Prezzo": 362.86
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 505.74
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "BY",
+        "Data": "2026-09-14",
+        "Prezzo": 493.41
+    },
+    {
+        "Ticker": "APLD",
+        "Tipo": "BY",
+        "Data": "2026-09-18",
+        "Prezzo": 28.12
+    },
+    {
+        "Ticker": "MU",
+        "Tipo": "BY",
+        "Data": "2026-09-14",
+        "Prezzo": 923.88
+    },
+    {
+        "Ticker": "MU",
+        "Tipo": "BY",
+        "Data": "2026-10-28",
+        "Prezzo": 983.23
+    },
+    {
+        "Ticker": "RKLB",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 69.89
+    },
+    {
+        "Ticker": "SHAK",
+        "Tipo": "BY",
+        "Data": "2026-10-06",
+        "Prezzo": 64.61
+    },
+    {
+        "Ticker": "NU",
+        "Tipo": "SELL",
+        "Data": "2026-10-26",
+        "Prezzo": 12.59
+    },
+    {
+        "Ticker": "NOW",
+        "Tipo": "SELL",
+        "Data": "2026-10-29",
+        "Prezzo": 109.67
+    },
+    {
+        "Ticker": "BBAI",
+        "Tipo": "BY",
+        "Data": "2026-08-27",
+        "Prezzo": 3.19
+    },
+    {
+        "Ticker": "BBAI",
+        "Tipo": "BY",
+        "Data": "2026-10-29",
+        "Prezzo": 2.67
+    },
+    {
+        "Ticker": "LRCX",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 320.08
+    },
+    {
+        "Ticker": "LRCX",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 301.96
+    },
+    {
+        "Ticker": "LRCX",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 310.63
+    },
+    {
+        "Ticker": "LRCX",
+        "Tipo": "SELL",
+        "Data": "2026-10-15",
+        "Prezzo": 277.46
+    },
+    {
+        "Ticker": "COHR",
+        "Tipo": "BY",
+        "Data": "2026-09-08",
+        "Prezzo": 301.88
+    },
+    {
+        "Ticker": "COHR",
+        "Tipo": "BY",
+        "Data": "2026-09-11",
+        "Prezzo": 305.37
+    },
+    {
+        "Ticker": "COHR",
+        "Tipo": "SELL",
+        "Data": "2026-09-14",
+        "Prezzo": 266.5
+    },
+    {
+        "Ticker": "COHR",
+        "Tipo": "SELL",
+        "Data": "2026-09-28",
+        "Prezzo": 282.45
+    },
+    {
+        "Ticker": "COHR",
+        "Tipo": "SELL",
+        "Data": "2026-10-12",
+        "Prezzo": 288.02
+    },
+    {
+        "Ticker": "ORCL",
+        "Tipo": "BY",
+        "Data": "2026-09-16",
+        "Prezzo": 142.63
+    },
+    {
+        "Ticker": "ORCL",
+        "Tipo": "BY",
+        "Data": "2026-09-24",
+        "Prezzo": 139.03
+    },
+    {
+        "Ticker": "ORCL",
+        "Tipo": "BY",
+        "Data": "2026-10-28",
+        "Prezzo": 144.54
+    },
+    {
+        "Ticker": "MRVL",
+        "Tipo": "BY",
+        "Data": "2026-10-15",
+        "Prezzo": 241.24
+    },
+    {
+        "Ticker": "LLY",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 1164.89
+    },
+    {
+        "Ticker": "LLY",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 1170.14
+    },
+    {
+        "Ticker": "LLY",
+        "Tipo": "BY",
+        "Data": "2026-09-24",
+        "Prezzo": 1181.89
+    },
+    {
+        "Ticker": "LLY",
+        "Tipo": "BY",
+        "Data": "2026-10-07",
+        "Prezzo": 1188.72
+    },
+    {
+        "Ticker": "SBUX",
+        "Tipo": "SELL",
+        "Data": "2026-09-15",
+        "Prezzo": 96.58
+    },
+    {
+        "Ticker": "SBUX",
+        "Tipo": "SELL",
+        "Data": "2026-09-17",
+        "Prezzo": 96.67
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-09-14",
+        "Prezzo": 253.54
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-09-18",
+        "Prezzo": 253.71
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 258.45
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-10-07",
+        "Prezzo": 259.92
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "SELL",
+        "Data": "2026-10-30",
+        "Prezzo": 240.35
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "SELL",
+        "Data": "2026-11-01",
+        "Prezzo": 240.35
+    },
+    {
+        "Ticker": "INTC",
+        "Tipo": "SELL",
+        "Data": "2026-11-01",
+        "Prezzo": 65.76
+    },
+    {
+        "Ticker": "WYNN",
+        "Tipo": "BY",
+        "Data": "2026-08-20",
+        "Prezzo": 99.6
+    },
+    {
+        "Ticker": "VRT",
+        "Tipo": "BY",
+        "Data": "2026-10-29",
+        "Prezzo": 245.92
+    },
+    {
+        "Ticker": "VRT",
+        "Tipo": "SELL",
+        "Data": "2026-09-10",
+        "Prezzo": 248.07
+    },
+    {
+        "Ticker": "TTD",
+        "Tipo": "BY",
+        "Data": "2026-10-15",
+        "Prezzo": 13.13
+    },
+    {
+        "Ticker": "TTD",
+        "Tipo": "BY",
+        "Data": "2026-10-29",
+        "Prezzo": 13.06
+    },
+    {
+        "Ticker": "HIMS",
+        "Tipo": "SELL",
+        "Data": "2026-11-02",
+        "Prezzo": 25.24
+    },
+    {
+        "Ticker": "NVDA",
+        "Tipo": "SELL",
+        "Data": "2026-11-02",
+        "Prezzo": 202.06
+    },
+    {
+        "Ticker": "SMCI",
+        "Tipo": "SELL",
+        "Data": "2026-11-02",
+        "Prezzo": 30.44
+    },
+    {
+        "Ticker": "AAPL",
+        "Tipo": "BY",
+        "Data": "2026-11-03",
+        "Prezzo": 330.88
+    },
+    {
+        "Ticker": "STVN",
+        "Tipo": "SELL",
+        "Data": "2026-11-03",
+        "Prezzo": 14.09
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-11-04",
+        "Prezzo": 267.67
+    },
+    {
+        "Ticker": "AAPL",
+        "Tipo": "BY",
+        "Data": "2026-11-04",
+        "Prezzo": 353.0
+    },
+    {
+        "Ticker": "WYNN",
+        "Tipo": "BY",
+        "Data": "2026-11-04",
+        "Prezzo": 82.26
+    },
+    {
+        "Ticker": "MT",
+        "Tipo": "SELL",
+        "Data": "2026-10-08",
+        "Prezzo": 61.3
+    },
+    {
+        "Ticker": "AMTX",
+        "Tipo": "BY",
+        "Data": "2026-11-05",
+        "Prezzo": 1.91
+    },
+    {
+        "Ticker": "MU",
+        "Tipo": "SELL",
+        "Data": "2026-11-05",
+        "Prezzo": 688.34
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "SELL",
+        "Data": "2026-11-05",
+        "Prezzo": 414.61
+    },
+    {
+        "Ticker": "MCD",
+        "Tipo": "SELL",
+        "Data": "2026-11-05",
+        "Prezzo": 278.04
+    },
+    {
+        "Ticker": "TTWO",
+        "Tipo": "BY",
+        "Data": "2026-11-05",
+        "Prezzo": 213.36
+    },
+    {
+        "Ticker": "BSX",
+        "Tipo": "BY",
+        "Data": "2026-10-22",
+        "Prezzo": 46.01
+    },
+    {
+        "Ticker": "BSX",
+        "Tipo": "BY",
+        "Data": "2026-11-02",
+        "Prezzo": 44.32
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "SELL",
+        "Data": "2026-11-06",
+        "Prezzo": 404.4
+    },
+    {
+        "Ticker": "AMTX",
+        "Tipo": "BY",
+        "Data": "2026-11-06",
+        "Prezzo": 1.73
+    },
+    {
+        "Ticker": "MCD",
+        "Tipo": "SELL",
+        "Data": "2026-11-06",
+        "Prezzo": 278.04
+    },
+    {
+        "Ticker": "MU",
+        "Tipo": "SELL",
+        "Data": "2026-11-06",
+        "Prezzo": 656.39
+    },
+    {
+        "Ticker": "TTWO",
+        "Tipo": "BY",
+        "Data": "2026-11-06",
+        "Prezzo": 213.36
+    },
+    {
+        "Ticker": "AMZN",
+        "Tipo": "BY",
+        "Data": "2026-11-06",
+        "Prezzo": 260.21
+    },
+    {
+        "Ticker": "CRWD",
+        "Tipo": "BY",
+        "Data": "2026-11-06",
+        "Prezzo": 217.2
+    },
+    {
+        "Ticker": "WYNN",
+        "Tipo": "BY",
+        "Data": "2026-11-06",
+        "Prezzo": 79.32
+    },
+    {
+        "Ticker": "AMTX",
+        "Tipo": "BY",
+        "Data": "2026-11-07",
+        "Prezzo": 1.62
+    },
+    {
+        "Ticker": "APP",
+        "Tipo": "BY",
+        "Data": "2026-11-07",
+        "Prezzo": 391.22
+    },
+    {
+        "Ticker": "WYNN",
+        "Tipo": "BY",
+        "Data": "2026-11-07",
+        "Prezzo": 83.11
+    },
+    {
+        "Ticker": "PAM",
+        "Tipo": "BY",
+        "Data": "2026-08-31",
+        "Prezzo": 82.32
+    },
+    {
+        "Ticker": "PAM",
+        "Tipo": "BY",
+        "Data": "2026-10-06",
+        "Prezzo": 81.48
+    },
+    {
+        "Ticker": "LRN",
+        "Tipo": "BY",
+        "Data": "2026-10-08",
+        "Prezzo": 81.36
+    },
+    {
+        "Ticker": "LRN",
+        "Tipo": "BY",
+        "Data": "2026-10-14",
+        "Prezzo": 82.55
+    },
+    {
+        "Ticker": "LRN",
+        "Tipo": "BY",
+        "Data": "2026-10-22",
+        "Prezzo": 80.68
+    },
+    {
+        "Ticker": "LRN",
+        "Tipo": "SELL",
+        "Data": "2026-09-08",
+        "Prezzo": 82.15
+    },
+    {
+        "Ticker": "LRN",
+        "Tipo": "SELL",
+        "Data": "2026-09-16",
+        "Prezzo": 82.04
+    },
+    {
+        "Ticker": "UCTT",
+        "Tipo": "SELL",
+        "Data": "2026-10-07",
+        "Prezzo": 71.42
+    },
+    {
+        "Ticker": "LULU",
+        "Tipo": "BY",
+        "Data": "2026-08-31",
+        "Prezzo": 120.26
+    },
+    {
+        "Ticker": "LULU",
+        "Tipo": "BY",
+        "Data": "2026-09-02",
+        "Prezzo": 120.07
+    },
+    {
+        "Ticker": "LULU",
+        "Tipo": "BY",
+        "Data": "2026-10-22",
+        "Prezzo": 104.06
+    },
+    {
+        "Ticker": "AMTX",
+        "Tipo": "BY",
+        "Data": "2026-11-08",
+        "Prezzo": 1.62
+    },
+    {
+        "Ticker": "COST",
+        "Tipo": "BY",
+        "Data": "2026-11-08",
+        "Prezzo": 1053.56
+    },
+    {
+        "Ticker": "ANET",
+        "Tipo": "SELL",
+        "Data": "2026-11-02",
+        "Prezzo": 164.14
+    },
+    {
+        "Ticker": "ANET",
+        "Tipo": "SELL",
+        "Data": "2026-11-05",
+        "Prezzo": 159.16
+    },
+    {
+        "Ticker": "AMTX",
+        "Tipo": "BY",
+        "Data": "2026-11-09",
+        "Prezzo": 1.62
+    },
+    {
+        "Ticker": "COST",
+        "Tipo": "BY",
+        "Data": "2026-11-09",
+        "Prezzo": 1053.56
+    },
+    {
+        "Ticker": "ZETA",
+        "Tipo": "BY",
+        "Data": "2026-11-09",
+        "Prezzo": 32.33
+    },
+    {
+        "Ticker": "TXN",
+        "Tipo": "BY",
+        "Data": "2026-11-10",
+        "Prezzo": 295.73
+    }
+]
