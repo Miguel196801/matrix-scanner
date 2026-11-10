@@ -1350,7 +1350,18 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                 stats['sell_count'] += 1; stats['sell_tickers'].append(ticker); continue
             is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
             is_fortezza_valida = (s_score >= 60 and "FASE 2" in fase)
-            is_fortezza_accumulo = (s_score >= 60 and "FASE 1" in fase and vol_ratio >= 1.60 and figura_z)
+            # Criteri SMCI allineati al Desktop
+            if s_score >= 75 and "FASE 1" in fase and prezzo_attuale < sma50 and 35 <= rsi_oggi <= 50:
+               # Calcolo R/R per ordinamento
+               targets_smci = calcola_target(ticker_obj, prezzo_eur, prezzo_eur)
+               rr_smci = 0.0
+               if targets_smci:
+                   upside = targets_smci.get('upside1', 0)
+                   risk = abs(targets_smci.get('sl_down', 1))
+                   rr_smci = round(upside / risk, 2) if risk > 0 else 0
+    
+               smci_tickers.append({'ticker': ticker, 'rr': rr_smci, 's_score': s_score})
+               registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}, R/R: {rr_smci}", stato="N/D")
             is_watchlist = (s_score >= 40 and ("FASE 1" in fase or "FASE 2" in fase or "CORREZIONE" in fase) and not is_cp_valido and not is_fortezza_valida)
             if ticker in ticker_in_portafoglio and (trigger_by or trigger_by_fabio):
                 pos = ticker_in_portafoglio[ticker]
