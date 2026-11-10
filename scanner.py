@@ -1298,10 +1298,11 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
                     risk = abs(targets_smci.get('sl_down', 1))
                     rr_smci = round(upside / risk, 2) if risk > 0 else 0
                 
-                stats.setdefault('smci_tickers', []).append({'ticker': ticker, 'rr': rr_smci, 's_score': s_score})
-                # MODIFICA 3b: Log SMCI
-                registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}, R/R: {rr_smci}", stato="N/D")
-            is_palantir = (s_score >= 75 and revenue_growth >= 0.20 and (peg_ratio > 0 and peg_ratio < 1.5) and rsi_oggi < 45 and distanza_sma200_pct <= 5.0)
+                 registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}, R/R: {rr_smci}", stato="N/D")
+                 is_fortezza_accumulo = (s_score >= 60 and "FASE 1" in fase and vol_ratio >= 1.60 and figura_z)
+                 is_palantir = (s_score >= 75 and revenue_growth >= 0.20 and (peg_ratio > 0 and peg_ratio < 1.5) and rsi_oggi < 45 and distanza_sma200_pct <= 5.0)           stats.setdefault('smci_tickers', []).append({'ticker': ticker, 'rr': rr_smci, 's_score': s_score})
+                 # MODIFICA 3b: Log SMCI
+                
             if is_palantir:
                 lista_palantir.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'RSI': round(rsi_oggi, 1), 'PEG': round(peg_ratio, 2) if peg_ratio > 0 else 'N/D', 'Rev Growth': f"{revenue_growth*100:.1f}%", 'Distanza SMA200': f"{distanza_sma200_pct:.1f}%"})
             pm_var = info.get('preMarketChangePercent') or 0
