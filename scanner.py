@@ -1290,8 +1290,17 @@ if st.sidebar.button("🔴 AVVIA SCANSIONE", type="primary", use_container_width
             prezzo_attuale = df['Close'].iloc[-1]
             distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
             if s_score >= 75 and "FASE 1" in fase and prezzo_attuale < sma50 and 35 <= rsi_oggi <= 50:
-                stats.setdefault('smci_tickers', []).append(ticker)
-                registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}", stato="N/D")
+                # Calcolo R/R per ordinamento
+                targets_smci = calcola_target(ticker_obj, prezzo_eur, prezzo_eur)
+                rr_smci = 0.0
+                if targets_smci:
+                    upside = targets_smci.get('upside1', 0)
+                    risk = abs(targets_smci.get('sl_down', 1))
+                    rr_smci = round(upside / risk, 2) if risk > 0 else 0
+                
+                stats.setdefault('smci_tickers', []).append({'ticker': ticker, 'rr': rr_smci, 's_score': s_score})
+                # MODIFICA 3b: Log SMCI
+                registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}, R/R: {rr_smci}", stato="N/D")
             is_palantir = (s_score >= 75 and revenue_growth >= 0.20 and (peg_ratio > 0 and peg_ratio < 1.5) and rsi_oggi < 45 and distanza_sma200_pct <= 5.0)
             if is_palantir:
                 lista_palantir.append({'Ticker': ticker, 'Prezzo EUR': prezzo_eur, 'S-Score': s_score, 'RSI': round(rsi_oggi, 1), 'PEG': round(peg_ratio, 2) if peg_ratio > 0 else 'N/D', 'Rev Growth': f"{revenue_growth*100:.1f}%", 'Distanza SMA200': f"{distanza_sma200_pct:.1f}%"})
@@ -1822,14 +1831,19 @@ with tab_scanner:
             st.markdown("---")
             st.subheader("❌ Titoli con Errori di Scansione")
             for err in stats['error_tickers']: st.warning(f"⚠️ {err}")
-        if stats.get('smci_tickers'):
+        # AGGIUNTA SEZIONE SMCI NELLA DASHBOARD - ORDINATA PER R/R
+        if st.session_state.get('smci_tickers'):
+            smci_sorted = sorted(st.session_state.smci_tickers, key=lambda x: x.get('rr', 0), reverse=True)
+            ticker_list = ", ".join([f"{t['ticker']} (R/R: {t['rr']})" for t in smci_sorted])
             st.markdown("---")
-            st.subheader("🎯 TITOLI TIPOLOGIA 'SMCI' RILEVATI (Pattern Accumulo Fortezza)")
+            st.subheader("🎯 TITOLI TIPOLOGIA 'SMCI' (Ordinati per R/R)")
             st.markdown(f"""
-            <div class="signal-box signal-blue" style="border-left: 5px solid #3b82f6; background-color: #1e3a5f;">
-                <h3 style="margin: 0; color: #dbeafe;">🧬 {len(stats['smci_tickers'])} Titoli con geometria SMCI</h3>
-                <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold; color: #dbeafe;">{', '.join(stats['smci_tickers'])}</p>
-                <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; opacity: 0.9;">S-Score ≥ 75 | FASE 1 | Prezzo < SMA50 | RSI 35-50. Valutazione manuale del Capitano.</p>
+            <div class="signal-box signal-blue">
+            <h3 style="margin: 0;">🎯 {len(st.session_state.smci_tickers)} Titoli con Pattern Accumulo Fortezza (SMCI)</h3>
+            <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;">
+            <strong>{ticker_list}</strong>
+            </p>
+            <p style="margin: 0.3rem 0 0 0; font-size: 0.9rem; opacity: 0.9;">Ordinati dal miglior Rapporto Rischio/Rendimento. Valutazione manuale del Capitano.</p>
             </div>
             """, unsafe_allow_html=True)
         if st.session_state.get('extended_hours_alerts'):
