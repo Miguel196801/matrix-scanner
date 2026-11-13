@@ -1250,6 +1250,32 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     f3.metric("🎯 Target Analisti 1y", tgt_str)
     f4.metric("📅 Stagionalità 60gg", stag_txt or "N/D", str(r.get('earnings_str', '')))
 
+    if p_usd > 0:
+        atr_val = float((df_1y['High'] - df_1y['Low']).tail(14).mean()) if (df_1y is not None and len(df_1y) >= 14) else (p_usd * 0.04)
+        sl_usd = max(0.01, p_usd - (2.0 * atr_val))
+        rischio_usd = max(0.01, p_usd - sl_usd)
+        t1_usd = p_usd + (1.5 * rischio_usd)
+        t2_usd = p_usd + (2.5 * rischio_usd)
+        t3_usd = tgt_1y if tgt_1y > t2_usd else (p_usd + (3.5 * rischio_usd))
+        rr_ratio = (t2_usd - p_usd) / rischio_usd
+        sl_pct = ((sl_usd - p_usd) / p_usd) * 100
+        t1_pct = ((t1_usd - p_usd) / p_usd) * 100
+        t2_pct = ((t2_usd - p_usd) / p_usd) * 100
+        t3_pct = ((t3_usd - p_usd) / p_usd) * 100
+
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg, rgba(124,58,237,0.16) 0%, rgba(19,23,34,0.95) 100%);"
+            f"border:1px solid rgba(124,58,237,0.5);border-radius:8px;padding:10px 14px;margin-top:8px;margin-bottom:8px;'>"
+            f"<div style='font-size:0.82rem;font-weight:700;color:#C4B5FD;margin-bottom:4px;'>🎯 TARGET OPERATIVI & RAPPORTO RISCHIO/RENDIMENTO (ATR 14gg)</div>"
+            f"<span style='color:#F23645;font-weight:600;'>🛑 Stop Loss: ${sl_usd:.2f} ({sl_pct:+.1f}%)</span> &nbsp;|&nbsp; "
+            f"<span style='color:#089981;font-weight:600;'>T1: ${t1_usd:.2f} ({t1_pct:+.1f}%)</span> &nbsp;|&nbsp; "
+            f"<span style='color:#089981;font-weight:600;'>T2: ${t2_usd:.2f} ({t2_pct:+.1f}%)</span> &nbsp;|&nbsp; "
+            f"<span style='color:#38BDF8;font-weight:600;'>T3: ${t3_usd:.2f} ({t3_pct:+.1f}%)</span> &nbsp;|&nbsp; "
+            f"<span style='color:#FBBF24;font-weight:700;'>⚖️ R/R: 1 : {rr_ratio:.1f}</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
 def get_badge_insider_attivo(ticker, giorni_validita=60):
     try:
         prom = carica_json('insider_promossi.json') if 'carica_json' in globals() else {}
@@ -1646,22 +1672,24 @@ def calcola_livello_balene(df):
 
 def applica_controlli_grafico(fig, chart_id):
     c1, c2, c3, c4, c5 = st.columns([1.4, 0.8, 0.8, 0.8, 0.8])
-    espandi = c1.checkbox("⛶ Espandi Grafico", key=f"exp_{chart_id}")
+    _uid_g = st.session_state.get('_grafico_uid_cnt', 0) + 1
+    st.session_state['_grafico_uid_cnt'] = _uid_g
+    espandi = c1.checkbox("⛶ Espandi Grafico", key=f"exp_{chart_id}_{_uid_g}")
     if espandi:
         fig.update_layout(height=1250)
-    z_key = f"zoom_lvl_{chart_id}"
-    s_key = f"shift_lvl_{chart_id}"
+    z_key = f"zoom_lvl_{chart_id}_{_uid_g}"
+    s_key = f"shift_lvl_{chart_id}_{_uid_g}"
     if z_key not in st.session_state:
         st.session_state[z_key] = 0
     if s_key not in st.session_state:
         st.session_state[s_key] = 0
-    if c2.button("🔍 +", key=f"zin_{chart_id}", use_container_width=True):
+    if c2.button("🔍 +", key=f"zin_{chart_id}_{_uid_g}", use_container_width=True):
         st.session_state[z_key] += 1
-    if c3.button("🔍 -", key=f"zout_{chart_id}", use_container_width=True):
+    if c3.button("🔍 -", key=f"zout_{chart_id}_{_uid_g}", use_container_width=True):
         st.session_state[z_key] = max(0, st.session_state[z_key] - 1)
-    if c4.button("⬅️", key=f"left_{chart_id}", use_container_width=True):
+    if c4.button("⬅️", key=f"left_{chart_id}_{_uid_g}", use_container_width=True):
         st.session_state[s_key] += 1
-    if c5.button("🔄 Reset", key=f"rst_{chart_id}", use_container_width=True):
+    if c5.button("🔄 Reset", key=f"rst_{chart_id}_{_uid_g}", use_container_width=True):
         st.session_state[z_key] = 0
         st.session_state[s_key] = 0
 
@@ -2561,6 +2589,7 @@ with tab_confronto:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
 
 with tab_portafoglio:
+    st.session_state["_grafico_uid_cnt"] = 0
     portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0), reverse=True)
     if not portafoglio or len(portafoglio) == 0:
         st.warning("⚠️ Portafoglio vuoto. Aggiungi titoli usando l'expander sopra o carica il file portafoglio.json")
