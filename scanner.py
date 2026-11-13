@@ -1147,6 +1147,325 @@ def verifica_trigger_by_fortezza(df, sma_short, ticker_obj=None):
         if not candela_verde:
             motivi.append("Candela rossa")
         return False, "; ".join(motivi), False
+PANIER_INSIDER_MID_LARGE = [
+    "MTDR", "TTMI", "BSX", "SHAK", "DUOL", "GME", "AN", "FANG", "PR", "CHRD",
+    "SM", "OVV", "APA", "DVN", "OXY", "SLB", "HAL", "BKR", "CTRA", "EQT",
+    "AR", "RRC", "SWN", "CNX", "CRK", "DINO", "MPC", "VLO", "PSX", "TRGP",
+    "OKE", "WMB", "KMI", "ET", "EPD", "MPLX", "ENB", "TRP", "PAA", "WES",
+    "HIMS", "OSCR", "ALGN", "DXCM", "PODD", "ISRG", "EW", "ZBH", "SYK", "MDT",
+    "BAX", "BDX", "HOLX", "RMD", "ICUI", "GMED", "NVST", "XRAY", "INSP", "SWAV",
+    "CAVA", "WING", "CMG", "TXRH", "DRI", "EAT", "CAKE", "PLAY", "BROS", "CELH",
+    "MNST", "ELF", "ULTA", "LULU", "ONON", "DECK", "CROX", "SKX", "BIRK", "GPS",
+    "ANF", "AEO", "URBN", "FIVE", "OLLI", "DG", "DLTR", "TGT", "WMT", "COST"
+]
+
+def render_scheda_titolo_pro(r, eurusd_rate=1.12):
+    tk = r['ticker']
+    info_y = {}
+    df_1y = None
+    try:
+        t_obj = yf.Ticker(tk)
+        info_y = t_obj.info if isinstance(t_obj.info, dict) else {}
+        df_1y = t_obj.history(period="1y", interval="1d").dropna(subset=['Close', 'Low', 'High'])
+    except Exception:
+        pass
+
+    nome_az = info_y.get('longName') or info_y.get('shortName') or tk
+    settore = info_y.get('sector', '')
+    industria = info_y.get('industry', '')
+    sub_sett = f"<div style='color:#9CA3AF;font-size:0.85rem;margin-top:-10px;margin-bottom:8px;'>{settore}{' • ' + industria if industria else ''}</div>" if settore else ""
+
+    vpoc_val, whale_b = calcola_livello_balene(df_1y) if ('calcola_livello_balene' in globals() and df_1y is not None) else (None, "")
+    _, stag_txt = calcola_stagionalita_10y(tk) if 'calcola_stagionalita_10y' in globals() else (None, "N/D")
+
+    st.markdown(f"## {nome_az} ({tk}) {whale_b} — {r['segnale']}")
+    if sub_sett:
+        st.markdown(sub_sett, unsafe_allow_html=True)
+
+    b_ins = get_badge_insider_attivo(tk, 60) if 'get_badge_insider_attivo' in globals() else ""
+    if b_ins:
+        st.info(f"**Segnale Insider Attivo:** {b_ins}")
+
+    p_usd = float(r.get('prezzo_usd', 0))
+    p_eur = float(r.get('prezzo_eur', 0))
+    var_pct = float(r.get('var_oggi_pct', r.get('var_pct', 0)))
+    col_v = "#089981" if var_pct >= 0 else "#F23645"
+    day_low = float(info_y.get('dayLow') or (df_1y['Low'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
+    day_high = float(info_y.get('dayHigh') or (df_1y['High'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
+    low_52 = float(info_y.get('fiftyTwoWeekLow') or (df_1y['Low'].min() if df_1y is not None and not df_1y.empty else 0))
+    high_52 = float(info_y.get('fiftyTwoWeekHigh') or (df_1y['High'].max() if df_1y is not None and not df_1y.empty else 0))
+
+    # Pre-Market / Post-Market da Yahoo
+    ext_html = ""
+    pre_p = info_y.get('preMarketPrice')
+    post_p = info_y.get('postMarketPrice')
+    if pre_p and p_usd > 0:
+        pre_chg = ((float(pre_p) - p_usd) / p_usd) * 100
+        c_ext = "#089981" if pre_chg >= 0 else "#F23645"
+        ext_html = f" &nbsp;|&nbsp; <span style='font-size:0.9rem;color:#D1D4DC;'>🌅 Pre-Market: <b>${float(pre_p):.2f}</b> <span style='color:{c_ext};'>({pre_chg:+.2f}%)</span></span>"
+    elif post_p and p_usd > 0:
+        post_chg = ((float(post_p) - p_usd) / p_usd) * 100
+        c_ext = "#089981" if post_chg >= 0 else "#F23645"
+        ext_html = f" &nbsp;|&nbsp; <span style='font-size:0.9rem;color:#D1D4DC;'>🌙 After-Hours: <b>${float(post_p):.2f}</b> <span style='color:{c_ext};'>({post_chg:+.2f}%)</span></span>"
+
+    st.markdown(
+        f"<div style='background:#131722;border:1px solid #2A2E39;border-radius:8px;padding:10px 14px;margin-bottom:10px;'>"
+        f"<span style='font-size:1.35rem;font-weight:700;color:#FFFFFF;'>${p_usd:.2f}</span> "
+        f"<span style='font-size:1.05rem;color:#9CA3AF;'>(€ {p_eur:.2f})</span> &nbsp;|&nbsp; "
+        f"<span style='font-size:1.05rem;font-weight:600;color:{col_v};'>Oggi: {var_pct:+.2f}%</span> &nbsp;|&nbsp; <span style='font-size:0.9rem;color:#D1D4DC;'>Day Range: <b>${day_low:.2f} - ${day_high:.2f}</b></span>"
+        f"{ext_html} &nbsp;|&nbsp; "
+        f"<span style='font-size:0.9rem;color:#D1D4DC;'>Range 52w: <b>${low_52:.2f} - ${high_52:.2f}</b></span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    _v50 = float(df_1y['Close'].rolling(50).mean().iloc[-1]) if (df_1y is not None and len(df_1y) >= 50) else 0.0
+    _v200 = float(df_1y['Close'].rolling(200).mean().iloc[-1]) if (df_1y is not None and len(df_1y) >= 200) else 0.0
+
+    vol_oggi = float(df_1y['Volume'].iloc[-1]) if (df_1y is not None and not df_1y.empty) else 0
+    vol_med = float(df_1y['Volume'].rolling(20).mean().iloc[-1]) if (df_1y is not None and len(df_1y) >= 20) else 0
+    vol_str = f"{vol_oggi/1e6:.2f}M / {vol_med/1e6:.2f}M" if vol_med > 0 else f"{r.get('vol_ratio', 0):.2f}x"
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🏛️ Fase Weinstein", str(r.get('fase', 'N/D')).split('(')[0].strip())
+    c2.metric("📈 SMA 50 / SMA 200", f"${_v50:.2f}", f"SMA200: ${_v200:.2f}")
+    c3.metric("🐋 VPOC Balene", f"${vpoc_val:.2f}" if vpoc_val else "N/D", f"RSI (14): {r.get('rsi', 0):.1f}")
+    c4.metric("📊 Volumi (Oggi/Med)", vol_str, f"Figura Z: {'SÌ ✅' if r.get('figura_z') else 'No'}")
+
+    mcap = float(info_y.get('marketCap') or 0)
+    mcap_str = f"${mcap/1e9:.2f}B" if mcap >= 1e9 else (f"${mcap/1e6:.0f}M" if mcap > 0 else "N/D")
+    pe_val = info_y.get('trailingPE') or info_y.get('forwardPE')
+    beta_val = info_y.get('beta')
+    sub_mcap = f"P/E: {float(pe_val):.2f}" if pe_val else "P/E: N/D"
+    if beta_val:
+        sub_mcap += f" | Beta: {float(beta_val):.2f}"
+
+    tgt_1y = float(info_y.get('targetMeanPrice') or 0)
+    upside_1y = ((tgt_1y - p_usd) / p_usd * 100) if (tgt_1y > 0 and p_usd > 0) else 0
+    tgt_str = f"${tgt_1y:.2f} ({upside_1y:+.1f}%)" if tgt_1y > 0 else "N/D"
+
+    f1, f2, f3, f4 = st.columns(4)
+    f1.metric("⚡ S-Score Matrix", f"{r.get('s_score', 0)}/100")
+    f2.metric("🏢 Market Cap", mcap_str, sub_mcap)
+    f3.metric("🎯 Target Analisti 1y", tgt_str)
+    f4.metric("📅 Stagionalità 60gg", stag_txt or "N/D", str(r.get('earnings_str', '')))
+
+def get_badge_insider_attivo(ticker, giorni_validita=60):
+    try:
+        prom = carica_json('insider_promossi.json') if 'carica_json' in globals() else {}
+        if not isinstance(prom, dict):
+            return ""
+        tk_u = ticker.strip().upper()
+        if tk_u not in prom:
+            return ""
+        info_p = prom[tk_u]
+        if isinstance(info_p, dict):
+            dt_str = info_p.get('data_acquisto') or info_p.get('data_promozione', '')
+            det = info_p.get('dettagli', '')
+        else:
+            dt_str = str(info_p)
+            det = ""
+        dt_p = pd.to_datetime(dt_str, errors='coerce')
+        if pd.isna(dt_p):
+            return "🕵️ INSIDER"
+        gg_passati = max(0, (pd.Timestamp.now() - dt_p).days)
+        if gg_passati <= giorni_validita:
+            rim = giorni_validita - gg_passati
+            return f"🕵️ INSIDER ({gg_passati}gg fa, -{rim}gg){' | ' + det if det else ''}"
+    except Exception:
+        pass
+    return ""
+
+def get_giorni_insider_rimanenti(ticker, giorni_validita=60):
+    try:
+        prom = carica_json('insider_promossi.json') if 'carica_json' in globals() else {}
+        if not isinstance(prom, dict):
+            return "-"
+        tk_u = ticker.strip().upper()
+        if tk_u not in prom:
+            return "-"
+        info_p = prom[tk_u]
+        dt_str = info_p.get('data_acquisto') or info_p.get('data_promozione', '') if isinstance(info_p, dict) else str(info_p)
+        dt_p = pd.to_datetime(dt_str, errors='coerce')
+        if pd.isna(dt_p):
+            return "🕵️ 60gg"
+        gg_passati = max(0, (pd.Timestamp.now() - dt_p).days)
+        if gg_passati <= giorni_validita:
+            return f"🕵️ {giorni_validita - gg_passati}gg"
+    except Exception:
+        pass
+    return "-"
+
+def uniforma_tabella_scanner(df_in):
+    if df_in is None or not isinstance(df_in, pd.DataFrame) or df_in.empty or 'Ticker' not in df_in.columns:
+        return df_in
+    df_out = df_in.copy()
+    if 'PEG' in df_out.columns or 'Rev Growth' in df_out.columns:
+        df_out['Insider (60gg)'] = df_out['Ticker'].apply(lambda t: get_giorni_insider_rimanenti(str(t)) if 'get_giorni_insider_rimanenti' in globals() else '-')
+        return df_out
+    if 'Stato' not in df_out.columns:
+        if 'Stato BY' in df_out.columns:
+            df_out = df_out.rename(columns={'Stato BY': 'Stato'})
+        elif 'Segnale' in df_out.columns:
+            df_out = df_out.rename(columns={'Segnale': 'Stato'})
+        else:
+            df_out['Stato'] = '🟡 HOLD'
+    if 'Motivo / Segnale' not in df_out.columns:
+        for alt_m in ['Motivo BY', 'Motivo Hold', 'Motivo', 'Dettagli']:
+            if alt_m in df_out.columns:
+                df_out = df_out.rename(columns={alt_m: 'Motivo / Segnale'})
+                break
+    df_out['Insider (60gg)'] = df_out['Ticker'].apply(lambda t: get_giorni_insider_rimanenti(str(t)) if 'get_giorni_insider_rimanenti' in globals() else '-')
+    col_std = ['Ticker', 'Prezzo EUR', 'S-Score', 'Fase', 'Stato', 'Motivo / Segnale', 'Earnings', 'Insider (60gg)']
+    col_finali = [c for c in col_std if c in df_out.columns] + [c for c in df_out.columns if c not in col_std]
+    return df_out[col_finali]
+
+def analizza_insider_e_minimi(ticker):
+    try:
+        tk = yf.Ticker(ticker)
+        df = tk.history(period="1y", interval="1d")
+        if df.empty:
+            return None
+        df = df.dropna(subset=['Close', 'Low', 'Volume']).copy()
+        if len(df) < 60:
+            return None
+        prezzo = float(df['Close'].iloc[-1])
+        low_52w = float(df['Low'].min())
+        dist_min_pct = ((prezzo - low_52w) / low_52w) * 100 if low_52w > 0 else 0.0
+
+        vol_oggi = float(df['Volume'].iloc[-1])
+        vol_med = float(df['Volume'].rolling(20).mean().iloc[-1])
+        vol_ratio = vol_oggi / vol_med if vol_med > 0 else 0
+
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rsi_s = (100 - (100 / (1 + (gain / loss.replace(0, np.nan))))).fillna(50)
+        rsi_now = float(rsi_s.iloc[-1])
+        div_rialzista = (float(df['Low'].tail(10).min()) <= float(df['Low'].tail(30).min()) * 1.02) and (float(rsi_s.tail(10).min()) > float(rsi_s.tail(30).min()) + 2)
+
+        insider_buys = 0
+        insider_val = 0.0
+        insider_names = set()
+        min_days_ago = 999
+        last_buy_dt = None
+        try:
+            itx = tk.insider_transactions
+            if itx is not None and not itx.empty:
+                cutoff = pd.Timestamp.now() - pd.Timedelta(days=95)
+                for _, row in itx.iterrows():
+                    dt_val = pd.to_datetime(row.get('Start Date', row.name), errors='coerce')
+                    if pd.notna(dt_val):
+                        if dt_val.tzinfo is not None:
+                            dt_val = dt_val.tz_localize(None)
+                        if dt_val < cutoff:
+                            continue
+                    txt = str(row.get('Transaction', '') or row.get('Text', '')).lower()
+                    shares = float(row.get('Shares', 0) or 0)
+                    val = float(row.get('Value', 0) or 0)
+                    if ('purchase' in txt or 'buy' in txt) and 'sale' not in txt and shares > 0:
+                        insider_buys += 1
+                        insider_val += val
+                        insider_names.add(str(row.get('Insider', 'Dirigente')))
+                        if pd.notna(dt_val):
+                            gg = max(0, (pd.Timestamp.now() - dt_val).days)
+                            if gg < min_days_ago:
+                                min_days_ago = gg
+                                last_buy_dt = dt_val
+        except Exception:
+            pass
+
+        info = tk.info if isinstance(tk.info, dict) else {}
+        target_mean = float(info.get('targetMeanPrice') or 0)
+        sconto_fv = ((target_mean - prezzo) / target_mean * 100) if target_mean > prezzo else 0.0
+        s_score = calcola_s_score(info) if 'calcola_s_score' in globals() else 60
+
+        score_opp = 0
+        if len(insider_names) >= 3: score_opp += 35
+        elif len(insider_names) == 2: score_opp += 25
+        elif insider_buys >= 1: score_opp += 15
+        if s_score >= 75: score_opp += 20
+        elif s_score >= 60: score_opp += 10
+        if 25 <= rsi_now <= 58: score_opp += 20
+        elif rsi_now > 70: score_opp -= 35
+        if div_rialzista: score_opp += 15
+        if dist_min_pct <= 20: score_opp += 15
+        if sconto_fv >= 15: score_opp += 15
+        elif sconto_fv >= 5: score_opp += 8
+        if min_days_ago <= 15: score_opp += 15
+        elif min_days_ago <= 30: score_opp += 8
+
+        ultimo_acq_str = (f"🔥 {min_days_ago}gg fa" if min_days_ago <= 15 else f"{min_days_ago}gg fa") if min_days_ago < 999 else "-"
+        var_da_acq_str = "-"
+        if last_buy_dt is not None:
+            try:
+                df_no_tz = df.copy()
+                if df_no_tz.index.tz is not None:
+                    df_no_tz.index = df_no_tz.index.tz_localize(None)
+                df_sub_acq = df_no_tz[df_no_tz.index >= last_buy_dt]
+                if not df_sub_acq.empty:
+                    p_acq_ins = float(df_sub_acq['Close'].iloc[0])
+                    if p_acq_ins > 0:
+                        var_ins = ((prezzo - p_acq_ins) / p_acq_ins) * 100
+                        var_da_acq_str = f"{var_ins:+.1f}%"
+                        if -15.0 <= var_ins <= 3.0:
+                            score_opp += 12
+                        elif var_ins > 20.0:
+                            score_opp -= 15
+            except Exception:
+                pass
+
+        return {
+            'Ticker': ticker,
+            'Azienda': str(info.get('shortName', ticker))[:22],
+            'Prezzo $': f"${prezzo:.2f}",
+            'Insider (90gg)': f"{insider_buys} acq ({len(insider_names)} dir.)" if insider_buys > 0 else "0",
+            'Ultimo Acq.': ultimo_acq_str,
+            'Dal Acq. Ins.': var_da_acq_str,
+            'Valore Insider $': f"${insider_val:,.0f}",
+            'Sconto FV %': f"{sconto_fv:.1f}%",
+            'Dist. Min 52w %': f"+{dist_min_pct:.1f}%",
+            'RSI': round(rsi_now, 1),
+            'Divergenza': "SI" if div_rialzista else "No",
+            'S-Score': s_score,
+            'Score': score_opp,
+            '_buys': insider_buys,
+            '_var_ins': var_ins if 'var_ins' in locals() else 0.0,
+            '_last_buy_str': last_buy_dt.strftime('%Y-%m-%d') if last_buy_dt is not None else ''
+        }
+    except Exception:
+        return None
+
+def calcola_stagionalita_10y(ticker):
+    try:
+        df10 = yf.Ticker(ticker).history(period="10y", interval="1mo")
+        if df10.empty or len(df10) < 24:
+            return None, None
+        df10 = df10.copy()
+        df10['Ret'] = df10['Close'].pct_change() * 100
+        df10['Mese'] = df10.index.month
+        mesi_nomi = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"]
+        stats_mesi = []
+        for m in range(1, 13):
+            sub = df10[df10['Mese'] == m]['Ret'].dropna()
+            if len(sub) > 0:
+                med = float(sub.mean())
+                win_rate = float((sub > 0).sum() / len(sub) * 100)
+                stats_mesi.append({'Mese_Num': m, 'Mese': mesi_nomi[m-1], 'Rendimento_Medio': round(med, 2), 'Win_Rate': round(win_rate, 0), 'Anni': len(sub)})
+        df_stag = pd.DataFrame(stats_mesi)
+        m_curr = datetime.now().month
+        m_next = 1 if m_curr == 12 else m_curr + 1
+        r1 = df_stag[df_stag['Mese_Num'] == m_curr]['Rendimento_Medio'].values
+        r2 = df_stag[df_stag['Mese_Num'] == m_next]['Rendimento_Medio'].values
+        w1 = df_stag[df_stag['Mese_Num'] == m_curr]['Win_Rate'].values
+        v1 = float(r1[0]) if len(r1) else 0.0
+        v2 = float(r2[0]) if len(r2) else 0.0
+        res_60g = round(v1 + v2, 2)
+        wr_curr = int(w1[0]) if len(w1) else 0
+        return df_stag, f"{res_60g:+.1f}% (WinRate mese: {wr_curr}%)"
+    except Exception:
+        return None, None
+
 def verifica_ignition_start(df, ticker):
     if df is None or len(df) < 60:
         return False, ""
@@ -1186,7 +1505,8 @@ def verifica_ignition_start(df, ticker):
         return False, ""
     if (riconquista_sma20 or is_squeeze) and prezzo > sma20 and sopra_vpoc and vol_ratio >= 1.35 and (45 <= rsi_now <= 63) and (rsi_now > rsi_prev):
         tag_sq = "Squeeze + " if is_squeeze else ""
-        return True, f"{tag_sq}Riconquista SMA20 | S-Score {s_score_ign} | Vol {vol_ratio:.1f}x | RSI {rsi_now:.0f} {whale}".strip()
+        _ins_ign = " | 🕵️ INSIDER" if ('get_giorni_insider_rimanenti' in globals() and get_giorni_insider_rimanenti(ticker) != "-") else ""
+        return True, f"{tag_sq}Riconquista SMA20 | S-Score {s_score_ign} | Vol {vol_ratio:.1f}x | RSI {rsi_now:.0f} {whale}{_ins_ign}".strip()
     return False, ""
 
 def verifica_by_fabio(df, sma_short, ticker_obj=None):
@@ -1962,16 +2282,14 @@ st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True
 # ==============================================================================
 # TAB PRINCIPALI (7 SCHEDE CON RIEPILOGO OPERATIVO IN PRIMA PAGINA)
 # ==============================================================================
-tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_analisi, tab_registro, tab_paper = st.tabs([
-    "Riepilogo",
+tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_analisi, tab_registro, tab_paper, tab_insider = st.tabs(["Riepilogo",
     "Portafoglio",
     "Console Operativa",
     "Confronto BY",
     "Scanner Dashboard",
     "Analisi Singola",
     "Registro Vendite",
-    "Portfolio AI"
-])
+    "Portfolio AI", "🕵️ Insider & Stagionalità"])
 
 with tab_riepilogo:
     st.subheader("🎯 Riepilogo Operativo — Cose da Fare & Valutare Oggi")
@@ -2007,7 +2325,7 @@ with tab_riepilogo:
         with st.expander('ℹ️ Spiegazione & Dettagli IGNITION', expanded=bool(ign_list)):
             st.caption('Intercetta l\'inizio del rialzo: Squeeze Bollinger o riconquista SMA 20 + sopra VPOC Balene + S-Score >= 60 + Squeeze Bollinger o riconquista SMA 20 + sopra VPOC Balene + Volumi >= 1.35x + RSI 45-63 in salita.')
             if ign_list:
-                for x in ign_list:
+                for x in sorted(ign_list, key=lambda x: float(x.get('investito_eur') or x.get('capitale_investito') or (float(x.get('quote') or x.get('quantita') or x.get('qta') or 0) * float(x.get('pmc_eur') or x.get('pmc') or x.get('prezzo_medio') or x.get('prezzo_carico') or 0))), reverse=True):
                     st.markdown(f"- **{x['ticker']}**: {x['motivo']}")
             else:
                 st.info('Nessun titolo attiva tutti i 4 filtri di accensione oggi.')
@@ -2243,7 +2561,7 @@ with tab_confronto:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
 
 with tab_portafoglio:
-    portafoglio = st.session_state.portafoglio
+    portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0), reverse=True)
     if not portafoglio or len(portafoglio) == 0:
         st.warning("⚠️ Portafoglio vuoto. Aggiungi titoli usando l'expander sopra o carica il file portafoglio.json")
     else:
@@ -2286,7 +2604,7 @@ with tab_portafoglio:
                             st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
                         st.rerun()
                 grid_cols = st.columns(2)
-            for idx_pos, pos in enumerate(portafoglio):
+            for idx_pos, pos in enumerate(sorted(portafoglio, key=lambda x: float(x.get('investito_eur') or x.get('capitale_investito') or x.get('investito') or (float(x.get('quote') or x.get('quantita') or x.get('qta') or x.get('azioni') or 0) * float(x.get('pmc_eur') or x.get('pmc') or x.get('prezzo_medio') or x.get('prezzo_carico') or 0))), reverse=True)):
                 with grid_cols[idx_pos % 2]:
                     ticker = pos['Ticker']
                     prezzo_eur = pos.get('Prezzo_Attuale_EUR')
@@ -2488,7 +2806,12 @@ with tab_console:
             if not res['suggestions'] and not res['gain_analyzed']:
                 st.info("✅ Nessuna ottimizzazione necessaria al momento. Il portafoglio è bilanciato.")
             else:
+                _visti_sell, _visti_buy = set(), set()
                 for sug in res['suggestions']:
+                    if sug.get('sell_ticker') in _visti_sell or sug.get('buy_ticker') in _visti_buy:
+                        continue
+                    _visti_sell.add(sug.get('sell_ticker'))
+                    _visti_buy.add(sug.get('buy_ticker'))
                     st.markdown(f"""
                     <div style="background-color: #131722; padding: 1rem; border-radius: 8px; border: 1px solid #2A2E39; border-left: 4px solid #089981; margin-bottom: 1rem;">
                         <p style="margin: 0.2rem 0;"><strong>1. LIBERA CAPITALE:</strong> Vendi {sug['sell_pct']}% di <span style="color: #089981;">{sug['sell_ticker']}</span> → Libera circa <strong>€{sug['capital_freed']:.2f}</strong>.</p>
@@ -2758,26 +3081,26 @@ with tab_scanner:
             with tab_f:
                 st.subheader("Asset Strutturali (S-Score > 60, Fase 2)")
                 if st.session_state.df_fortezza is not None:
-                    st.dataframe(st.session_state.df_fortezza, use_container_width=True, height=400)
+                    st.dataframe(uniforma_tabella_scanner(st.session_state.df_fortezza), use_container_width=True, height=400)
                 else:
                     st.info("Nessun titolo in Fortezza.")
             with tab_c:
                 st.subheader("Arena Speculativa (S-Score 40-60, Vol > +60%, Fase 1/2, Figura Z)")
                 if st.session_state.df_cavalli is not None:
-                    st.dataframe(st.session_state.df_cavalli, use_container_width=True, height=400)
+                    st.dataframe(uniforma_tabella_scanner(st.session_state.df_cavalli), use_container_width=True, height=400)
                 else:
                     st.info("Nessun titolo ha superato i 3 filtri rigidi.")
             with tab_m:
                 st.subheader("👁️ Watchlist Permanente - Titoli da Monitorare")
                 if st.session_state.df_monitor is not None:
-                    st.dataframe(st.session_state.df_monitor, use_container_width=True, height=400)
+                    st.dataframe(uniforma_tabella_scanner(st.session_state.df_monitor), use_container_width=True, height=400)
                 else:
                     st.info("La watchlist è vuota.")
             with tab_p:
                 st.subheader("🤖 Setup Palantir (Growth Esplosiva + Sconto Irrazionale)")
                 st.markdown("*Filtri: S-Score ≥ 75, Revenue Growth ≥ 20%, PEG < 1.5, RSI < 45, Distanza SMA 200 ≤ 5%*")
                 if st.session_state.df_palantir is not None and not st.session_state.df_palantir.empty:
-                    st.dataframe(st.session_state.df_palantir, use_container_width=True, height=400)
+                    st.dataframe(uniforma_tabella_scanner(st.session_state.df_palantir), use_container_width=True, height=400)
                 else:
                     st.info("Nessun titolo soddisfa attualmente i rigorosi criteri del Setup Palantir. Avvia una scansione.")
     else:
@@ -2866,30 +3189,34 @@ with tab_analisi:
 
     if st.session_state.analisi_risultati:
         r = st.session_state.analisi_risultati
-        st.markdown(f"### {r['ticker']} - {r['segnale']}")
-        st.markdown(f"**Prezzo:** € {r['prezzo_eur']:.2f} (${r['prezzo_usd']:.2f}) | **S-Score:** {r['s_score']}/100 | **RSI:** {r['rsi']:.1f}")
-        col5, col6, col7, col8 = st.columns(4)
-        col5.metric("📊 Fase Weinstein", r['fase'].split(' ')[0] + " " + r['fase'].split(' ')[1] if len(r['fase'].split(' ')) > 1 else r['fase'])
-        col6.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
-        col7.metric("📉 SMA 200", f"$ {r['sma200_usd']:.2f}")
-        col8.metric("📊 Vol Ratio", f"{r['vol_ratio']:.2f}x")
+        render_scheda_titolo_pro(r, eurusd_rate)
+        _b_ins_an = get_badge_insider_attivo(r['ticker'])
+        if False:
+            st.info(f"**Promosso da Insider Tracker:** {_b_ins_an}")
+        if False:
+            st.markdown(f"**Prezzo:** € {r['prezzo_eur']:.2f} (${r['prezzo_usd']:.2f}) | **S-Score:** {r['s_score']}/100 | **RSI:** {r['rsi']:.1f}")
+            col5, col6, col7, col8 = st.columns(4)
+            col5.metric("📊 Fase Weinstein", r['fase'].split(' ')[0] + " " + r['fase'].split(' ')[1] if len(r['fase'].split(' ')) > 1 else r['fase'])
+            col6.metric("📈 SMA 50", f"$ {r['sma50_usd']:.2f}")
+            col7.metric("📉 SMA 200", f"$ {r['sma200_usd']:.2f}")
+            col8.metric("📊 Vol Ratio", f"{r['vol_ratio']:.2f}x")
 
-        if r.get('var_pct') is not None:
-            var_color = "#089981" if r['var_pct'] > 0 else "#F23645"
-            st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span> &nbsp;|&nbsp; **Min/Max Oggi:** ${r['min_oggi']} / ${r['max_oggi']}", unsafe_allow_html=True)
-        st.markdown(f"**{r['market_msg']}** &nbsp;|&nbsp; **Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'} &nbsp;|&nbsp; **Utili:** {r['earnings_msg']} &nbsp;|&nbsp; **Sup/Res:** ${r['supporto']:.2f} / ${r['resistenza']:.2f}")
-        if r.get('pre_golden_cross'):
-            st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
-        elif r.get('pre_death_cross'):
-            st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione!")
+            if r.get('var_pct') is not None:
+                var_color = "#089981" if r['var_pct'] > 0 else "#F23645"
+                st.markdown(f"**Variazione oggi:** <span style='color:{var_color};font-weight:bold'>{r['var_pct']:+.2f}% ({r['var_abs']:+.2f}€)</span> &nbsp;|&nbsp; **Min/Max Oggi:** ${r['min_oggi']} / ${r['max_oggi']}", unsafe_allow_html=True)
+            st.markdown(f"**{r['market_msg']}** &nbsp;|&nbsp; **Figura Z:** {'✅ Sì' if r['figura_z'] else '❌ No'} &nbsp;|&nbsp; **Utili:** {r['earnings_msg']} &nbsp;|&nbsp; **Sup/Res:** ${r['supporto']:.2f} / ${r['resistenza']:.2f}")
+            if r.get('pre_golden_cross'):
+                st.success("🚀 **Pre-Golden Cross**: La SMA 50 sta per incrociare la SMA 200 dal basso!")
+            elif r.get('pre_death_cross'):
+                st.warning("⚠️ **Pre-Death Cross**: La SMA 50 sta per incrociare la SMA 200 dall'alto. Attenzione!")
 
-        ticker_obj_analisi = yf.Ticker(r['ticker'])
-        targets_analisi = calcola_target(ticker_obj_analisi, r['prezzo_eur'], r['prezzo_usd'])
-        if targets_analisi:
-            rischio_pct = round(((targets_analisi['sl'] / r['prezzo_usd']) - 1) * 100, 1)
-            rapporto_rr = round(targets_analisi['upside1'] / abs(rischio_pct), 1) if rischio_pct != 0 else 1.5
-            st.markdown(f"""
-            <div style="background-color: #131722; padding: 1rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #2A2E39;">
+            ticker_obj_analisi = yf.Ticker(r['ticker'])
+            targets_analisi = calcola_target(ticker_obj_analisi, r['prezzo_eur'], r['prezzo_usd'])
+            if targets_analisi:
+                rischio_pct = round(((targets_analisi['sl'] / r['prezzo_usd']) - 1) * 100, 1)
+                rapporto_rr = round(targets_analisi['upside1'] / abs(rischio_pct), 1) if rischio_pct != 0 else 1.5
+                st.markdown(f"""
+                <div style="background-color: #131722; padding: 1rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #2A2E39;">
                 <h4 style="margin-top:0; color: #F59E0B;">🎯 TARGET DI PREZZO (Basati su resistenze grafiche):</h4>
                 <p style="margin: 0.2rem 0;">• <strong>Target 1:</strong> ${targets_analisi['t1']} (+{targets_analisi['upside1']}%) &nbsp;|&nbsp; <strong>Target 2:</strong> ${targets_analisi['t2']} (+{targets_analisi['upside2']}%) &nbsp;|&nbsp; <strong>Target 3:</strong> ${targets_analisi['t3']} (+{targets_analisi['upside3']}%)</p>
                 <hr style="border-color: #2A2E39; margin: 0.5rem 0;">
@@ -3227,3 +3554,121 @@ with tab_paper:
             st.info("Nessuna posizione attiva da chiudere.")
     else:
         st.info("📭 Il portfolio sperimentale è vuoto. Usa il pulsante 'Scansione AI' per iniziare a tracciare i setup.")
+
+with tab_insider:
+    st.markdown("### 🕵️ Insider Tracker (SEC Form 4) & Stagionalità 10 Anni")
+    st.caption("Individua acquisti reali dei dirigenti (Cluster Buying) su titoli sottovalutati vicini ai minimi con stagionalità favorevole.")
+
+    col_ins1, col_ins2, col_ins3, col_ins4 = st.columns([1.3, 1, 1, 1])
+    with col_ins1:
+        solo_con_insider = st.checkbox("Solo con Acquisti Insider (90gg)", value=True)
+    with col_ins2:
+        min_s_score_ins = st.slider("S-Score minimo", 0, 90, 55, step=5)
+    with col_ins3:
+        max_dist_min = st.slider("Max dist. minimi 52w (%)", 5, 60, 30)
+    with col_ins4:
+        avvia_ins = st.button("🔍 Scansiona Insider & Minimi", type="primary", use_container_width=True)
+
+    if avvia_ins:
+        wl_attuale = [t.strip().upper() for t in st.session_state.get('tickers_input', '').split(',') if t.strip()]
+        _port_data = carica_json('portafoglio.json') if 'carica_json' in globals() else []
+        _port_tks = [p.get('ticker', '').strip().upper() for p in _port_data if isinstance(p, dict) and p.get('ticker')] if isinstance(_port_data, list) else []
+        lista_tot = sorted(list(set(wl_attuale) | set(_port_tks) | set(PANIER_INSIDER_MID_LARGE)))
+        risultati_ins = []
+        prog_bar = st.progress(0, text="Analisi transazioni Insider e minimi in corso...")
+        for idx_i, tk_i in enumerate(lista_tot):
+            prog_bar.progress((idx_i + 1) / len(lista_tot), text=f"Scansione {tk_i} ({idx_i+1}/{len(lista_tot)})...")
+            res_i = analizza_insider_e_minimi(tk_i)
+            if res_i:
+                if solo_con_insider and res_i['_buys'] == 0:
+                    continue
+                if res_i['S-Score'] < min_s_score_ins:
+                    continue
+                _promossi_file = 'insider_promossi.json'
+                _promossi = (carica_json(_promossi_file) or {}) if 'carica_json' in globals() else {}
+                if not isinstance(_promossi, dict): _promossi = {}
+                _t_code = res_i['Ticker']
+                _l_buy = res_i.get('_last_buy_str', '')
+                # Se già promosso per questo stesso acquisto insider, nascondilo finché non c'è un nuovo acquisto
+                _prev_b = _promossi[_t_code].get('data_acquisto', '') if isinstance(_promossi.get(_t_code), dict) else str(_promossi.get(_t_code, ''))
+                if _t_code in _promossi and _prev_b >= _l_buy and _l_buy != '':
+                    continue
+                # Se è salito troppo (> +18% da acquisto insider o RSI > 68) ma è buona azienda (S-Score >= 65) -> sposta in Watchlist
+                if (res_i.get('_var_ins', 0) > 18.0 or res_i['RSI'] > 68) and res_i['S-Score'] >= 65:
+                    if _l_buy:
+                        _promossi[_t_code] = {
+                            'data_acquisto': _l_buy,
+                            'data_promozione': datetime.now().strftime('%Y-%m-%d'),
+                            'dettagli': f"{res_i.get('Insider (90gg)', '')} | {res_i.get('Valore Insider $', '')}"
+                        }
+                        if 'salva_json' in globals(): salva_json(_promossi_file, _promossi)
+                    _imp = (carica_json('impostazioni.json') or {}) if 'carica_json' in globals() else {}
+                    if not isinstance(_imp, dict): _imp = {}
+                    _wl_str = _imp.get('lista_ticker_default', '')
+                    _wl_list = [x.strip().upper() for x in _wl_str.split(',') if x.strip()]
+                    if _t_code not in _wl_list:
+                        _wl_list.append(_t_code)
+                        _imp['lista_ticker_default'] = ', '.join(_wl_list)
+                        if 'salva_json' in globals(): salva_json('impostazioni.json', _imp)
+                    st.session_state.setdefault('insider_promossi_oggi', []).append(_t_code)
+                    continue
+                if float(str(res_i['Dist. Min 52w %']).replace('+','').replace('%','').replace('nan','0')) <= max_dist_min or res_i['_buys'] >= 2:
+                    _, stag_txt = calcola_stagionalita_10y(tk_i)
+                    res_i['Stagionalità 60gg'] = stag_txt or "N/D"
+                    if stag_txt and stag_txt.startswith('+'):
+                        res_i['Score'] += 10
+                    risultati_ins.append(res_i)
+        prog_bar.empty()
+        risultati_ins.sort(key=lambda x: (x['Score'], x['S-Score']), reverse=True)
+        for idx_r, item_r in enumerate(risultati_ins):
+            medal = "🥇 #1 TOP" if idx_r == 0 else ("🥈 #2" if idx_r == 1 else ("🥉 #3" if idx_r == 2 else f"#{idx_r+1}"))
+            item_r['Scelta'] = medal
+        st.session_state.insider_results = risultati_ins
+        if st.session_state.get('insider_promossi_oggi'): st.info(f"📲 **Promossi in Watchlist MATRIX** (già saliti troppo, in attesa di pullback): {', '.join(st.session_state['insider_promossi_oggi'])}")
+
+    ins_res = st.session_state.get('insider_results', [])
+    if ins_res:
+        df_ins_view = pd.DataFrame(ins_res).drop(columns=['_buys', '_var_ins', '_last_buy_str'], errors='ignore')
+        if 'Scelta' in df_ins_view.columns:
+            cols_order = ['Scelta'] + [c for c in df_ins_view.columns if c != 'Scelta']
+            df_ins_view = df_ins_view[cols_order]
+        st.dataframe(df_ins_view, use_container_width=True, hide_index=True)
+    elif avvia_ins:
+        st.info("Nessun titolo trovato con i filtri attuali. Prova ad allargare la distanza dai minimi o deseleziona il filtro solo Insider.")
+
+    st.markdown("---")
+    st.markdown("#### 📅 Analisi Dettagliata Stagionalità & Grafico Singolo")
+    default_tk_ins = ins_res[0]['Ticker'] if ins_res else "TTMI"
+    c_sel1, c_sel2 = st.columns([1.5, 3])
+    with c_sel1:
+        tk_stag = st.text_input("Ticker da analizzare (es. TTMI, MTDR, BSX):", value=default_tk_ins).strip().upper()
+    if tk_stag:
+        df_stag_chart, stag_summary = calcola_stagionalita_10y(tk_stag)
+        det_singolo = analizza_insider_e_minimi(tk_stag)
+        if det_singolo:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Insider Buys (90gg)", det_singolo['Insider (90gg)'])
+            m2.metric("Sconto Fair Value", str(det_singolo["Sconto FV %"]))
+            m3.metric("Distanza Min 52w", str(det_singolo["Dist. Min 52w %"]))
+            m4.metric("Stagionalità 60gg", stag_summary or "N/D")
+        if df_stag_chart is not None and not df_stag_chart.empty:
+            colors_s = ['#089981' if v >= 0 else '#F23645' for v in df_stag_chart['Rendimento_Medio']]
+            fig_s = go.Figure(go.Bar(
+                x=df_stag_chart['Mese'],
+                y=df_stag_chart['Rendimento_Medio'],
+                marker_color=colors_s,
+                text=[f"{v:+.1f}%<br>({int(w)}% pos)" for v, w in zip(df_stag_chart['Rendimento_Medio'], df_stag_chart['Win_Rate'])],
+                textposition='outside'
+            ))
+            fig_s.update_layout(
+                title=f"Stagionalità Media Mensile 10 Anni — {tk_stag}",
+                height=380,
+                template="plotly_dark",
+                paper_bgcolor='#131722',
+                plot_bgcolor='#0B0E11',
+                margin=dict(l=15, r=15, t=45, b=20),
+                yaxis_title="Rendimento Medio %"
+            )
+            st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False})
+
+
