@@ -2688,7 +2688,7 @@ if "_gh_last_msg" in st.session_state:
 
 with tab_portafoglio:
     st.session_state["_grafico_uid_cnt"] = 0
-    portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0), reverse=True)
+    portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Valore_Carico') or (float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0))), reverse=True)
     if not portafoglio or len(portafoglio) == 0:
         st.warning("⚠️ Portafoglio vuoto. Aggiungi titoli usando l'expander sopra o carica il file portafoglio.json")
     else:
@@ -2730,8 +2730,10 @@ with tab_portafoglio:
                             st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
                             st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
                         st.rerun()
-                grid_cols = st.columns(2)
-            for idx_pos, pos in enumerate(sorted(portafoglio, key=lambda x: float(x.get('investito_eur') or x.get('capitale_investito') or x.get('investito') or (float(x.get('quote') or x.get('quantita') or x.get('qta') or x.get('azioni') or 0) * float(x.get('pmc_eur') or x.get('pmc') or x.get('prezzo_medio') or x.get('prezzo_carico') or 0))), reverse=True)):
+                pass
+            for idx_pos, pos in enumerate(portafoglio):
+                if idx_pos % 2 == 0:
+                    grid_cols = st.columns(2)
                 with grid_cols[idx_pos % 2]:
                     ticker = pos['Ticker']
                     prezzo_eur = pos.get('Prezzo_Attuale_EUR')
