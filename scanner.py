@@ -308,13 +308,29 @@ def _sync_github_file(file_path, content_str, mode="push"):
         if sha:
             payload["sha"] = sha
         put_req = urllib.request.Request(url, data=_js.dumps(payload).encode("utf-8"), headers=headers, method="PUT")
-        with urllib.request.urlopen(put_req, timeout=6):
+        with urllib.request.urlopen(put_req, timeout=8):
+            try:
+                st.toast(f"☁️ Sincronizzato su GitHub: {fname}", icon="✅")
+            except Exception:
+                pass
+    except Exception as _e_gh:
+        try:
+            st.toast(f"⚠️ Errore Sync GitHub ({fname}): {_e_gh}", icon="❌")
+        except Exception:
             pass
-    except Exception:
-        pass
     return None
 
 def carica_json(file_path):
+    _k_pull = f"_gh_pulled_{os.path.basename(file_path)}"
+    if _k_pull not in st.session_state and "_sync_github_file" in globals():
+        st.session_state[_k_pull] = True
+        _rem_txt = _sync_github_file(file_path, "", mode="pull")
+        if _rem_txt:
+            try:
+                with open(file_path, "w", encoding="utf-8") as _fw:
+                    _fw.write(_rem_txt)
+            except Exception:
+                pass
     if f"_pulled_{os.path.basename(file_path)}" not in st.session_state:
         st.session_state[f"_pulled_{os.path.basename(file_path)}"] = True
         _rem = _sync_github_file(file_path, "", mode="pull")
@@ -3813,19 +3829,4 @@ with tab_insider:
             fig_s = go.Figure(go.Bar(
                 x=df_stag_chart['Mese'],
                 y=df_stag_chart['Rendimento_Medio'],
-                marker_color=colors_s,
-                text=[f"{v:+.1f}%<br>({int(w)}% pos)" for v, w in zip(df_stag_chart['Rendimento_Medio'], df_stag_chart['Win_Rate'])],
-                textposition='outside'
-            ))
-            fig_s.update_layout(
-                title=f"Stagionalità Media Mensile 10 Anni — {tk_stag}",
-                height=380,
-                template="plotly_dark",
-                paper_bgcolor='#131722',
-                plot_bgcolor='#0B0E11',
-                margin=dict(l=15, r=15, t=45, b=20),
-                yaxis_title="Rendimento Medio %"
-            )
-            st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False})
-
-
+   
