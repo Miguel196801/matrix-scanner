@@ -3829,4 +3829,19 @@ with tab_insider:
             fig_s = go.Figure(go.Bar(
                 x=df_stag_chart['Mese'],
                 y=df_stag_chart['Rendimento_Medio'],
-   
+                marker_color=colors_s,
+                text=[f"{v:+.1f}%<br>({int(w)}% pos)" for v, w in zip(df_stag_chart['Rendimento_Medio'], df_stag_chart['Win_Rate'])],
+                textposition='outside'
+            ))
+            fig_s.update_layout(
+                title=f"Stagionalità Media Mensile 10 Anni — {tk_stag}",
+                height=380,
+                template="plotly_dark",
+                paper_bgcolor='#131722',
+                plot_bgcolor='#0B0E11',
+                margin=dict(l=15, r=15, t=45, b=20),
+                yaxis_title="Rendimento Medio %"
+            )
+            st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False})
+
+
