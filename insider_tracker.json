@@ -1,1 +1,290 @@
-
+[
+  {
+    "Ticker": "DUOT",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 218401.0,
+    "Prezzo_Alert": 5.019999980926514,
+    "S_Score": 100
+  },
+  {
+    "Ticker": "PRLB",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 251390.0,
+    "Prezzo_Alert": 65.69000244140625,
+    "S_Score": 95
+  },
+  {
+    "Ticker": "PNFP",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 2385760.0,
+    "Prezzo_Alert": 100.63999938964844,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "ACN",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 3200889.0,
+    "Prezzo_Alert": 260.5,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "GME",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 132335274.0,
+    "Prezzo_Alert": 25.1200008392334,
+    "S_Score": 75
+  },
+  {
+    "Ticker": "TTMI",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 4029761.0,
+    "Prezzo_Alert": 66.51000213623047,
+    "S_Score": 75
+  },
+  {
+    "Ticker": "PAM",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 64059273.0,
+    "Prezzo_Alert": 63.58000183105469,
+    "S_Score": 85
+  },
+  {
+    "Ticker": "CELH",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 3199034.0,
+    "Prezzo_Alert": 32.15999984741211,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "RAPP",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 8,
+    "Valore_Acquistato": 23791728.0,
+    "Prezzo_Alert": 24.440000534057617,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "SMID",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 127650.0,
+    "Prezzo_Alert": 26.110000610351562,
+    "S_Score": 85
+  },
+  {
+    "Ticker": "BLX",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 271903.0,
+    "Prezzo_Alert": 49.880001068115234,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "SRTS",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 753101.0,
+    "Prezzo_Alert": 2.859999895095825,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "SEVN",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 35016134.0,
+    "Prezzo_Alert": 6.630000114440918,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "STC",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 709988.0,
+    "Prezzo_Alert": 47.0,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "REFI",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 7,
+    "Valore_Acquistato": 2014309.0,
+    "Prezzo_Alert": 8.800000190734863,
+    "S_Score": 85
+  },
+  {
+    "Ticker": "XENE",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 1681140.0,
+    "Prezzo_Alert": 39.16999816894531,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "IIPR",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 1277067.0,
+    "Prezzo_Alert": 54.83000183105469,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "KMT",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 737648.0,
+    "Prezzo_Alert": 23.0,
+    "S_Score": 85
+  },
+  {
+    "Ticker": "MCFT",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 8127439.0,
+    "Prezzo_Alert": 20.360000610351562,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "THRM",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 5,
+    "Valore_Acquistato": 925673.0,
+    "Prezzo_Alert": 29.469999313354492,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "UAMY",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 6,
+    "Valore_Acquistato": 1424720.0,
+    "Prezzo_Alert": 2.819999933242798,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "ENPH",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 2362277.0,
+    "Prezzo_Alert": 28.469999313354492,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "SWZ",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 1522811.0,
+    "Prezzo_Alert": 5.800000190734863,
+    "S_Score": 75
+  },
+  {
+    "Ticker": "CAVA",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 1151237.0,
+    "Prezzo_Alert": 59.150001525878906,
+    "S_Score": 75
+  },
+  {
+    "Ticker": "ASYS",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 984658.0,
+    "Prezzo_Alert": 11.430000305175781,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "TRNS",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 421457.0,
+    "Prezzo_Alert": 101.51000213623047,
+    "S_Score": 85
+  },
+  {
+    "Ticker": "ENOV",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 6,
+    "Valore_Acquistato": 1426192.0,
+    "Prezzo_Alert": 27.15999984741211,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "AAON",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 709812.0,
+    "Prezzo_Alert": 57.189998626708984,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "ADC",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 6,
+    "Valore_Acquistato": 17348797.0,
+    "Prezzo_Alert": 69.87000274658203,
+    "S_Score": 80
+  },
+  {
+    "Ticker": "HWKN",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 4,
+    "Valore_Acquistato": 850942.0,
+    "Prezzo_Alert": 150.9499969482422,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "PRE",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 2,
+    "Valore_Acquistato": 999698.0,
+    "Prezzo_Alert": 15.9399995803833,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "SBLK",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 9,
+    "Valore_Acquistato": 6920496.0,
+    "Prezzo_Alert": 26.729999542236328,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "NSLR",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 1548929.0,
+    "Prezzo_Alert": 5.760000228881836,
+    "S_Score": 90
+  },
+  {
+    "Ticker": "AVBC",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 14,
+    "Valore_Acquistato": 4814207.0,
+    "Prezzo_Alert": 22.420000076293945,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "BBD",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 23,
+    "Valore_Acquistato": 102491345.0,
+    "Prezzo_Alert": 2.5399999618530273,
+    "S_Score": 70
+  },
+  {
+    "Ticker": "AGMB",
+    "Data_Scoperta": "07/11/2026",
+    "Num_Insider": 3,
+    "Valore_Acquistato": 503470.0,
+    "Prezzo_Alert": 7.639999866485596,
+    "S_Score": 80
+  }
+]
