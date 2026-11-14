@@ -1,1 +1,6 @@
-
+{
+    "lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, APP, TXN, AAPL, NBIS, NU, MCD, DIS, SBUX, PEP, INTC, LLY, AVGO, IREN, WDC, LRCX, GLW, COHR, SOFI, APLD, CRDO, MELI, UA, SHAK, LAES, ORCL, HIMS, NVDA, PFE, GOOGL, AMZN, META, SMCI, NOW, WYNN, NFLX, MU, STVN, AMTX, UCTT, LULU, VRTX, AVGO, COST, BSX, ANET, MGM, SIRI, CAVA, CELH, TTMI, GME",
+    "catalizzatori": "TTWO: LANCIO GTA6 - 19/11/2026",
+    "esclusioni": "",
+    "insider_tickers": "BSX,"
+}
