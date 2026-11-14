@@ -1,14 +1,126 @@
 [
     {
-        "timestamp": "2026-11-09 21:43:35",
+        "timestamp": "2026-11-11 20:46:22",
         "modulo": "SCANSIONE",
-        "azione": "TAKE_PROFIT",
+        "azione": "ZONA_INTERESSE",
         "ticker": "APP",
-        "dettaglio": "RSI 80, Gain +51.9%",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.0%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:43:35",
+        "timestamp": "2026-11-11 20:46:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 48, R/R: 6.2",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:27",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 44, R/R: 2.25",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 48, R/R: 6.19",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 46, R/R: 2.59",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 46, R/R: 2.59",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:49",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:46:49",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:10",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.48",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:10",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.48",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:24",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43, R/R: 23.05",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43, R/R: 23.04",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:27",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 32, SELL: 24, BY_FABIO: 0, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:47:27",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 32, SELL: 24, BY_FABIO: 0, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:53:40",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +52.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:53:40",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "APP",
@@ -16,95 +128,375 @@
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:43:37",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "AVGO",
-        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 46",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:43:40",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "COHR",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 49",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:43:43",
+        "timestamp": "2026-11-11 20:53:49",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "CRDO",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 40",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 44, R/R: 2.17",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:43:46",
+        "timestamp": "2026-11-11 20:53:53",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "GLW",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 39",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 48, R/R: 6.14",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:43:57",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "LRCX",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:43:59",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "MCD",
-        "dettaglio": "S-Score 65, Distanza SMA200 0.8%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:02",
+        "timestamp": "2026-11-11 20:54:10",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "META",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 38",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 46, R/R: 2.6",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:44:02",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "META",
-        "dettaglio": "S-Score 90, Distanza SMA200 2.3%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:05",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "MU",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:05",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "MU",
-        "dettaglio": "S-Score 100, Distanza SMA200 3.0%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:06",
+        "timestamp": "2026-11-11 20:54:14",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "NBIS",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 40",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.23",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:44:26",
+        "timestamp": "2026-11-11 20:54:34",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.46",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:54:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43, R/R: 22.74",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:54:51",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 32, SELL: 24, BY_FABIO: 0, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:55:55",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +52.0%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:55:55",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:03",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 44, R/R: 2.24",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:08",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 48, R/R: 6.16",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 46, R/R: 2.6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.23",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:43",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.5",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:57",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43, R/R: 23.08",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 20:56:59",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 32, SELL: 24, BY_FABIO: 0, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 21:00:42",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 0, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 21:32:13",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 0, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 21:32:59",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli: 11. Stato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-11 21:33:03",
+        "modulo": "PODC",
+        "azione": "NESSUNA_PROPOSTA",
+        "ticker": "SISTEMA",
+        "dettaglio": "Nessuna proposta. Gain: 0, Loss candidati: 0",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-11 21:57:45",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 0, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 21:59:20",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 0, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 22:34:12",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 0, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:00:28",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AMD",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 100, Vol 1.34x, RSI 55",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:00:34",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +50.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:00:34",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:00:44",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43, R/R: 2.5",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:00:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47, R/R: 6.24",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:01",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:03",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44, R/R: 2.76",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:03",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 0.3%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:08",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.71",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:27",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.58",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:40",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 42, R/R: 23.22",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:01:42",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 31, SELL: 24, BY_FABIO: 1, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-11 23:06:38",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-11 23:06:42",
+        "modulo": "PODC",
+        "azione": "NESSUNA_PROPOSTA",
+        "ticker": "SISTEMA",
+        "dettaglio": "Nessuna proposta valida. Gain analizzati: 7, Loss candidati: 0",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-12 00:31:30",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AMD",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 100, Vol 1.35x, RSI 55",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:31:35",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +50.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:31:35",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:31:43",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:31:46",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:32:00",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:32:03",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:32:03",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 0.3%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:32:06",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:32:24",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "SMCI",
@@ -112,303 +504,3375 @@
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:44:27",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "SOFI",
-        "dettaglio": "S-Score 80, Distanza SMA200 3.5%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:37",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "UCTT",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 44",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 21:44:43",
+        "timestamp": "2026-11-12 00:32:37",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "WDC",
-        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 36",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 42",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 21:44:45",
+        "timestamp": "2026-11-12 00:32:40",
         "modulo": "SCANSIONE",
         "azione": "RIEPILOGO_SCANSIONE",
         "ticker": "SISTEMA",
-        "dettaglio": "BY: 0, HOLD: 33, SELL: 24, BY_FABIO: 0, SMCI: 11",
+        "dettaglio": "BY: 1, HOLD: 31, SELL: 24, BY_FABIO: 1, SMCI: 6",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:28",
+        "timestamp": "2026-11-12 00:41:33",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AMD",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 100, Vol 1.35x, RSI 55",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:41:38",
         "modulo": "SCANSIONE",
         "azione": "TAKE_PROFIT",
         "ticker": "APP",
-        "dettaglio": "RSI 80, Gain +52.8%",
+        "dettaglio": "RSI 79, Gain +50.8%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:28",
+        "timestamp": "2026-11-12 00:41:38",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "APP",
-        "dettaglio": "S-Score 70, Distanza SMA200 0.3%",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.6%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:30",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "AVGO",
-        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 45",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:34",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "COHR",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 48",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:36",
+        "timestamp": "2026-11-12 00:41:47",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "CRDO",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 39",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43, R/R: 2.5",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:40",
+        "timestamp": "2026-11-12 00:41:51",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "GLW",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 38",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47, R/R: 6.24",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:50",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "LRCX",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:53",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "MCD",
-        "dettaglio": "S-Score 65, Distanza SMA200 0.7%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:55",
+        "timestamp": "2026-11-12 00:42:06",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "META",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 37",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44, R/R: 2.76",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:05:55",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "META",
-        "dettaglio": "S-Score 90, Distanza SMA200 1.6%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:58",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "MU",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 37",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:58",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "MU",
-        "dettaglio": "S-Score 100, Distanza SMA200 3.3%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:05:59",
+        "timestamp": "2026-11-12 00:42:10",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "NBIS",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 40",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.71",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:06:26",
+        "timestamp": "2026-11-12 00:42:30",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "SMCI",
-        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 41",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.58",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:06:27",
-        "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "SOFI",
-        "dettaglio": "S-Score 80, Distanza SMA200 4.3%",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:06:36",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "UCTT",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 44",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:06:40",
+        "timestamp": "2026-11-12 00:42:43",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "WDC",
-        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 37",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 42, R/R: 23.22",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 22:06:42",
-        "modulo": "SCANSIONE",
-        "azione": "BY_FABIO",
-        "ticker": "ZETA",
-        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 90, Vol 1.34x, RSI 45",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-09 22:06:42",
+        "timestamp": "2026-11-12 00:42:46",
         "modulo": "SCANSIONE",
         "azione": "RIEPILOGO_SCANSIONE",
         "ticker": "SISTEMA",
-        "dettaglio": "BY: 0, HOLD: 33, SELL: 24, BY_FABIO: 1, SMCI: 11",
+        "dettaglio": "BY: 1, HOLD: 31, SELL: 24, BY_FABIO: 1, SMCI: 6",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-09 23:01:55",
+        "timestamp": "2026-11-12 00:45:19",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AMD",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 100, Vol 1.35x, RSI 55",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:24",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +50.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:24",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:33",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43, R/R: 2.5",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47, R/R: 6.24",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:53",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44, R/R: 2.76",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:45:57",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49, R/R: 4.71",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:46:16",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42, R/R: 3.58",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:46:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 42, R/R: 23.22",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:46:32",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 31, SELL: 24, BY_FABIO: 1, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 00:47:01",
         "modulo": "PODC",
         "azione": "PODC_AVVIATO",
         "ticker": "SISTEMA",
-        "dettaglio": "PODC avviato. Titoli in portafoglio: 10. Stato mercato: rosso",
-        "stato_mercato": "rosso"
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
     },
     {
-        "timestamp": "2026-11-09 23:01:59",
+        "timestamp": "2026-11-12 00:47:06",
         "modulo": "PODC",
         "azione": "NESSUNA_PROPOSTA",
         "ticker": "SISTEMA",
-        "dettaglio": "Nessuna proposta valida. Gain analizzati: 5, Loss candidati: 0",
-        "stato_mercato": "rosso"
+        "dettaglio": "Nessuna proposta valida. Gain analizzati: 7, Loss candidati: 0",
+        "stato_mercato": "verde"
     },
     {
-        "timestamp": "2026-11-10 00:51:41",
+        "timestamp": "2026-11-12 01:51:14",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AMD",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 100, Vol 1.35x, RSI 55",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:19",
         "modulo": "SCANSIONE",
         "azione": "TAKE_PROFIT",
         "ticker": "APP",
-        "dettaglio": "RSI 80, Gain +52.8%",
+        "dettaglio": "RSI 79, Gain +50.8%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:51:41",
+        "timestamp": "2026-11-12 01:51:19",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "APP",
-        "dettaglio": "S-Score 70, Distanza SMA200 0.3%",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.6%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:51:44",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "AVGO",
-        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 45",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-10 00:51:47",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "COHR",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 48",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-10 00:51:49",
+        "timestamp": "2026-11-12 01:51:28",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:31",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:43",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:46",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:46",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 0.3%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:51:50",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 49",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:52:09",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:52:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 01:52:25",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 31, SELL: 24, BY_FABIO: 1, SMCI: 6",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 02:18:59",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 78, Gain +50.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 02:20:07",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 57, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:17",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 80, Gain +50.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:17",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:19",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.3%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:26",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 48",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:31",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 40",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:43",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:46",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 45",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:46",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:49",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 3.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:40:50",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:41:10",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:41:26",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 18:41:28",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 30, SELL: 25, BY_FABIO: 0, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:31:24",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-12 19:31:29",
+        "modulo": "PODC",
+        "azione": "NESSUNA_PROPOSTA",
+        "ticker": "SISTEMA",
+        "dettaglio": "Nessuna proposta valida. Gain analizzati: 8, Loss candidati: 0",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:44",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 79, Gain +49.4%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:44",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 1.4%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:46",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:53",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 48",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:57",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 46",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:56:58",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 40",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:11",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:14",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:14",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.0%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:17",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 3.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:18",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:39",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:54",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 19:57:56",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 30, SELL: 25, BY_FABIO: 0, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:08",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 77, Gain +47.4%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:08",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 2.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:11",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.35x, RSI 61",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:11",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 1.3%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:17",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:21",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
         "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 39",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:51:53",
+        "timestamp": "2026-11-12 21:45:34",
         "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "GLW",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 38",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:03",
+        "timestamp": "2026-11-12 21:45:37",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
-        "ticker": "LRCX",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:37",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:39",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.4%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:40",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:45:59",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:46:13",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 21:46:16",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 30, SELL: 25, BY_FABIO: 1, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:19",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:19",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:22",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.44x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:22",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:34",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:00:35",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
         "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:05",
+        "timestamp": "2026-11-12 22:00:54",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "MCD",
-        "dettaglio": "S-Score 65, Distanza SMA200 0.7%",
+        "dettaglio": "S-Score 65, Distanza SMA200 2.0%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:08",
+        "timestamp": "2026-11-12 22:00:56",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "META",
-        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 37",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:08",
+        "timestamp": "2026-11-12 22:00:56",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "META",
-        "dettaglio": "S-Score 90, Distanza SMA200 1.6%",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:10",
-        "modulo": "SCANSIONE",
-        "azione": "TIPOLOGIA_SMCI",
-        "ticker": "MU",
-        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 37",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-10 00:52:10",
+        "timestamp": "2026-11-12 22:00:59",
         "modulo": "SCANSIONE",
         "azione": "ZONA_INTERESSE",
         "ticker": "MU",
-        "dettaglio": "S-Score 100, Distanza SMA200 3.3%",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:11",
+        "timestamp": "2026-11-12 22:01:00",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:01:23",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:01:38",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-12 22:01:41",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 0, HOLD: 29, SELL: 26, BY_FABIO: 1, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:13",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:13",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:16",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:16",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:26",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:36",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:38",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:38",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:41",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:42",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:40:59",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:41:11",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:41:13",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 28, SELL: 26, BY_FABIO: 1, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:17",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:17",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:19",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:19",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:41",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:44",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:44",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:47",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:49:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:50:07",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:50:21",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:50:24",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 28, SELL: 26, BY_FABIO: 1, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:25",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:25",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:27",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:27",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:33",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:38",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:49",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:52",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:52",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:55",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:54:56",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:55:15",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:55:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 01:55:31",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 28, SELL: 26, BY_FABIO: 1, SMCI: 7",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 02:00:43",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 80, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 02:01:41",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "TTD",
+        "dettaglio": "RSI 75, Gain +4.8%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 02:01:52",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 57, SELL: 0, BY_FABIO: 0, SMCI: 0",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:19",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:19",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:21",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:21",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:26",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:34",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:36",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:48",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:50",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:50",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:53",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:19:54",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:20:15",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:20:21",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:20:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:20:33",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:00",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:01",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:03",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:03",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:09",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:13",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:17",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:18",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:30",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:32",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:32",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:34",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:36",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:46:58",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:47:05",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:47:14",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:47:17",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:20",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:20",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:22",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:22",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:28",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:32",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:36",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:49",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:52",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:52",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:55",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:53:56",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:54:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:54:28",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:54:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 08:54:39",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:17",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:17",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:20",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:20",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:25",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:30",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:35",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:49",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:51",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:51",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:54",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:00:55",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:01:18",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:01:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:01:34",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:01:36",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:03:52",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:03:52",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:03:55",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:03:55",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:03:59",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:03",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:07",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:08",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:20",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:22",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:22",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:25",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:26",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:04:52",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:05:01",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:05:04",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:14:52",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:14:52",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:14:55",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:14:55",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:14:59",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:04",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:07",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:09",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:21",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:24",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:24",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:27",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:28",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:49",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:15:55",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:16:03",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:16:06",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:43",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:43",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:46",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:46",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:51",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:55",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:21:59",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:01",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:14",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:16",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:16",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:19",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:20",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:40",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:47",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:56",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:22:59",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:24:56",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:24:56",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:24:58",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:24:58",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:04",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:09",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:12",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:14",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:26",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:29",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:32",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:33",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:25:53",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:26:01",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:26:10",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:26:13",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:33",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:33",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:35",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:35",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:41",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:29:49",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:02",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:05",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:05",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:08",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:09",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:31",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:47",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 09:30:50",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:32",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:32",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:35",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:35",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:41",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:53:49",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:02",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:04",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:04",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:07",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:08",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:29",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:35",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:44",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 13:54:47",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:28",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 76, Gain +46.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:28",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 3.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:31",
+        "modulo": "SCANSIONE",
+        "azione": "BY_FABIO",
+        "ticker": "AVGO",
+        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 85, Vol 1.63x, RSI 62",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:31",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "AVGO",
+        "dettaglio": "S-Score 85, Distanza SMA200 0.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:36",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 4.7%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:40",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:45",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:46",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:13:58",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:01",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "META",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:01",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 1.1%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:03",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 4.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:05",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "NBIS",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 42",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:25",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "SMCI",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 37",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:31",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:41",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "WDC",
+        "dettaglio": "Pattern SMCI: S-Score 85, FASE 1, RSI 44",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:14:44",
+        "modulo": "SCANSIONE",
+        "azione": "RIEPILOGO_SCANSIONE",
+        "ticker": "SISTEMA",
+        "dettaglio": "BY: 1, HOLD: 29, SELL: 28, BY_FABIO: 1, SMCI: 8",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:52",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:56",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €100.64",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:56",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €208.15 (da €218.54). PnL: -6.1% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:56",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €100.64",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:57",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €25.92 (da €27.19). PnL: -11.4% → -7.0%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:18:57",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 2 proposte. Capitale liberato: €100.64",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:20",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:29:25",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:42",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:32:47",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:53",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:34:58",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:23",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:28",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:28",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:39:29",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:37",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:53:40",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:09",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: verde",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 14:58:14",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "verde"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:35",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: rosso",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €101.63",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €207.78 (da €218.54). PnL: -6.3% → -1.4%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €101.63",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -9.9% → -6.1%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €58.82",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €209.24 (da €218.54). PnL: -6.3% → -2.1%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €58.82",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.42 (da €27.19). PnL: -9.9% → -7.2%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:06:39",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €160.44",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:22",
+        "modulo": "SCANSIONE",
+        "azione": "TAKE_PROFIT",
+        "ticker": "APP",
+        "dettaglio": "RSI 77, Gain +51.0%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:22",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "APP",
+        "dettaglio": "S-Score 70, Distanza SMA200 0.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:29",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "CELH",
+        "dettaglio": "S-Score 90, Distanza SMA200 3.5%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:31",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "COHR",
+        "dettaglio": "Pattern SMCI: S-Score 90, FASE 1, RSI 47",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:33",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "CRDO",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 43",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:37",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GLW",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 39",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:39",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "GOOGL",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 38",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:48",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "LRCX",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 45",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:51",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MCD",
+        "dettaglio": "S-Score 65, Distanza SMA200 1.6%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:54",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "META",
+        "dettaglio": "S-Score 90, Distanza SMA200 0.2%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:57",
+        "modulo": "SCANSIONE",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "MU",
+        "dettaglio": "Pattern SMCI: S-Score 100, FASE 1, RSI 39",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:57",
+        "modulo": "SCANSIONE",
+        "azione": "ZONA_INTERESSE",
+        "ticker": "MU",
+        "dettaglio": "S-Score 100, Distanza SMA200 0.9%",
+        "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:07:58",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "NBIS",
@@ -416,31 +3880,31 @@
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:31",
+        "timestamp": "2026-11-13 17:08:20",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "SMCI",
-        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 41",
+        "dettaglio": "Pattern SMCI: S-Score 80, FASE 1, RSI 36",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:32",
+        "timestamp": "2026-11-13 17:08:28",
         "modulo": "SCANSIONE",
-        "azione": "ZONA_INTERESSE",
-        "ticker": "SOFI",
-        "dettaglio": "S-Score 80, Distanza SMA200 4.3%",
+        "azione": "TIPOLOGIA_SMCI",
+        "ticker": "TTMI",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 41",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:39",
+        "timestamp": "2026-11-13 17:08:33",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "UCTT",
-        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 44",
+        "dettaglio": "Pattern SMCI: S-Score 75, FASE 1, RSI 48",
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:43",
+        "timestamp": "2026-11-13 17:08:37",
         "modulo": "SCANSIONE",
         "azione": "TIPOLOGIA_SMCI",
         "ticker": "WDC",
@@ -448,19 +3912,91 @@
         "stato_mercato": "N/D"
     },
     {
-        "timestamp": "2026-11-10 00:52:45",
-        "modulo": "SCANSIONE",
-        "azione": "BY_FABIO",
-        "ticker": "ZETA",
-        "dettaglio": "Segnale BY FABIO rilevato - ✅ BREAKOUT Fortezza: S-Score 90, Vol 1.72x, RSI 45",
-        "stato_mercato": "N/D"
-    },
-    {
-        "timestamp": "2026-11-10 00:52:45",
+        "timestamp": "2026-11-13 17:08:40",
         "modulo": "SCANSIONE",
         "azione": "RIEPILOGO_SCANSIONE",
         "ticker": "SISTEMA",
-        "dettaglio": "BY: 1, HOLD: 32, SELL: 24, BY_FABIO: 1, SMCI: 11",
+        "dettaglio": "BY: 0, HOLD: 32, SELL: 27, BY_FABIO: 0, SMCI: 11",
         "stato_mercato": "N/D"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:29",
+        "modulo": "PODC",
+        "azione": "PODC_AVVIATO",
+        "ticker": "SISTEMA",
+        "dettaglio": "PODC avviato. Titoli in portafoglio: 11. Stato mercato: rosso",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €103.56",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €202.45 (da €218.54). PnL: -9.3% → -2.1%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "APP",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €103.56",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €25.61 (da €27.19). PnL: -13.7% → -8.4%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare CRWD. Capitale liberato: €59.15",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "CRWD",
+        "dettaglio": "Nuovo medio: €204.62 (da €218.54). PnL: -9.3% → -3.1%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "VENDITA_PARZIALE",
+        "ticker": "TTD",
+        "dettaglio": "Vendi 50% per mediare SMCI. Capitale liberato: €59.15",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "ACQUISTO_MEDIA",
+        "ticker": "SMCI",
+        "dettaglio": "Nuovo medio: €26.09 (da €27.19). PnL: -13.7% → -10.1%",
+        "stato_mercato": "rosso"
+    },
+    {
+        "timestamp": "2026-11-13 17:12:33",
+        "modulo": "PODC",
+        "azione": "PROPOSTE_GENERATE",
+        "ticker": "SISTEMA",
+        "dettaglio": "Generate 4 proposte. Capitale liberato: €162.71",
+        "stato_mercato": "rosso"
     }
 ]
