@@ -272,7 +272,58 @@ MINUSVALENZE_FILE = "minusvalenze.json"
 IMPOSTAZIONI_FILE = "impostazioni.json"
 LOG_PROPOSTE_FILE = "log_proposte.json"
 
+def _sync_github_file(file_path, content_str, mode="push"):
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        repo = st.secrets.get("GITHUB_REPO", "")
+        if not token or not repo:
+            return None
+        import base64, urllib.request, json as _js
+        fname = os.path.basename(file_path)
+        url = f"https://github.com{repo}/contents/{fname}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "Matrix-DVMS-Sync"
+        }
+        req = urllib.request.Request(url, headers=headers)
+        sha = None
+        remote_text = None
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                res_data = _js.loads(resp.read().decode("utf-8"))
+                sha = res_data.get("sha")
+                if mode == "pull" and "content" in res_data:
+                    remote_text = base64.b64decode(res_data["content"]).decode("utf-8")
+        except Exception:
+            pass
+
+        if mode == "pull":
+            return remote_text
+
+        payload = {
+            "message": f"Sync auto {fname}",
+            "content": base64.b64encode(content_str.encode("utf-8")).decode("utf-8")
+        }
+        if sha:
+            payload["sha"] = sha
+        put_req = urllib.request.Request(url, data=_js.dumps(payload).encode("utf-8"), headers=headers, method="PUT")
+        with urllib.request.urlopen(put_req, timeout=6):
+            pass
+    except Exception:
+        pass
+    return None
+
 def carica_json(file_path):
+    if f"_pulled_{os.path.basename(file_path)}" not in st.session_state:
+        st.session_state[f"_pulled_{os.path.basename(file_path)}"] = True
+        _rem = _sync_github_file(file_path, "", mode="pull")
+        if _rem:
+            try:
+                with open(file_path, "w", encoding="utf-8") as _fw:
+                    _fw.write(_rem)
+            except Exception:
+                pass
     if os.path.exists(file_path):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -284,6 +335,10 @@ def carica_json(file_path):
 def salva_json(file_path, data):
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
+    try:
+        _sync_github_file(file_path, json.dumps(data, indent=4, ensure_ascii=False), mode='push')
+    except Exception:
+        pass
 
 def registra_proposta(modulo, azione, ticker, dettaglio, stato="N/D"):
     try:
@@ -1491,6 +1546,17 @@ def calcola_stagionalita_10y(ticker):
         return df_stag, f"{res_60g:+.1f}% (WinRate mese: {wr_curr}%)"
     except Exception:
         return None, None
+
+IGNITION_UNIVERSE = [
+    "NVDA", "AMD", "PLTR", "SMCI", "AVGO", "META", "MSFT", "GOOGL", "AAPL", "TSLA",
+    "CRWD", "PANW", "VRT", "SOFI", "RKLB", "IONQ", "ASTS", "NKE", "CRDO", "NU",
+    "MCD", "DIS", "SBUX", "PEP", "INTC", "ANET", "MTDR", "TTMI", "BSX", "SHAK",
+    "DUOL", "FANG", "OXY", "SLB", "HIMS", "DXCM", "PODD", "ISRG", "SYK", "MDT",
+    "CAVA", "CMG", "TXRH", "DRI", "LULU", "ONON", "DECK", "CROX", "WMT", "COST",
+    "COIN", "HOOD", "RBLX", "U", "DASH", "ABNB", "NET", "SNOW", "DDOG", "ZS",
+    "OKTA", "MDB", "ESTC", "CELH", "MNST", "ELF", "ULTA", "GAP", "ANF", "AEO",
+    "URBN", "FIVE", "OLLI", "DG", "DLTR", "TGT", "NBIS", "SOUN", "BBAI", "ZETA"
+]
 
 def verifica_ignition_start(df, ticker):
     if df is None or len(df) < 60:
@@ -3086,6 +3152,64 @@ with tab_scanner:
                 st.markdown(f"""<div class="signal-box signal-red"><h4 style="margin:0">🔴 {alert['ticker']} ({alert['tipo']}) - RSI: {alert['rsi']}</h4><p style="margin:0.5rem 0">💶 Prezzo: {alert['prezzo_attuale_eur']}€ | 📈 Gain: <span style="color:#089981;font-weight:bold">+{alert['gain_pct']}%</span></p></div>""", unsafe_allow_html=True)
         st.markdown("---")
         st.subheader("⚠️ Watchlist Breakout Imminente")
+        st.markdown("### 🚀 Radar IGNITION — Inizio Salita (80 Titoli)")
+        _c_ig1, _c_ig2 = st.columns([2.5, 1])
+        with _c_ig1:
+            st.caption("Scansiona i migliori 80 titoli USA + Watchlist alla ricerca di Squeeze Bollinger, riconquista SMA 20, supporto VPOC Balene e volumi >= 1.35x.")
+        with _c_ig2:
+            _avvia_ig = st.button("🚀 Scansiona Radar IGNITION", type="primary", key="btn_run_ignition_80", use_container_width=True)
+        if _avvia_ig:
+            _lista_ig = sorted(list(set(IGNITION_UNIVERSE if 'IGNITION_UNIVERSE' in globals() else []) | set([x.strip().upper() for x in st.session_state.get('tickers_input', '').split(',') if x.strip()])))
+            _trovati_ig = []
+            _pre_ig = []
+            _pb_ig = st.progress(0, text="Scansione Radar IGNITION in corso...")
+            for _idx_i, _tk_i in enumerate(_lista_ig):
+                _pb_ig.progress((_idx_i + 1) / max(1, len(_lista_ig)), text=f"Analisi IGNITION: {_tk_i} ({_idx_i+1}/{len(_lista_ig)})")
+                try:
+                    _df_i = yf.Ticker(_tk_i).history(period="6mo", interval="1d").dropna(subset=["Close", "Volume"])
+                    if len(_df_i) >= 25:
+                        _c = _df_i["Close"]
+                        _v = _df_i["Volume"]
+                        _p_now = float(_c.iloc[-1])
+                        _p_prev = float(_c.iloc[-2])
+                        _sma20 = _c.rolling(20).mean()
+                        _std20 = _c.rolling(20).std()
+                        _s20_now = float(_sma20.iloc[-1])
+                        _s20_prev = float(_sma20.iloc[-2])
+                        _bb_w = ((_sma20 + 2 * _std20) - (_sma20 - 2 * _std20)) / _sma20
+                        _squeeze = float(_bb_w.iloc[-1]) <= float(_bb_w.tail(60).quantile(0.30))
+                        _vol_r = float(_v.iloc[-1]) / max(1.0, float(_v.tail(21).iloc[:-1].mean()))
+                        _delta = _c.diff()
+                        _gain = _delta.clip(lower=0).rolling(14).mean()
+                        _loss = (-_delta.clip(upper=0)).rolling(14).mean()
+                        _rs = _gain / _loss.replace(0, np.nan)
+                        _rsi_i = float((100 - (100 / (1 + _rs))).iloc[-1])
+                        _riconq = (_p_now > _s20_now) and (_p_prev <= _s20_prev * 1.01) and (_p_now > _p_prev)
+                        _vp_i, _wh_i = calcola_livello_balene(_df_i) if "calcola_livello_balene" in globals() else (None, "")
+                        _ins_i = " | 🕵️ INSIDER" if ("get_giorni_insider_rimanenti" in globals() and get_giorni_insider_rimanenti(_tk_i) != "-") else ""
+                        _dist_s20 = ((_p_now - _s20_now) / _s20_now) * 100
+                        if (_riconq or (_squeeze and _p_now > _s20_now and _p_now > _p_prev)) and _vol_r >= 1.20 and 40 <= _rsi_i <= 68:
+                            _tag_sq = "🔥 Squeeze + " if _squeeze else ""
+                            _det_i = f"{_tag_sq}Riconquista SMA20 (${_s20_now:.2f}) | Vol {_vol_r:.2f}x | RSI {_rsi_i:.0f} {_wh_i}{_ins_i}".strip()
+                            _trovati_ig.append({"Ticker": _tk_i, "Prezzo $": f"${_p_now:.2f}", "Stato": "🚀 IGNITION ATTIVO", "Dettagli & Conferme": _det_i})
+                        elif (-2.5 <= _dist_s20 <= 2.5) and 42 <= _rsi_i <= 62 and (_squeeze or _vol_r >= 1.05):
+                            _sc_pre = (20 if _squeeze else 0) + (_vol_r * 10) + (5 if _ins_i else 0)
+                            _tag_sq2 = "🔥 Squeeze | " if _squeeze else ""
+                            _det_p = f"{_tag_sq2}Dist. SMA20: {_dist_s20:+.1f}% (${_s20_now:.2f}) | Vol {_vol_r:.2f}x | RSI {_rsi_i:.0f} {_wh_i}{_ins_i}".strip()
+                            _pre_ig.append((_sc_pre, {"Ticker": _tk_i, "Prezzo $": f"${_p_now:.2f}", "Stato": "⏳ PRE-IGNITION", "Dettagli & Conferme": _det_p}))
+                except Exception:
+                    pass
+            _pb_ig.empty()
+            _pre_ig.sort(key=lambda x: x[0], reverse=True)
+            st.session_state["risultati_radar_ignition_80"] = _trovati_ig + [x[1] for x in _pre_ig[:6]]
+        if "risultati_radar_ignition_80" in st.session_state:
+            _res_ig = st.session_state["risultati_radar_ignition_80"]
+            if _res_ig:
+                st.success(f"🔥 Trovati **{len(_res_ig)}** titoli in fase di partenza (IGNITION):")
+                st.dataframe(pd.DataFrame(_res_ig), use_container_width=True, hide_index=True)
+            else:
+                st.info("Nessun titolo in partenza IGNITION rilevato in questo momento sugli 80 titoli.")
+
         port_scan_ref = st.session_state.portafoglio or list()
         breakout_tickers = trova_breakout_imminenti(port_scan_ref, eurusd_rate)
         if breakout_tickers:
