@@ -3778,25 +3778,88 @@ with tab_paper:
     st.markdown("---")
     if paper_port:
         df_paper = pd.DataFrame(paper_port)
-        pnl_virtuali, ultimo_segnale_col = list(), list()
+        pnl_virtuali, ultimo_segnale_col, stats_pnl_list = list(), list(), list()
+        aggiornato_json = False
+
         for idx, row in df_paper.iterrows():
-            ticker = row['Ticker']
-            if row['Stato'] == 'Attivo':
+            ticker = str(row.get('Ticker', '')).strip().upper()
+            stato_cur = str(row.get('Stato', 'Attivo'))
+            entry_eur = float(row.get('Entry', 0) or 0)
+            sl_eur = float(row.get('Stop_Loss', 0) or 0)
+            tg_eur = float(row.get('Target', 0) or 0)
+            dt_ing = str(row.get('Data_Ingresso', ''))[:10]
+
+            if stato_cur == 'Attivo' and ticker and entry_eur > 0:
                 try:
-                    current_price_usd = yf.Ticker(ticker).history(period='1d')['Close'].iloc[-1]
-                    current_price_eur = current_price_usd / eurusd_rate
-                    pnl_pct = ((current_price_eur - row['Entry']) / row['Entry']) * 100
-                    pnl_virtuali.append(f"{pnl_pct:+.1f}%")
-                    ultimo_segnale_col.append(format_ultimo_segnale_display(ticker, current_price_usd))
-                except:
+                    hist_1y = yf.Ticker(ticker).history(period='1y', interval='1d')
+                    if not hist_1y.empty:
+                        current_price_usd = float(hist_1y['Close'].dropna().iloc[-1])
+                        current_price_eur = current_price_usd / eurusd_rate
+
+                        sub_h = hist_1y[hist_1y.index.strftime('%Y-%m-%d') >= dt_ing] if dt_ing else hist_1y.tail(1)
+                        min_low_eur = float(sub_h['Low'].min()) / eurusd_rate if not sub_h.empty else current_price_eur
+                        max_high_eur = float(sub_h['High'].max()) / eurusd_rate if not sub_h.empty else current_price_eur
+
+                        if sl_eur > 0 and min_low_eur <= sl_eur:
+                            pnl_sl = ((sl_eur - entry_eur) / entry_eur) * 100
+                            df_paper.at[idx, 'Stato'] = 'Chiuso (SL)'
+                            pnl_virtuali.append(f"{pnl_sl:+.1f}%")
+                            ultimo_segnale_col.append(f"🛑 Stop €{sl_eur:.2f}")
+                            stats_pnl_list.append(pnl_sl)
+                            paper_port[idx]['Stato'] = 'Chiuso (SL)'
+                            paper_port[idx]['Prezzo_Uscita'] = sl_eur
+                            aggiornato_json = True
+                        elif tg_eur > 0 and max_high_eur >= tg_eur:
+                            pnl_tp = ((tg_eur - entry_eur) / entry_eur) * 100
+                            df_paper.at[idx, 'Stato'] = 'Chiuso (TP)'
+                            pnl_virtuali.append(f"{pnl_tp:+.1f}%")
+                            ultimo_segnale_col.append(f"🎯 Target €{tg_eur:.2f}")
+                            stats_pnl_list.append(pnl_tp)
+                            paper_port[idx]['Stato'] = 'Chiuso (TP)'
+                            paper_port[idx]['Prezzo_Uscita'] = tg_eur
+                            aggiornato_json = True
+                        else:
+                            pnl_pct = ((current_price_eur - entry_eur) / entry_eur) * 100
+                            pnl_virtuali.append(f"{pnl_pct:+.1f}%")
+                            stats_pnl_list.append(pnl_pct)
+                            sig_txt = format_ultimo_segnale_display(ticker, current_price_usd)
+                            m_dt = re.search(r'(\d{2})/(\d{2})/(\d{4})', str(sig_txt))
+                            if m_dt and dt_ing and f"{m_dt.group(3)}-{m_dt.group(2)}-{m_dt.group(1)}" < dt_ing:
+                                sig_txt = "In corso"
+                            ultimo_segnale_col.append(sig_txt)
+                    else:
+                        pnl_virtuali.append("N/D")
+                        ultimo_segnale_col.append("N/D")
+                except Exception:
                     pnl_virtuali.append("N/D")
                     ultimo_segnale_col.append("N/D")
             else:
-                pnl_virtuali.append("Chiuso")
-                ultimo_segnale_col.append("Chiuso")
+                exit_eur = float(row.get('Prezzo_Uscita') or sl_eur or entry_eur)
+                pnl_ch = ((exit_eur - entry_eur) / entry_eur) * 100 if entry_eur > 0 else 0.0
+                pnl_virtuali.append(f"{pnl_ch:+.1f}%")
+                stats_pnl_list.append(pnl_ch)
+                if stato_cur == 'Chiuso':
+                    df_paper.at[idx, 'Stato'] = 'Chiuso (SL)'
+                ultimo_segnale_col.append(f"Chiuso @ €{exit_eur:.2f}")
+
+        if aggiornato_json:
+            salva_json(PAPER_TRADING_FILE, paper_port)
+
         df_paper['P&L Virtuale'] = pnl_virtuali
         df_paper['Ultimo Segnale'] = ultimo_segnale_col
-        st.dataframe(df_paper[['Ticker', 'Entry', 'Stop_Loss', 'Target', 'Data_Ingresso', 'Stato', 'P&L Virtuale', 'Ultimo Segnale']], use_container_width=True, height=400)
+
+        if stats_pnl_list:
+            win_count = sum(1 for x in stats_pnl_list if x > 0)
+            win_rate = (win_count / len(stats_pnl_list)) * 100
+            avg_ret = sum(stats_pnl_list) / len(stats_pnl_list)
+            tot_ret = sum(stats_pnl_list)
+            cs1, cs2, cs3, cs4 = st.columns(4)
+            cs1.metric("🎯 Win Rate Strategia", f"{win_rate:.0f}%", f"{win_count} vincenti su {len(stats_pnl_list)}")
+            cs2.metric("📊 Rendimento Medio", f"{avg_ret:+.2f}%", "Per singolo trade")
+            cs3.metric("📈 P&L Cumulato", f"{tot_ret:+.1f}%", "Somma segnali")
+            cs4.metric("📁 Posizioni Tracciate", f"{len(stats_pnl_list)}", f"{sum(1 for s in df_paper['Stato'] if s == 'Attivo')} attive")
+
+        st.dataframe(df_paper[['Ticker', 'Entry', 'Stop_Loss', 'Target', 'Data_Ingresso', 'Stato', 'P&L Virtuale', 'Ultimo Segnale']], use_container_width=True, hide_index=True, height=340)
         st.markdown("---")
         st.subheader("🔒 Gestione Posizioni")
         ticker_attivi = [p['Ticker'] for p in paper_port if p.get('Stato') == 'Attivo']
@@ -3807,6 +3870,11 @@ with tab_paper:
                     if p['Ticker'] == ticker_da_chiudere and p.get('Stato') == 'Attivo':
                         p['Stato'] = 'Chiuso'
                         p['Data_Uscita'] = datetime.now().strftime("%Y-%m-%d")
+                        try:
+                            _p_close_usd = float(yf.Ticker(ticker_da_chiudere).history(period='1d')['Close'].iloc[-1])
+                            p['Prezzo_Uscita'] = round(_p_close_usd / eurusd_rate, 2)
+                        except Exception:
+                            pass
                 salva_json(PAPER_TRADING_FILE, paper_port)
                 st.success(f"Posizione {ticker_da_chiudere} chiusa e archiviata.")
                 st.rerun()
