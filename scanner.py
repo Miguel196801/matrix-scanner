@@ -2168,6 +2168,10 @@ if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True
     impostazioni["esclusioni"] = esclusioni_input
     with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
         json.dump(impostazioni, f)
+        try:
+            _sync_github_file(IMPOSTAZIONI_FILE, json.dumps(impostazioni, indent=4, ensure_ascii=False), mode='push')
+        except Exception:
+            pass
     progress_bar = st.progress(0)
     if st.session_state.spy_data is None:
         try:
