@@ -3794,6 +3794,9 @@ with tab_insider:
                         _wl_list.append(_t_code)
                         _imp['lista_ticker_default'] = ', '.join(_wl_list)
                         if 'salva_json' in globals(): salva_json('impostazioni.json', _imp)
+                        if os.path.exists('impostazioni.json'):
+                            with open('impostazioni.json', 'r', encoding='utf-8') as _fr_gh:
+                                _sync_github_file('impostazioni.json', _fr_gh.read(), mode='push')
                     st.session_state.setdefault('insider_promossi_oggi', []).append(_t_code)
                     continue
                 if float(str(res_i['Dist. Min 52w %']).replace('+','').replace('%','').replace('nan','0')) <= max_dist_min or res_i['_buys'] >= 2:
