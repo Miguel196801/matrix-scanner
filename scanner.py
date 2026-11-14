@@ -324,6 +324,39 @@ def _sync_github_file(file_path, content_str, mode="push"):
             pass
     return None
 
+def registra_acquisto_storico(ticker, tipo, qta, prezzo_eur, nota="Acquisto"):
+    try:
+        fn = "registro_acquisti.json"
+        storico = []
+        if os.path.exists(fn):
+            with open(fn, "r", encoding="utf-8") as f_r:
+                storico = json.load(f_r)
+        storico.insert(0, {
+            "Data": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "Ticker": str(ticker).upper(),
+            "Operazione": nota,
+            "Tipo": str(tipo),
+            "Quantita": round(float(qta), 4),
+            "Prezzo_EUR": round(float(prezzo_eur), 4),
+            "Totale_EUR": round(float(qta) * float(prezzo_eur), 2)
+        })
+        with open(fn, "w", encoding="utf-8") as f_w:
+            json.dump(storico, f_w, indent=4, ensure_ascii=False)
+    except Exception:
+        pass
+
+def formatta_fase_weinstein_pro(val_fase):
+    s = str(val_fase).upper()
+    if "2" in s:
+        return "<span style='color:#4ade80; font-weight:800;'>🟢 FASE 2 — Rialzo (Ideale)</span>"
+    elif "1" in s:
+        return "<span style='color:#fb923c; font-weight:800;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>"
+    elif "3" in s:
+        return "<span style='color:#fb923c; font-weight:800;'>🟠 FASE 3 — Distribuzione (Tattico)</span>"
+    elif "4" in s:
+        return "<span style='color:#f87171; font-weight:800;'>🔴 FASE 4 — Ribasso (Evitare)</span>"
+    return str(val_fase)
+
 def carica_json(file_path):
     _k_pull = f"_gh_pulled_{os.path.basename(file_path)}"
     if _k_pull not in st.session_state and "_sync_github_file" in globals():
@@ -470,7 +503,7 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
                     trend_30gg = ((hist_pos['Close'].iloc[-1] / hist_pos['Close'].iloc[-30]) - 1) * 100
                 s_score = calcola_s_score(info_pos)
                 fase = rileva_fase_weinstein(hist_pos)
-                kill_switch = ("FASE 4" in fase or s_score < 50)
+                kill_switch = ("<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase or s_score < 50)
                 has_catalizzatore = False
                 if ticker_pos in catalizzatori:
                     if catalizzatori[ticker_pos]['data'] >= oggi:
@@ -518,11 +551,11 @@ def parse_catalizzatori(testo):
 def calcola_score_ribilanciamento(ticker, df, info, insider_data=None):
     score = 0
     fase = rileva_fase_weinstein(df)
-    if "FASE 2" in fase:
+    if "<span style='color:#4ade80; font-weight:800; font-size:0.95rem;'>🟢 FASE 2 — Rialzo (Ideale)</span>" in fase:
         score += 30
-    elif "FASE 1" in fase:
+    elif "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase:
         score += 20
-    elif "FASE 3" in fase:
+    elif "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 3 — Distribuzione (Tattico)</span>" in fase:
         score += 10
     elif "CORREZIONE" in fase:
         score += 25
@@ -590,9 +623,9 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
             pnl_pct = round(((pos.get('Prezzo_Attuale_EUR', 0) / pos.get('Prezzo_Medio', 1)) - 1) * 100 if pos.get('Prezzo_Medio', 0) > 0 else 0, 2)
             if has_catalizzatore:
                 monitor.append({'ticker': ticker, 'score': score, 'fase': fase, 'messaggio': f"⚠️ HOLD FORZATO: Ha un catalizzatore imminente ({cat_desc}). Non vendere nonostante il punteggio."})
-            elif "FASE 3" in fase:
+            elif "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 3 — Distribuzione (Tattico)</span>" in fase:
                 vendite.append({'ticker': ticker, 'score': score, 'fase': fase, 'pnl_pct': pnl_pct, 'messaggio': "⚠️ Fase di distribuzione in atto. Valuta vendita parziale o totale per proteggere i guadagni."})
-            elif "FASE 4" in fase:
+            elif "<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase:
                 s_score_check = calcola_s_score(info)
                 if s_score_check >= 60:
                     monitor.append({'ticker': ticker, 'score': score, 'fase': fase, 'pnl_pct': pnl_pct, 'messaggio': f"⚠️ FASE 4 ma S-Score alto ({s_score_check}). Possibile falsa Fase 4 (accumulazione). Monitorare, non vendere."})
@@ -600,7 +633,7 @@ def genera_piano_ribilanciamento(portafoglio, watchlist_tickers, semaforo, catal
                     vendite.append({'ticker': ticker, 'score': score, 'fase': fase, 'pnl_pct': pnl_pct, 'messaggio': "🔴 FASE 4 (Declino Strutturale): Vendita consigliata per proteggere il capitale."})
             elif score < 40:
                 vendite.append({'ticker': ticker, 'score': score, 'fase': fase, 'pnl_pct': pnl_pct, 'messaggio': "Score basso e trend debole. Ottimizzazione fiscale consigliata."})
-            elif "FASE 1" in fase and score >= 40:
+            elif "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase and score >= 40:
                 monitor.append({'ticker': ticker, 'score': score, 'fase': fase, 'messaggio': "🟢 Pronti al Rimbalzo: Titolo in fase di accumulo, pronto a ripartire quando il mercato gira."})
             elif "CORREZIONE" in fase:
                 monitor.append({'ticker': ticker, 'score': score, 'fase': fase, 'messaggio': "🟡 Correzione in Trend: Pullback sano in Fase 2. Monitorare per ingresso."})
@@ -1195,7 +1228,7 @@ def verifica_trigger_by_fortezza(df, sma_short, ticker_obj=None):
     rs = gain / loss
     rsi_oggi = float((100 - (100 / (1 + (gain/loss)))).iloc[-1]) if not (gain/loss).empty else 50
     fase = rileva_fase_weinstein(df)
-    if "FASE 4" in fase:
+    if "<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase:
         return False, f"❌ Bloccato: {fase}", False
     if rsi_oggi > 70:
         return False, f"❌ Bloccato: RSI ipercomprato ({rsi_oggi:.0f})", False
@@ -1302,7 +1335,11 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     vol_str = f"{vol_oggi/1e6:.2f}M / {vol_med/1e6:.2f}M" if vol_med > 0 else f"{r.get('vol_ratio', 0):.2f}x"
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🏛️ Fase Weinstein", str(r.get('fase', 'N/D')).split('(')[0].strip())
+    _fw_raw = str(r.get("fase", "N/D")).upper()
+    _fw_lbl = "🟢 FASE 2" if "2" in _fw_raw else ("🟠 FASE 1" if "1" in _fw_raw else ("🟠 FASE 3" if "3" in _fw_raw else ("🔴 FASE 4" if "4" in _fw_raw else _fw_raw)))
+    _fw_desc = "Rialzo (Ideale)" if "2" in _fw_raw else ("Accumulo (Attesa Breakout)" if "1" in _fw_raw else ("Distribuzione (Tattico)" if "3" in _fw_raw else ("Ribasso (Evitare)" if "4" in _fw_raw else "")))
+    _fw_col = "normal" if "2" in _fw_raw else ("inverse" if "4" in _fw_raw else "off")
+    c1.metric("🏛️ Fase Weinstein", _fw_lbl, _fw_desc, delta_color=_fw_col)
     c2.metric("📈 SMA 50 / SMA 200", f"${_v50:.2f}", f"SMA200: ${_v200:.2f}")
     c3.metric("🐋 VPOC Balene", f"${vpoc_val:.2f}" if vpoc_val else "N/D", f"RSI (14): {r.get('rsi', 0):.1f}")
     c4.metric("📊 Volumi (Oggi/Med)", vol_str, f"Figura Z: {'SÌ ✅' if r.get('figura_z') else 'No'}")
@@ -1905,7 +1942,7 @@ def valuta_stato_pac(info, df_storico):
         s_score = calcola_s_score(info)
         fase = rileva_fase_weinstein(df_storico)
         rev_growth = info.get('revenueGrowth', 0.0) or 0.0
-        if "FASE 4" in fase or s_score < 50 or rev_growth < 0:
+        if "<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase or s_score < 50 or rev_growth < 0:
             return "🔴 PAC SOSPESO"
         return "🟢 PAC ATTIVO"
     except:
@@ -2123,7 +2160,7 @@ st.markdown(f'''
 <div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
     <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
-        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span>
+        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {st.session_state.get("_last_price_update") or (datetime.fromtimestamp(os.path.getmtime("portafoglio.json")).strftime("%d/%m/%Y %H:%M") if os.path.exists("portafoglio.json") else "-")}</span>
     </div>
     <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
         {sem_display}
@@ -2244,7 +2281,7 @@ if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True
             sma50 = df['Close'].rolling(window=50).mean().iloc[-1]
             prezzo_attuale = df['Close'].dropna().iloc[-1]
             distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
-            if s_score >= 75 and "FASE 1" in fase and prezzo_attuale < sma50 and 35 <= rsi_oggi <= 50:
+            if s_score >= 75 and "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase and prezzo_attuale < sma50 and 35 <= rsi_oggi <= 50:
                 stats.setdefault('smci_tickers', list()).append(ticker)
                 registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}", stato="N/D")
             is_palantir = (s_score >= 75 and revenue_growth >= 0.20 and (peg_ratio > 0 and peg_ratio < 1.5) and rsi_oggi < 45 and distanza_sma200_pct <= 5.0)
@@ -2294,14 +2331,14 @@ if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True
                 registra_segnale(ticker, 'BY', prezzo_usd, oggi_str)
             elif trigger_sell_tecnico_oggi:
                 registra_segnale(ticker, 'SELL', prezzo_usd, oggi_str)
-            if ignore_fase_4 and "FASE 4" in fase:
+            if ignore_fase_4 and "<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase:
                 stats['sell_count'] += 1
                 stats['sell_tickers'].append(ticker)
                 continue
-            is_cp_valido = (40 <= s_score <= 60 and ("FASE 1" in fase or "FASE 2" in fase) and vol_ratio >= 1.60 and figura_z)
-            is_fortezza_valida = (s_score >= 60 and "FASE 2" in fase)
-            is_fortezza_accumulo = (s_score >= 60 and "FASE 1" in fase and vol_ratio >= 1.60 and figura_z)
-            is_watchlist = (s_score >= 40 and ("FASE 1" in fase or "FASE 2" in fase or "CORREZIONE" in fase) and not is_cp_valido and not is_fortezza_valida)
+            is_cp_valido = (40 <= s_score <= 60 and ("<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase or "<span style='color:#4ade80; font-weight:800; font-size:0.95rem;'>🟢 FASE 2 — Rialzo (Ideale)</span>" in fase) and vol_ratio >= 1.60 and figura_z)
+            is_fortezza_valida = (s_score >= 60 and "<span style='color:#4ade80; font-weight:800; font-size:0.95rem;'>🟢 FASE 2 — Rialzo (Ideale)</span>" in fase)
+            is_fortezza_accumulo = (s_score >= 60 and "<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase and vol_ratio >= 1.60 and figura_z)
+            is_watchlist = (s_score >= 40 and ("<span style='color:#fb923c; font-weight:800; font-size:0.95rem;'>🟠 FASE 1 — Accumulo (Attesa Breakout)</span>" in fase or "<span style='color:#4ade80; font-weight:800; font-size:0.95rem;'>🟢 FASE 2 — Rialzo (Ideale)</span>" in fase or "CORREZIONE" in fase) and not is_cp_valido and not is_fortezza_valida)
             if ticker in ticker_in_portafoglio and (trigger_by or trigger_by_fabio):
                 pos = ticker_in_portafoglio[ticker]
                 azioni = math.floor(100.0 / prezzo_eur)
@@ -2406,7 +2443,7 @@ tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_ana
     "Confronto BY",
     "Scanner Dashboard",
     "Analisi Singola",
-    "Registro Vendite",
+    "Registro Acquisti & Vendite",
     "Portfolio AI", "🕵️ Insider & Stagionalità"])
 
 with tab_riepilogo:
@@ -2688,6 +2725,16 @@ if False:
 
 with tab_portafoglio:
     st.session_state["_grafico_uid_cnt"] = 0
+    for _p_chk in st.session_state.portafoglio:
+        _q_c = float(_p_chk.get('Quantita', 0) or 0)
+        _pmc_c = float(_p_chk.get('Prezzo_Medio', 0) or 0)
+        _pe_c = float(_p_chk.get('Prezzo_Attuale_EUR', 0) or 0)
+        if _q_c > 0 and _pmc_c > 0:
+            _p_chk['Valore_Carico'] = round(_q_c * _pmc_c, 2)
+            if _pe_c > 0:
+                _p_chk['Valore_Attuale'] = round(_q_c * _pe_c, 2)
+                _p_chk['PnL_EUR'] = round(_p_chk['Valore_Attuale'] - _p_chk['Valore_Carico'], 2)
+                _p_chk['PnL_%'] = round(((_p_chk['Valore_Attuale'] / _p_chk['Valore_Carico']) - 1) * 100, 2)
     portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Valore_Carico') or (float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0))), reverse=True)
     if not portafoglio or len(portafoglio) == 0:
         st.warning("⚠️ Portafoglio vuoto. Aggiungi titoli usando l'expander sopra o carica il file portafoglio.json")
@@ -2816,80 +2863,80 @@ with tab_portafoglio:
                             else:
                                 st.info("Dati insufficienti per calcolare i target.")
 
-                    with st.expander(f"📋 Dettagli e Operazioni - {ticker}"):
-                        st.markdown(f"<div style='background:#0B0E11;border:1px solid #2A2E39;border-radius:6px;padding:8px 10px;font-size:0.82rem;margin-bottom:6px;'><div style='display:flex;justify-content:space-between;'><span>Quantità: <b>{quantita:.4f}</b></span><span>Prezzo: <b>€ {prezzo_display}</b></span></div><div style='display:flex;justify-content:space-between;margin-top:4px;'><span>P&L: <b style='color:{acqu_color};'>{netto_label}</b></span><span>Var: <b style='color:{acqu_color};'>{var_acquisto:+.1f}%</b></span></div></div>", unsafe_allow_html=True)
-                        st.caption(f"📅 Prossimi Utili: {earnings}")
-                        st.markdown("---")
-                        st.markdown("**➕ Aggiungi Quote**")
-                        col_a1, col_a2 = st.columns(2)
-                        with col_a1:
-                            nuova_qta = st.number_input("Nuova Qta", min_value=0.0001, step=0.0001, key=f"qta_{ticker}_{idx_pos}")
-                        with col_a2:
-                            nuovo_prezzo_acq = st.number_input("Prezzo Acquisto €", min_value=0.01, step=0.01, key=f"prezzo_acq_{ticker}_{idx_pos}")
-                        if st.button("✅ Conferma Aggiunta", key=f"add_{ticker}_{idx_pos}", use_container_width=True):
-                                if nuova_qta > 0 and nuovo_prezzo_acq > 0:
-                                    vecchio_medio = pos['Prezzo_Medio']
-                                    nuovo_medio = ((quantita * vecchio_medio) + (nuova_qta * nuovo_prezzo_acq)) / (quantita + nuova_qta)
-                                    pos['Quantita'] = round(quantita + nuova_qta, 6)
-                                    pos['Prezzo_Medio'] = round(nuovo_medio, 4)
-                                    salva_json(PORTAFOGLIO_FILE, portafoglio)
-                                    st.session_state.portafoglio = portafoglio
-                                    st.success(f"✅ Aggiunte {nuova_qta} quote di {ticker}. Nuovo medio: €{nuovo_medio:.4f}")
-                                    st.rerun()
-                        st.markdown("---")
-                        st.markdown("**➖ Vendi Quote**")
-                        modalita_vendita = st.radio(f"Modalità vendita {ticker}", ["📊 Percentuale (%)", "🔢 Quantità specifica"], horizontal=True, key=f"modalita_{ticker}_{idx_pos}")
-                        qta_da_vendere = 0
-                        if modalita_vendita == "📊 Percentuale (%)":
-                            pct_vendita = st.slider("Percentuale da vendere", min_value=1.0, max_value=100.0, value=100.0, step=1.0, key=f"pct_{ticker}_{idx_pos}")
-                            qta_da_vendere = quantita * (pct_vendita / 100.0)
-                            st.info(f"📊 Venderai {pct_vendita:.0f}% = {qta_da_vendere:.6f} quote")
-                        else:
-                            qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
-                        prezzo_vendita = st.number_input("Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
-                        if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
-                            pnl_lordo_prev = (prezzo_vendita - prezzo_medio) * qta_da_vendere
-                            pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
-                            minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
-                            oggi_str = datetime.now().strftime("%Y-%m-%d")
-                            tasse_sim = 0
-                            if pnl_lordo_prev > 0:
-                                residuo = pnl_lordo_prev
-                                for mv in sorted(minusvalenze_disp, key=lambda x: x.get('Scadenza', '9999-12-31')):
-                                    if mv.get('Scadenza', '') >= oggi_str and mv.get('Importo', 0) > 0:
-                                        usa = min(mv['Importo'], residuo)
-                                        residuo -= usa
-                                        if residuo <= 0:
-                                            break
-                                tasse_sim = residuo * ALIQUOTA_TASSE
-                            pnl_netto_prev = pnl_lordo_prev - tasse_sim
-                            st.markdown(f"""
-                            <div style="background-color: #131722; padding: 1rem; border-radius: 6px; margin: 1rem 0; border: 1px solid #2A2E39;">
-                                <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                                    <div><div style="color: #787B86; font-size: 0.85rem;">P&L Lordo</div><div style="font-family: 'JetBrains Mono', monospace; color: {'#089981' if pnl_lordo_prev > 0 else '#F23645'}; font-size: 1.2rem; font-weight: 700;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div></div>
-                                    <div><div style="color: #787B86; font-size: 0.85rem;">Tasse stimate (26%)</div><div style="font-family: 'JetBrains Mono', monospace; color: #F23645; font-size: 1.2rem; font-weight: 700;">€ -{tasse_sim:.2f}</div></div>
-                                    <div><div style="color: #787B86; font-size: 0.85rem;">Netto reale</div><div style="font-family: 'JetBrains Mono', monospace; color: {'#089981' if pnl_netto_prev > 0 else '#F23645'}; font-size: 1.2rem; font-weight: 700;">€ {pnl_netto_prev:+.2f}</div></div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
-                                if qta_da_vendere <= quantita:
-                                    risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
-                                    if risultato:
-                                        pos['Quantita'] = round(quantita - qta_da_vendere, 6)
-                                        if pos['Quantita'] <= 0:
-                                            portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
-                                        st.session_state.portafoglio = portafoglio
+                        with st.expander(f"📋 Dettagli e Operazioni - {ticker}"):
+                            st.markdown(f"<div style='background:#0B0E11;border:1px solid #2A2E39;border-radius:6px;padding:8px 10px;font-size:0.82rem;margin-bottom:6px;'><div style='display:flex;justify-content:space-between;'><span>Quantità: <b>{quantita:.4f}</b></span><span>Prezzo: <b>€ {prezzo_display}</b></span></div><div style='display:flex;justify-content:space-between;margin-top:4px;'><span>P&L: <b style='color:{acqu_color};'>{netto_label}</b></span><span>Var: <b style='color:{acqu_color};'>{var_acquisto:+.1f}%</b></span></div></div>", unsafe_allow_html=True)
+                            st.caption(f"📅 Prossimi Utili: {earnings}")
+                            st.markdown("---")
+                            st.markdown("**➕ Aggiungi Quote**")
+                            col_a1, col_a2 = st.columns(2)
+                            with col_a1:
+                                nuova_qta = st.number_input("Nuova Qta", min_value=0.0001, step=0.0001, key=f"qta_{ticker}_{idx_pos}")
+                            with col_a2:
+                                nuovo_prezzo_acq = st.number_input("Prezzo Acquisto €", min_value=0.01, step=0.01, key=f"prezzo_acq_{ticker}_{idx_pos}")
+                            if st.button("✅ Conferma Aggiunta", key=f"add_{ticker}_{idx_pos}", use_container_width=True):
+                                    if nuova_qta > 0 and nuovo_prezzo_acq > 0:
+                                        vecchio_medio = pos['Prezzo_Medio']
+                                        nuovo_medio = ((quantita * vecchio_medio) + (nuova_qta * nuovo_prezzo_acq)) / (quantita + nuova_qta)
+                                        pos['Quantita'] = round(quantita + nuova_qta, 6)
+                                        pos['Prezzo_Medio'] = round(nuovo_medio, 4)
                                         salva_json(PORTAFOGLIO_FILE, portafoglio)
-                                        st.success(f"✅ Vendute {qta_da_vendere:.6f} quote di {ticker}. P&L Netto: €{risultato['pnl_netto']:+.2f}")
+                                        st.session_state.portafoglio = portafoglio
+                                        st.success(f"✅ Aggiunte {nuova_qta} quote di {ticker}. Nuovo medio: €{nuovo_medio:.4f}")
                                         st.rerun()
-                        st.markdown("---")
-                        if st.button(f"🗑️ Rimuovi {ticker} dal Portafoglio", key=f"remove_{ticker}_{idx_pos}"):
-                            portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
-                            st.session_state.portafoglio = portafoglio
-                            salva_json(PORTAFOGLIO_FILE, portafoglio)
-                            st.success(f"✅ {ticker} rimosso dal portafoglio")
-                            st.rerun()
+                            st.markdown("---")
+                            st.markdown("**➖ Vendi Quote**")
+                            modalita_vendita = st.radio(f"Modalità vendita {ticker}", ["📊 Percentuale (%)", "🔢 Quantità specifica"], horizontal=True, key=f"modalita_{ticker}_{idx_pos}")
+                            qta_da_vendere = 0
+                            if modalita_vendita == "📊 Percentuale (%)":
+                                pct_vendita = st.slider("Percentuale da vendere", min_value=1.0, max_value=100.0, value=100.0, step=1.0, key=f"pct_{ticker}_{idx_pos}")
+                                qta_da_vendere = quantita * (pct_vendita / 100.0)
+                                st.info(f"📊 Venderai {pct_vendita:.0f}% = {qta_da_vendere:.6f} quote")
+                            else:
+                                qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
+                            prezzo_vendita = st.number_input("Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
+                            if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
+                                pnl_lordo_prev = (prezzo_vendita - prezzo_medio) * qta_da_vendere
+                                pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
+                                minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
+                                oggi_str = datetime.now().strftime("%Y-%m-%d")
+                                tasse_sim = 0
+                                if pnl_lordo_prev > 0:
+                                    residuo = pnl_lordo_prev
+                                    for mv in sorted(minusvalenze_disp, key=lambda x: x.get('Scadenza', '9999-12-31')):
+                                        if mv.get('Scadenza', '') >= oggi_str and mv.get('Importo', 0) > 0:
+                                            usa = min(mv['Importo'], residuo)
+                                            residuo -= usa
+                                            if residuo <= 0:
+                                                break
+                                    tasse_sim = residuo * ALIQUOTA_TASSE
+                                pnl_netto_prev = pnl_lordo_prev - tasse_sim
+                                st.markdown(f"""
+                                <div style="background-color: #131722; padding: 1rem; border-radius: 6px; margin: 1rem 0; border: 1px solid #2A2E39;">
+                                    <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                                        <div><div style="color: #787B86; font-size: 0.85rem;">P&L Lordo</div><div style="font-family: 'JetBrains Mono', monospace; color: {'#089981' if pnl_lordo_prev > 0 else '#F23645'}; font-size: 1.2rem; font-weight: 700;">€ {pnl_lordo_prev:+.2f} ({pnl_pct_prev:+.1f}%)</div></div>
+                                        <div><div style="color: #787B86; font-size: 0.85rem;">Tasse stimate (26%)</div><div style="font-family: 'JetBrains Mono', monospace; color: #F23645; font-size: 1.2rem; font-weight: 700;">€ -{tasse_sim:.2f}</div></div>
+                                        <div><div style="color: #787B86; font-size: 0.85rem;">Netto reale</div><div style="font-family: 'JetBrains Mono', monospace; color: {'#089981' if pnl_netto_prev > 0 else '#F23645'}; font-size: 1.2rem; font-weight: 700;">€ {pnl_netto_prev:+.2f}</div></div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
+                                    if qta_da_vendere <= quantita:
+                                        risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
+                                        if risultato:
+                                            pos['Quantita'] = round(quantita - qta_da_vendere, 6)
+                                            if pos['Quantita'] <= 0:
+                                                portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
+                                            st.session_state.portafoglio = portafoglio
+                                            salva_json(PORTAFOGLIO_FILE, portafoglio)
+                                            st.success(f"✅ Vendute {qta_da_vendere:.6f} quote di {ticker}. P&L Netto: €{risultato['pnl_netto']:+.2f}")
+                                            st.rerun()
+                            st.markdown("---")
+                            if st.button(f"🗑️ Rimuovi {ticker} dal Portafoglio", key=f"remove_{ticker}_{idx_pos}"):
+                                portafoglio = [p for p in portafoglio if p['Ticker'] != ticker]
+                                st.session_state.portafoglio = portafoglio
+                                salva_json(PORTAFOGLIO_FILE, portafoglio)
+                                st.success(f"✅ {ticker} rimosso dal portafoglio")
+                                st.rerun()
 
             st.markdown("---")
 
@@ -3076,23 +3123,39 @@ with tab_console:
             with col_add4:
                 new_medio = st.number_input("Prezzo Medio €", min_value=0.01, step=0.01)
             if st.button("➕ Aggiungi al Portafoglio"):
-                if new_ticker:
-                    port_att = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
-                    posizione_esistente = None
-                    for i, p in enumerate(port_att):
-                        if p['Ticker'] == new_ticker and p.get('Tipo') == new_tipo:
-                            posizione_esistente = i
+                _tk_clean = str(new_ticker).strip().upper()
+                if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
+                    _trovato_m = False
+                    for _item_m in st.session_state.portafoglio:
+                        if str(_item_m.get("Ticker", "")).upper() == _tk_clean and str(_item_m.get("Tipo", "Spot")) == str(new_tipo):
+                            _q_old = float(_item_m.get("Quantita", 0) or 0)
+                            _pmc_old = float(_item_m.get("Prezzo_Medio", 0) or 0)
+                            _q_new = round(_q_old + float(new_qta), 4)
+                            _pmc_new = round(((_q_old * _pmc_old) + (float(new_qta) * float(new_medio))) / _q_new, 4)
+                            _item_m["Quantita"] = _q_new
+                            _item_m["Prezzo_Medio"] = _pmc_new
+                            _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
+                            _trovato_m = True
+                            st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M"); salva_json("portafoglio.json", st.session_state.portafoglio)
+                            registra_acquisto_storico(_tk_clean, "Spot", _q_new - _q_old, (_pmc_new * _q_new - _pmc_old * _q_old) / max(0.0001, _q_new - _q_old), nota="Mediazione PMC"); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
                             break
-                    if posizione_esistente is not None:
-                        port_att[posizione_esistente]['Quantita'] = new_qta
-                        port_att[posizione_esistente]['Prezzo_Medio'] = new_medio
-                        st.warning(f"⚠️ {new_ticker} ({new_tipo}) già esistente. Aggiornato con nuovi valori.")
-                    else:
-                        port_att.append({"Ticker": new_ticker, "Tipo": new_tipo, "Quantita": new_qta, "Prezzo_Medio": new_medio})
-                        st.success(f"✅ {new_ticker} ({new_tipo}) aggiunto!")
-                    st.session_state.portafoglio = port_att
-                    salva_json(PORTAFOGLIO_FILE, port_att)
-                    st.rerun()
+                    if not _trovato_m:
+                        _q_n = round(float(new_qta), 4)
+                        _pm_n = round(float(new_medio), 4)
+                        st.session_state.portafoglio.append({
+                            "Ticker": _tk_clean,
+                            "Tipo": str(new_tipo),
+                            "Quantita": _q_n,
+                            "Prezzo_Medio": _pm_n,
+                            "Valore_Carico": round(_q_n * _pm_n, 2),
+                            "Prezzo_Attuale_EUR": _pm_n,
+                            "Valore_Attuale": round(_q_n * _pm_n, 2),
+                            "PnL_EUR": 0.0,
+                            "PnL_%": 0.0,
+                            "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
+                        })
+                        st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M"); salva_json("portafoglio.json", st.session_state.portafoglio)
+                        registra_acquisto_storico(_tk_clean, "Spot", _q_n, _pm_n, nota="Nuovo Acquisto"); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
             st.markdown("---")
             st.write("Rimuovi un titolo:")
             port_att = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
@@ -3349,9 +3412,9 @@ with tab_analisi:
                         segnale = "🟢 BY FABIO - Ingresso Matematico"
                     elif trigger_by:
                         segnale = "🟢 BY - Acquista"
-                    elif "FASE 4" in fase or s_score < 40:
+                    elif "<span style='color:#f87171; font-weight:800; font-size:0.95rem;'>🔴 FASE 4 — Ribasso (Evitare)</span>" in fase or s_score < 40:
                         segnale = "🔴 SELL - Evita"
-                    elif s_score >= 60 and "FASE 2" in fase:
+                    elif s_score >= 60 and "<span style='color:#4ade80; font-weight:800; font-size:0.95rem;'>🟢 FASE 2 — Rialzo (Ideale)</span>" in fase:
                         segnale = "🟡 HOLD - Monitora"
                     else:
                         segnale = "🟡 HOLD - In attesa"
@@ -3547,6 +3610,17 @@ with tab_analisi:
                 st.session_state.grafico_prezzo_medio = None
                 st.rerun()
 with tab_registro:
+    st.markdown("### 📒 Registro Acquisti & Mediazioni")
+    if os.path.exists("registro_acquisti.json"):
+        with open("registro_acquisti.json", "r", encoding="utf-8") as _fa:
+            _dati_acq = json.load(_fa)
+        if _dati_acq:
+            st.dataframe(pd.DataFrame(_dati_acq), use_container_width=True, hide_index=True)
+        else:
+            st.info("Nessun acquisto registrato finora.")
+    else:
+        st.info("Il registro acquisti si creerà automaticamente al primo nuovo acquisto o mediazione.")
+
     st.subheader("📋 Registro Vendite & Fiscalità")
     anni_disponibili = ["Tutti"] + [str(y) for y in range(2024, 2028)]
     anno_corrente = str(datetime.now().year)
@@ -3859,5 +3933,3 @@ with tab_insider:
                 yaxis_title="Rendimento Medio %"
             )
             st.plotly_chart(fig_s, use_container_width=True, config={'displayModeBar': False})
-
-
