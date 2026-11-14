@@ -910,5 +910,113 @@
         "Tipo": "BY",
         "Data": "2026-11-10",
         "Prezzo": 295.73
+    },
+    {
+        "Ticker": "TTWO",
+        "Tipo": "BY",
+        "Data": "2026-11-10",
+        "Prezzo": 222.09
+    },
+    {
+        "Ticker": "RKLB",
+        "Tipo": "BY",
+        "Data": "2026-11-10",
+        "Prezzo": 61.5
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "BY",
+        "Data": "2026-11-11",
+        "Prezzo": 559.08
+    },
+    {
+        "Ticker": "MCD",
+        "Tipo": "SELL",
+        "Data": "2026-11-11",
+        "Prezzo": 274.8
+    },
+    {
+        "Ticker": "TTWO",
+        "Tipo": "BY",
+        "Data": "2026-11-11",
+        "Prezzo": 231.31
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "BY",
+        "Data": "2026-11-12",
+        "Prezzo": 552.9
+    },
+    {
+        "Ticker": "MCD",
+        "Tipo": "SELL",
+        "Data": "2026-11-12",
+        "Prezzo": 274.8
+    },
+    {
+        "Ticker": "TTWO",
+        "Tipo": "BY",
+        "Data": "2026-11-12",
+        "Prezzo": 231.31
+    },
+    {
+        "Ticker": "AVGO",
+        "Tipo": "BY_FABIO",
+        "Data": "2026-11-13",
+        "Prezzo": 364.36
+    },
+    {
+        "Ticker": "AMD",
+        "Tipo": "BY",
+        "Data": "2026-11-13",
+        "Prezzo": 585.3
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "BY",
+        "Data": "2026-09-21",
+        "Prezzo": 124.02
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "BY",
+        "Data": "2026-09-22",
+        "Prezzo": 127.47
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "BY",
+        "Data": "2026-09-24",
+        "Prezzo": 126.98
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "SELL",
+        "Data": "2026-09-14",
+        "Prezzo": 113.22
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "SELL",
+        "Data": "2026-09-28",
+        "Prezzo": 124.19
+    },
+    {
+        "Ticker": "TTMI",
+        "Tipo": "SELL",
+        "Data": "2026-10-08",
+        "Prezzo": 117.5
+    },
+    {
+        "Ticker": "MTDR",
+        "Tipo": "SELL",
+        "Data": "2026-09-22",
+        "Prezzo": 51.41
+    },
+    {
+        "Ticker": "MTDR",
+        "Tipo": "SELL",
+        "Data": "2026-11-04",
+        "Prezzo": 49.93
     }
 ]
