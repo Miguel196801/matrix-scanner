@@ -2183,10 +2183,15 @@ if st.sidebar.button("🔄 Ricostruisci Segnali Retroattivi (1 anno)"):
     st.rerun()
 
 if st.sidebar.button("☁️ Sincronizza su GitHub", key="btn_force_sync_gh", use_container_width=True):
-    for _fn_sync in ["impostazioni.json", "portafoglio.json", "registro_vendite.json", "insider_promossi.json"]:
-        if os.path.exists(_fn_sync):
-            with open(_fn_sync, "r", encoding="utf-8") as _f_s:
-                _sync_github_file(_fn_sync, _f_s.read(), mode="push")
+    _tk_chk = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
+    _rp_chk = str(st.secrets.get("GITHUB_REPO", "")).strip()
+    if not _tk_chk or not _rp_chk:
+        st.session_state["_gh_last_msg"] = ("err", f"⚠️ Secrets non letti! Chiavi trovate: {list(st.secrets.keys())}")
+    else:
+        for _fn_sync in ["impostazioni.json", "portafoglio.json", "registro_vendite.json", "insider_promossi.json"]:
+            if os.path.exists(_fn_sync):
+                with open(_fn_sync, "r", encoding="utf-8") as _f_s:
+                    _sync_github_file(_fn_sync, _f_s.read(), mode="push")
     st.rerun()
 if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True):
     impostazioni["lista_ticker_default"] = tickers_input
