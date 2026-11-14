@@ -2184,15 +2184,32 @@ if st.sidebar.button("🔄 Ricostruisci Segnali Retroattivi (1 anno)"):
 
 if st.sidebar.button("☁️ Sincronizza su GitHub", key="btn_force_sync_gh", use_container_width=True):
     _tk_chk = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
-    _rp_chk = str(st.secrets.get("GITHUB_REPO", "")).strip()
+    _rp_chk = str(st.secrets.get("GITHUB_REPO", "")).strip().replace("https://github.com", "").strip("/")
     if not _tk_chk or not _rp_chk:
-        st.session_state["_gh_last_msg"] = ("err", f"⚠️ Secrets non letti! Chiavi trovate: {list(st.secrets.keys())}")
+        st.session_state["_sb_gh_res"] = ("err", f"Secrets mancanti! Trovati: {list(st.secrets.keys())}")
     else:
+        import base64, requests
+        _esiti = []
         for _fn_sync in ["impostazioni.json", "portafoglio.json", "registro_vendite.json", "insider_promossi.json"]:
             if os.path.exists(_fn_sync):
                 with open(_fn_sync, "r", encoding="utf-8") as _f_s:
-                    _sync_github_file(_fn_sync, _f_s.read(), mode="push")
-    st.rerun()
+                    _cnt = _f_s.read()
+                _u = f"https://github.com{_rp_chk}/contents/{_fn_sync}"
+                _h = {"Authorization": f"token {_tk_chk}", "Accept": "application/vnd.github.v3+json"}
+                _rg = requests.get(_u, headers=_h, timeout=8)
+                _sha = _rg.json().get("sha") if _rg.status_code == 200 else None
+                _pl = {"message": f"Sync {_fn_sync}", "content": base64.b64encode(_cnt.encode("utf-8")).decode("utf-8")}
+                if _sha:
+                    _pl["sha"] = _sha
+                _rp_put = requests.put(_u, json=_pl, headers=_h, timeout=10)
+                _esiti.append(f"{_fn_sync}:{_rp_put.status_code}")
+        st.session_state["_sb_gh_res"] = ("ok", " | ".join(_esiti))
+if "_sb_gh_res" in st.session_state:
+    _t_sb, _m_sb = st.session_state["_sb_gh_res"]
+    if _t_sb == "ok":
+        st.sidebar.success(_m_sb)
+    else:
+        st.sidebar.error(_m_sb)
 if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True):
     impostazioni["lista_ticker_default"] = tickers_input
     impostazioni["catalizzatori"] = catalizzatori_input
