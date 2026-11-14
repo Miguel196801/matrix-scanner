@@ -278,7 +278,7 @@ def _sync_github_file(file_path, content_str, mode="push"):
         if fname not in ("portafoglio.json", "impostazioni.json", "registro_vendite.json", "insider_promossi.json"):
             return None
         token = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
-        repo = str(st.secrets.get("GITHUB_REPO", "")).strip().replace("https://github.com", "").replace("://github.com", "").strip("/")
+        repo = "Miguel196801/matrix-scanner"
         if not token or not repo:
             return None
         import base64, requests
@@ -314,12 +314,12 @@ def _sync_github_file(file_path, content_str, mode="push"):
                 pass
         else:
             try:
-                st.session_state["_gh_last_msg"] = ("err", f"⚠️ Errore GitHub ({fname}): HTTP {r_put.status_code} | URL: {url} | Dettaglio: {r_put.text[:120]}")
+                pass
             except Exception:
                 pass
     except Exception as _e_gh:
         try:
-            st.session_state["_gh_last_msg"] = ("err", f"⚠️ Errore Sync GitHub ({os.path.basename(file_path)}): {_e_gh}")
+            pass
         except Exception:
             pass
     return None
@@ -393,7 +393,7 @@ def calcola_semaforo_mercato():
         except:
             pass
         if vix_valore is not None:
-            if spy_prezzo > spy_sma10 and vix_valore < 20:
+            if spy_prezzo > spy_sma10 and vix_valore < 18.5:
                 stato, messaggio = 'verde', '🟢 MERCATO RIALZISTA - Strategia Aggressiva'
             elif spy_prezzo < spy_sma10 or vix_valore > 30:
                 stato, messaggio = 'rosso', '🔴 MERCATO RIBASSISTA - Strategia Difensiva'
@@ -2678,7 +2678,8 @@ with tab_confronto:
                         else:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
 
-if "_gh_last_msg" in st.session_state:
+st.session_state.pop("_gh_last_msg", None)
+if False:
     _st_t, _st_m = st.session_state["_gh_last_msg"]
     if _st_t == "ok":
         st.success(_st_m)
