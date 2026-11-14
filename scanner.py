@@ -309,17 +309,17 @@ def _sync_github_file(file_path, content_str, mode="push"):
         r_put = requests.put(url, json=payload, headers=headers, timeout=10)
         if r_put.status_code in (200, 201):
             try:
-                st.toast(f"☁️ Sincronizzato su GitHub: {fname}", icon="✅")
+                st.session_state["_gh_last_msg"] = ("ok", f"☁️ Sincronizzato su GitHub: {fname} (Repo: {repo})")
             except Exception:
                 pass
         else:
             try:
-                st.toast(f"⚠️ Errore GitHub ({fname}): HTTP {r_put.status_code}", icon="❌")
+                st.session_state["_gh_last_msg"] = ("err", f"⚠️ Errore GitHub ({fname}): HTTP {r_put.status_code} | URL: {url} | Dettaglio: {r_put.text[:120]}")
             except Exception:
                 pass
     except Exception as _e_gh:
         try:
-            st.toast(f"⚠️ Errore Sync GitHub ({os.path.basename(file_path)}): {_e_gh}", icon="❌")
+            st.session_state["_gh_last_msg"] = ("err", f"⚠️ Errore Sync GitHub ({os.path.basename(file_path)}): {_e_gh}")
         except Exception:
             pass
     return None
@@ -2677,6 +2677,13 @@ with tab_confronto:
                             render_barra_intervalli_yahoo(t_curr, "conf", default_tf="3M")
                         else:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
+
+if "_gh_last_msg" in st.session_state:
+    _st_t, _st_m = st.session_state["_gh_last_msg"]
+    if _st_t == "ok":
+        st.success(_st_m)
+    else:
+        st.error(_st_m)
 
 with tab_portafoglio:
     st.session_state["_grafico_uid_cnt"] = 0
