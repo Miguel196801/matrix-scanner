@@ -1,1 +1,22 @@
-
+{
+    "CAVA": {
+        "data_acquisto": "2026-09-15",
+        "data_promozione": "2026-11-13",
+        "dettagli": "Cluster Insider"
+    },
+    "CELH": {
+        "data_acquisto": "2026-09-15",
+        "data_promozione": "2026-11-13",
+        "dettagli": "Cluster Insider"
+    },
+    "TTMI": {
+        "data_acquisto": "2026-11-05",
+        "data_promozione": "2026-11-13",
+        "dettagli": "Cluster Insider"
+    },
+    "GME": {
+        "data_acquisto": "2026-10-13",
+        "data_promozione": "2026-11-13",
+        "dettagli": "9 acq (5 dir.) | $82,094,676"
+    }
+}
