@@ -273,13 +273,12 @@ IMPOSTAZIONI_FILE = "impostazioni.json"
 LOG_PROPOSTE_FILE = "log_proposte.json"
 
 def _sync_github_file(file_path, content_str, mode="push"):
-    return None
     try:
         fname = os.path.basename(file_path)
         if fname not in ("portafoglio.json", "impostazioni.json", "registro_vendite.json", "insider_promossi.json"):
             return None
         token = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
-        repo = str(st.secrets.get("GITHUB_REPO", "")).strip().replace("https://github.com", "").strip("/")
+        repo = str(st.secrets.get("GITHUB_REPO", "")).strip().replace("https://github.com", "").replace("://github.com", "").strip("/")
         if not token or not repo:
             return None
         import base64, requests
@@ -2730,92 +2729,91 @@ with tab_portafoglio:
                             st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
                             st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
                         st.rerun()
-                pass
-            for idx_pos, pos in enumerate(portafoglio):
-                if idx_pos % 2 == 0:
-                    grid_cols = st.columns(2)
-                with grid_cols[idx_pos % 2]:
-                    ticker = pos['Ticker']
-                    prezzo_eur = pos.get('Prezzo_Attuale_EUR')
-                    var_pct = pos.get('Variazione_Pct')
-                    pnl_pct = pos.get('PnL_%', 0) or 0
-                    stato_pac = pos.get('Stato_PAC', 'N/A')
-                    ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
-                    trend = pos.get('Trend', 'N/D')
-                    earnings = pos.get('Earnings', 'N/D')
-                    prezzo_medio = pos.get('Prezzo_Medio', 0)
-                    quantita = pos.get('Quantita', 0)
-                    pnl_eur = pos.get('PnL_EUR', 0) or 0
-                    if prezzo_medio > 0 and prezzo_eur:
-                        var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
-                    else:
-                        var_acquisto = 0
-                    if var_pct is not None:
-                        var_color = "#089981" if var_pct > 0 else "#F23645"
-                        var_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
-                        var_display = f"{var_symbol} {var_pct:+.2f}%"
-                    else:
-                        var_color, var_symbol, var_display = "#787B86", "●", "N/D"
-                    if var_acquisto > 0:
-                        acqu_color, acqu_symbol = "#089981", "▲"
-                    elif var_acquisto < 0:
-                        acqu_color, acqu_symbol = "#F23645", "▼"
-                    else:
-                        acqu_color, acqu_symbol = "#787B86", "●"
-                    if pnl_pct > 0:
-                        border_color = "#089981"
-                    elif pnl_pct < 0:
-                        border_color = "#F23645"
-                    else:
-                        border_color = "#2A2E39"
-                    prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
-                    if pnl_eur > 0:
-                        pnl_netto = pnl_eur * 0.74
-                        netto_label = f"+€ {pnl_netto:.2f} netto"
-                    elif pnl_eur < 0:
-                        pnl_netto = pnl_eur
-                        netto_label = f"-€ {abs(pnl_netto):.2f} netto"
-                    else:
-                        pnl_netto, netto_label = 0, "€ 0.00 netto"
-                    ticker_obj = yf.Ticker(ticker)
-                    targets = calcola_target(ticker_obj, prezzo_medio, prezzo_eur)
-                    if targets:
-                        target_raggiunti = sum(1 for p in [targets['prog1'], targets['prog2'], targets['prog3']] if p >= 100.0)
-                        if target_raggiunti == 0:
-                            dots_html = '<span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span>'
-                        elif target_raggiunti == 1:
-                            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 2 non raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
-                        elif target_raggiunti == 2:
-                            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
+                for idx_pos, pos in enumerate(portafoglio):
+                    if idx_pos % 2 == 0:
+                        grid_cols = st.columns(2)
+                    with grid_cols[idx_pos % 2]:
+                        ticker = pos['Ticker']
+                        prezzo_eur = pos.get('Prezzo_Attuale_EUR')
+                        var_pct = pos.get('Variazione_Pct')
+                        pnl_pct = pos.get('PnL_%', 0) or 0
+                        stato_pac = pos.get('Stato_PAC', 'N/A')
+                        ultimo_segnale = pos.get('Ultimo_Segnale', 'N/D')
+                        trend = pos.get('Trend', 'N/D')
+                        earnings = pos.get('Earnings', 'N/D')
+                        prezzo_medio = pos.get('Prezzo_Medio', 0)
+                        quantita = pos.get('Quantita', 0)
+                        pnl_eur = pos.get('PnL_EUR', 0) or 0
+                        if prezzo_medio > 0 and prezzo_eur:
+                            var_acquisto = ((prezzo_eur / prezzo_medio) - 1) * 100
                         else:
-                            dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 3 raggiunto"></span>'
-                        dots_display = f'{dots_html} <span class="target-tooltip">{target_raggiunti}/3 Target</span>'
-                    else:
-                        dots_display = '<span class="target-tooltip">N/D</span>'
-                    trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
-                    by_fabio_indicator = '<span class="by-fabio-badge" title="Ingresso matematicamente validato: Fortezza + Grafico">🟢 BY FABIO</span>' if trigger_by_fabio else ''
-                    pill_bg = "#089981" if (var_pct is not None and not math.isnan(var_pct) and var_pct > 0) else ("#F23645" if (var_pct is not None and not math.isnan(var_pct) and var_pct < 0) else "#363A45")
-                    pill_txt = f"{var_symbol} {var_pct:+.2f}%" if (var_pct is not None and not math.isnan(var_pct)) else "N/D"
-                    st.markdown(f"""<div style="background-color:#131722;border:1px solid #2A2E39;border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.45rem;border-left:4px solid {border_color};"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.2rem;"><div><span style="font-size:1.35rem;color:#FFFFFF;font-weight:700;">{ticker}</span>{by_fabio_indicator}</div><span style="background-color:{pill_bg};color:#FFFFFF;font-family:'JetBrains Mono',monospace;font-size:0.82rem;font-weight:700;padding:3px 9px;border-radius:5px;">{pill_txt}</span></div><div style="font-size:0.78rem;color:#787B86;margin-bottom:0.55rem;border-bottom:1px solid #1E222D;padding-bottom:0.4rem;">{stato_pac} &nbsp;•&nbsp; PMC €{prezzo_medio:.2f}<br><span style='color:#D1D4DC;font-weight:600;'>In carico: {quantita:.4f} az. &nbsp;•&nbsp; Valore €{(pos.get('Valore_Attuale') or (prezzo_medio * quantita)):.2f}</span></div><div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-bottom:0.22rem;"><span style="color:#787B86;">Prezzo Attuale</span><span style="font-family:'JetBrains Mono',monospace;color:#FFFFFF;font-weight:700;font-size:0.96rem;">€ {prezzo_display}</span></div><div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-bottom:0.22rem;"><span style="color:#787B86;">P&L Totale</span><span style="font-family:'JetBrains Mono',monospace;color:{acqu_color};font-weight:600;">{acqu_symbol} {var_acquisto:+.1f}% | {netto_label}</span></div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.22rem;"><span style="color:#787B86;">Ultimo Segnale</span><span style="color:#D1D4DC;">{ultimo_segnale}</span></div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.4rem;"><span style="color:#787B86;">Trend</span><span style="color:#D1D4DC;">{trend}</span></div><div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #1E222D;padding-top:0.4rem;font-size:0.78rem;"><span style="color:#787B86;">Target</span><div>{dots_display}</div></div></div>""", unsafe_allow_html=True)
-                    with st.expander(f"🎯 Target e Stop Loss - {ticker}"):
+                            var_acquisto = 0
+                        if var_pct is not None:
+                            var_color = "#089981" if var_pct > 0 else "#F23645"
+                            var_symbol = "▲" if var_pct > 0 else "▼" if var_pct < 0 else "●"
+                            var_display = f"{var_symbol} {var_pct:+.2f}%"
+                        else:
+                            var_color, var_symbol, var_display = "#787B86", "●", "N/D"
+                        if var_acquisto > 0:
+                            acqu_color, acqu_symbol = "#089981", "▲"
+                        elif var_acquisto < 0:
+                            acqu_color, acqu_symbol = "#F23645", "▼"
+                        else:
+                            acqu_color, acqu_symbol = "#787B86", "●"
+                        if pnl_pct > 0:
+                            border_color = "#089981"
+                        elif pnl_pct < 0:
+                            border_color = "#F23645"
+                        else:
+                            border_color = "#2A2E39"
+                        prezzo_display = f"{prezzo_eur:.2f}" if prezzo_eur is not None else "N/D"
+                        if pnl_eur > 0:
+                            pnl_netto = pnl_eur * 0.74
+                            netto_label = f"+€ {pnl_netto:.2f} netto"
+                        elif pnl_eur < 0:
+                            pnl_netto = pnl_eur
+                            netto_label = f"-€ {abs(pnl_netto):.2f} netto"
+                        else:
+                            pnl_netto, netto_label = 0, "€ 0.00 netto"
+                        ticker_obj = yf.Ticker(ticker)
+                        targets = calcola_target(ticker_obj, prezzo_medio, prezzo_eur)
                         if targets:
-                            st.markdown(f"""
-                            <div style="background-color: #131722; padding: 1rem; border-radius: 6px; border: 1px solid #2A2E39;">
-                                <h4 style="margin-top:0; color: #F59E0B;">🎯 TARGET DI PREZZO (Basati su resistenze grafiche):</h4>
-                                <p style="margin: 0.2rem 0;">• <strong>Target 1:</strong> € {targets['t1']} (Upside: +{targets['upside1']}% | Progresso: {targets['prog1']}%)</p>
-                                <p style="margin: 0.2rem 0;">• <strong>Target 2:</strong> € {targets['t2']} (Upside: +{targets['upside2']}% | Progresso: {targets['prog2']}%)</p>
-                                <p style="margin: 0.2rem 0;">• <strong>Target 3:</strong> € {targets['t3']} (Upside: +{targets['upside3']}% | Progresso: {targets['prog3']}%)</p>
-                                <hr style="border-color: #2A2E39; margin: 0.5rem 0;">
-                                <h4 style="margin-top:0; color: #F23645;">🛡️ STOP LOSS DINAMICO: € {targets['sl']} ({targets['sl_down']}% dal prezzo attuale)</h4>
-                                <ul style="font-size: 0.9rem; color: #D1D4DC; margin-bottom: 0;">
-                                    <li>⚠️ Quando raggiungi Target 1 → sposta stop a € {prezzo_medio:.2f} (break-even)</li>
-                                    <li>⚠️ Quando raggiungi Target 2 → sposta stop a € {targets['t1']}</li>
-                                    <li>⚠️ Quando raggiungi Target 3 → sposta stop a € {targets['t2']}</li>
-                                </ul>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            target_raggiunti = sum(1 for p in [targets['prog1'], targets['prog2'], targets['prog3']] if p >= 100.0)
+                            if target_raggiunti == 0:
+                                dots_html = '<span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span><span class="target-dot target-dot-pending" title="Nessun target raggiunto"></span>'
+                            elif target_raggiunti == 1:
+                                dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 2 non raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
+                            elif target_raggiunti == 2:
+                                dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-pending" title="Target 3 non raggiunto"></span>'
+                            else:
+                                dots_html = '<span class="target-dot target-dot-achieved" title="Target 1 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 2 raggiunto"></span><span class="target-dot target-dot-achieved" title="Target 3 raggiunto"></span>'
+                            dots_display = f'{dots_html} <span class="target-tooltip">{target_raggiunti}/3 Target</span>'
                         else:
-                            st.info("Dati insufficienti per calcolare i target.")
+                            dots_display = '<span class="target-tooltip">N/D</span>'
+                        trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(ticker_obj.history(period='1y'), 50, ticker_obj) if not ticker_obj.history(period='1y').empty else (False, "")
+                        by_fabio_indicator = '<span class="by-fabio-badge" title="Ingresso matematicamente validato: Fortezza + Grafico">🟢 BY FABIO</span>' if trigger_by_fabio else ''
+                        pill_bg = "#089981" if (var_pct is not None and not math.isnan(var_pct) and var_pct > 0) else ("#F23645" if (var_pct is not None and not math.isnan(var_pct) and var_pct < 0) else "#363A45")
+                        pill_txt = f"{var_symbol} {var_pct:+.2f}%" if (var_pct is not None and not math.isnan(var_pct)) else "N/D"
+                        st.markdown(f"""<div style="background-color:#131722;border:1px solid #2A2E39;border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.45rem;border-left:4px solid {border_color};"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.2rem;"><div><span style="font-size:1.35rem;color:#FFFFFF;font-weight:700;">{ticker}</span>{by_fabio_indicator}</div><span style="background-color:{pill_bg};color:#FFFFFF;font-family:'JetBrains Mono',monospace;font-size:0.82rem;font-weight:700;padding:3px 9px;border-radius:5px;">{pill_txt}</span></div><div style="font-size:0.78rem;color:#787B86;margin-bottom:0.55rem;border-bottom:1px solid #1E222D;padding-bottom:0.4rem;">{stato_pac} &nbsp;•&nbsp; PMC €{prezzo_medio:.2f}<br><span style='color:#D1D4DC;font-weight:600;'>In carico: {quantita:.4f} az. &nbsp;•&nbsp; Valore €{(pos.get('Valore_Attuale') or (prezzo_medio * quantita)):.2f}</span></div><div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-bottom:0.22rem;"><span style="color:#787B86;">Prezzo Attuale</span><span style="font-family:'JetBrains Mono',monospace;color:#FFFFFF;font-weight:700;font-size:0.96rem;">€ {prezzo_display}</span></div><div style="display:flex;justify-content:space-between;font-size:0.84rem;margin-bottom:0.22rem;"><span style="color:#787B86;">P&L Totale</span><span style="font-family:'JetBrains Mono',monospace;color:{acqu_color};font-weight:600;">{acqu_symbol} {var_acquisto:+.1f}% | {netto_label}</span></div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.22rem;"><span style="color:#787B86;">Ultimo Segnale</span><span style="color:#D1D4DC;">{ultimo_segnale}</span></div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.4rem;"><span style="color:#787B86;">Trend</span><span style="color:#D1D4DC;">{trend}</span></div><div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #1E222D;padding-top:0.4rem;font-size:0.78rem;"><span style="color:#787B86;">Target</span><div>{dots_display}</div></div></div>""", unsafe_allow_html=True)
+                        with st.expander(f"🎯 Target e Stop Loss - {ticker}"):
+                            if targets:
+                                st.markdown(f"""
+                                <div style="background-color: #131722; padding: 1rem; border-radius: 6px; border: 1px solid #2A2E39;">
+                                    <h4 style="margin-top:0; color: #F59E0B;">🎯 TARGET DI PREZZO (Basati su resistenze grafiche):</h4>
+                                    <p style="margin: 0.2rem 0;">• <strong>Target 1:</strong> € {targets['t1']} (Upside: +{targets['upside1']}% | Progresso: {targets['prog1']}%)</p>
+                                    <p style="margin: 0.2rem 0;">• <strong>Target 2:</strong> € {targets['t2']} (Upside: +{targets['upside2']}% | Progresso: {targets['prog2']}%)</p>
+                                    <p style="margin: 0.2rem 0;">• <strong>Target 3:</strong> € {targets['t3']} (Upside: +{targets['upside3']}% | Progresso: {targets['prog3']}%)</p>
+                                    <hr style="border-color: #2A2E39; margin: 0.5rem 0;">
+                                    <h4 style="margin-top:0; color: #F23645;">🛡️ STOP LOSS DINAMICO: € {targets['sl']} ({targets['sl_down']}% dal prezzo attuale)</h4>
+                                    <ul style="font-size: 0.9rem; color: #D1D4DC; margin-bottom: 0;">
+                                        <li>⚠️ Quando raggiungi Target 1 → sposta stop a € {prezzo_medio:.2f} (break-even)</li>
+                                        <li>⚠️ Quando raggiungi Target 2 → sposta stop a € {targets['t1']}</li>
+                                        <li>⚠️ Quando raggiungi Target 3 → sposta stop a € {targets['t2']}</li>
+                                    </ul>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.info("Dati insufficienti per calcolare i target.")
 
                     with st.expander(f"📋 Dettagli e Operazioni - {ticker}"):
                         st.markdown(f"<div style='background:#0B0E11;border:1px solid #2A2E39;border-radius:6px;padding:8px 10px;font-size:0.82rem;margin-bottom:6px;'><div style='display:flex;justify-content:space-between;'><span>Quantità: <b>{quantita:.4f}</b></span><span>Prezzo: <b>€ {prezzo_display}</b></span></div><div style='display:flex;justify-content:space-between;margin-top:4px;'><span>P&L: <b style='color:{acqu_color};'>{netto_label}</b></span><span>Var: <b style='color:{acqu_color};'>{var_acquisto:+.1f}%</b></span></div></div>", unsafe_allow_html=True)
