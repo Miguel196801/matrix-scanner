@@ -274,29 +274,28 @@ LOG_PROPOSTE_FILE = "log_proposte.json"
 
 def _sync_github_file(file_path, content_str, mode="push"):
     try:
-        token = st.secrets.get("GITHUB_TOKEN", "")
-        repo = st.secrets.get("GITHUB_REPO", "")
+        fname = os.path.basename(file_path)
+        if fname not in ("portafoglio.json", "impostazioni.json", "registro_vendite.json", "insider_promossi.json"):
+            return None
+        token = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
+        repo = str(st.secrets.get("GITHUB_REPO", "")).strip().replace("https://github.com", "").strip("/")
         if not token or not repo:
             return None
-        import base64, urllib.request, json as _js
-        fname = os.path.basename(file_path)
+        import base64, requests
         url = f"https://github.com{repo}/contents/{fname}"
         headers = {
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "Matrix-DVMS-Sync"
         }
-        req = urllib.request.Request(url, headers=headers)
         sha = None
         remote_text = None
-        try:
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                res_data = _js.loads(resp.read().decode("utf-8"))
-                sha = res_data.get("sha")
-                if mode == "pull" and "content" in res_data:
-                    remote_text = base64.b64decode(res_data["content"]).decode("utf-8")
-        except Exception:
-            pass
+        r_get = requests.get(url, headers=headers, timeout=8)
+        if r_get.status_code == 200:
+            res_data = r_get.json()
+            sha = res_data.get("sha")
+            if mode == "pull" and "content" in res_data:
+                remote_text = base64.b64decode(res_data["content"]).decode("utf-8")
 
         if mode == "pull":
             return remote_text
@@ -307,15 +306,20 @@ def _sync_github_file(file_path, content_str, mode="push"):
         }
         if sha:
             payload["sha"] = sha
-        put_req = urllib.request.Request(url, data=_js.dumps(payload).encode("utf-8"), headers=headers, method="PUT")
-        with urllib.request.urlopen(put_req, timeout=8):
+        r_put = requests.put(url, json=payload, headers=headers, timeout=10)
+        if r_put.status_code in (200, 201):
             try:
                 st.toast(f"☁️ Sincronizzato su GitHub: {fname}", icon="✅")
             except Exception:
                 pass
+        else:
+            try:
+                st.toast(f"⚠️ Errore GitHub ({fname}): HTTP {r_put.status_code}", icon="❌")
+            except Exception:
+                pass
     except Exception as _e_gh:
         try:
-            st.toast(f"⚠️ Errore Sync GitHub ({fname}): {_e_gh}", icon="❌")
+            st.toast(f"⚠️ Errore Sync GitHub ({os.path.basename(file_path)}): {_e_gh}", icon="❌")
         except Exception:
             pass
     return None
