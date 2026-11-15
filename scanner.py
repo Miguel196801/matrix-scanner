@@ -357,6 +357,107 @@ def formatta_fase_weinstein_pro(val_fase):
         return "<span style='color:#f87171; font-weight:800;'>🔴 FASE 4 — Ribasso (Evitare)</span>"
     return str(val_fase)
 
+@st.cache_data(ttl=900, show_spinner=False)
+def get_live_eurusd():
+    try:
+        _fx = yf.Ticker("EURUSD=X").history(period="1d")
+        if not _fx.empty:
+            _val = float(_fx["Close"].dropna().iloc[-1])
+            if 0.80 < _val < 1.50:
+                return round(_val, 4)
+    except Exception:
+        pass
+    return 1.12
+
+def calcola_regia_acquisti(ign_l, fabio_l, std_l, tp_l, port_l, df_map, cassa_b, liq_ex, escl_s, cat_s, taglia, manual_l=None):
+    port_m = {str(p.get("Ticker", "")).strip().upper(): p for p in port_l}
+    raw = []
+    for m_idx, m_tk in enumerate(manual_l or []):
+        tk_m = str(m_tk).strip().upper()
+        if tk_m and not any(x == tk_m for x in raw):
+            raw.append((tk_m, f"PRIORITÀ MANUALE #{m_idx+1}", -100 + m_idx))
+    for lst, nome, rk in [(ign_l, "IGNITION", 0), (fabio_l, "BY FABIO", 1), (std_l, "BY Standard", 2)]:
+        for item in (lst or []):
+            tk = str(item.get("Ticker", item) if isinstance(item, dict) else item).strip().upper()
+            if tk and not any(x == tk for x in raw):
+                raw.append((tk, nome, rk))
+    approvati, scartati = [], []
+    for tk, tipo, rk in raw:
+        is_manual = rk < 0
+        info = df_map.get(tk, {})
+        pot = float(info.get("Upside_%", info.get("Potenziale_%", info.get("Target1_%", 15.0))) or 15.0)
+        fase = str(info.get("Fase", info.get("Fase_Weinstein", "2"))).upper()
+        sc = float(info.get("S_Score", info.get("Score", 80)) or 80)
+        if not is_manual and pot < 10.0:
+            scartati.append(f"⛔ **{tk}** ({tipo}): potenziale **+{pot:.1f}%** (< 10% minimo)")
+            continue
+        if tk in port_m:
+            pnl_p = float(port_m[tk].get("PnL_%", 0.0) or 0.0)
+            if not is_manual and pnl_p > 5.0:
+                scartati.append(f"⚠️ **{tk}** ({tipo}): già in gain **+{pnl_p:.1f}%** (anti-inseguimento)")
+                continue
+            nota = f"Mediazione in loss ({pnl_p:+.1f}%)" if pnl_p < 0 else f"Incremento (+{pnl_p:.1f}%)"
+        else:
+            nota = "Nuovo ingresso"
+        approvati.append((rk, 0 if "2" in fase else 1, -pot, -sc, tk, tipo, pot, sc, nota))
+    approvati.sort(key=lambda x: (x, x, x, x))
+
+    pool, tp_set = [], set()
+    for tpi in (tp_l or []):
+        ttk = str(tpi.get("ticker", tpi.get("Ticker", "")) if isinstance(tpi, dict) else tpi).strip().upper()
+        if ttk and ttk in port_m:
+            tp_set.add(ttk)
+            va = float(port_m[ttk].get("Valore_Attuale", 0.0) or 0.0)
+            pnl = float(port_m[ttk].get("PnL_EUR", 0.0) or 0.0)
+            net = round(va - max(0.0, pnl * 0.26), 2)
+            if net > 0:
+                # Priorita 1 per Take Profit (dopo Eventi/Trimestrali imminenti che hanno Priorita 0)
+                pool.append((1, ttk, net, f"🎯 Vendi **{ttk}** (Take Profit attivo) -> netto **€ {net:,.2f}**"))
+    for ptk, po in port_m.items():
+        if ptk in tp_set or ptk in escl_s or ptk in cat_s:
+            continue
+        va = float(po.get("Valore_Attuale", 0.0) or 0.0)
+        pnl = float(po.get("PnL_EUR", 0.0) or 0.0)
+        if va <= 0:
+            continue
+        net = round(va - max(0.0, pnl * 0.26), 2)
+        fase = str(po.get("Fase", po.get("fase", ""))).upper()
+        sc = float(po.get("S_Score", po.get("Score", 0)) or 0)
+        rsi = float(po.get("RSI", 50) or 50)
+        pac = bool(po.get("PAC_Attivo", False)) and not bool(po.get("PAC_Sospeso", False))
+        ut = int(po.get("Giorni_Utili", 999) or 999)
+        if pnl > 0 and ("2" in fase or sc >= 85) and rsi < 75 and ut > 7:
+            continue
+        if ptk == "NKE" or ut <= 7:
+            pr, lbl = 0, "⚠️ Trimestrale / Investor Day imminente"
+        elif ptk == "TTD" or "4" in fase or rsi >= 70:
+            pr, lbl = 2, "Fase 4 / RSI>70"
+        elif pnl > 0 and not pac:
+            pr, lbl = 3, "Gain Spot non in Fase 2"
+        elif pnl <= 0 and not pac:
+            pr, lbl = 4, "Sfoltimento 0 tasse"
+        else:
+            continue
+        pool.append((pr, ptk, net, f"🔄 Vendi **{ptk}** ({lbl}) -> netto **€ {net:,.2f}**"))
+    pool.sort(key=lambda x: (x, x))
+
+    rem_c, rem_e, out = float(cassa_b), float(liq_ex), []
+    for idx, (_, _, _, _, tk, tipo, pot, sc, nota) in enumerate(approvati, 1):
+        cop, fonti = float(taglia), []
+        if rem_c > 0 and cop > 0:
+            u = min(cop, rem_c); fonti.append(f"💳 Cassa Broker **€ {u:,.2f}**"); rem_c = round(rem_c - u, 2); cop = round(cop - u, 2)
+        if rem_e > 0 and cop > 0:
+            u = min(cop, rem_e); fonti.append(f"💵 Liq. Aggiuntiva **€ {u:,.2f}**"); rem_e = round(rem_e - u, 2); cop = round(cop - u, 2)
+        while cop > 0 and pool:
+            _, vtk, vnet, vdesc = pool.pop(0)
+            fonti.append(vdesc)
+            if vnet > cop:
+                rem_c = round(rem_c + (vnet - cop), 2); cop = 0.0
+            else:
+                cop = round(cop - vnet, 2)
+        out.append((idx, tk, tipo, pot, sc, nota, fonti, cop))
+    return out, scartati
+
 def carica_json(file_path):
     _k_pull = f"_gh_pulled_{os.path.basename(file_path)}"
     if _k_pull not in st.session_state and "_sync_github_file" in globals():
@@ -2184,7 +2285,21 @@ tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
 sma_short = st.sidebar.slider("SMA Breve:", 10, 100, 50)
 sma_long = st.sidebar.slider("SMA Lunga:", 50, 200, 200)
-eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=1.12, step=0.001)
+eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=get_live_eurusd(), step=0.001, format="%.4f")
+if "_fx_init_done" not in st.session_state and "portafoglio" in st.session_state and st.session_state.portafoglio:
+    for _p_fx in st.session_state.portafoglio:
+        _usd_p = float(_p_fx.get("Prezzo_Attuale_USD", 0) or 0)
+        _q_p = float(_p_fx.get("Quantita", 0) or 0)
+        _vc_p = float(_p_fx.get("Valore_Carico", 0) or 0)
+        if _usd_p > 0 and eurusd_rate > 0:
+            _eur_p = round(_usd_p / eurusd_rate, 2)
+            _va_p = round(_eur_p * _q_p, 2)
+            _p_fx["Prezzo_Attuale_EUR"] = _eur_p
+            _p_fx["Valore_Attuale"] = _va_p
+            if _vc_p > 0:
+                _p_fx["PnL_EUR"] = round(_va_p - _vc_p, 2)
+                _p_fx["PnL_%"] = round(((_va_p - _vc_p) / _vc_p) * 100, 2)
+    st.session_state["_fx_init_done"] = True
 st.sidebar.markdown("---")
 ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
 st.sidebar.markdown("---")
@@ -2193,6 +2308,14 @@ catalizzatori_input = st.sidebar.text_area("Formato: TICKER: Descrizione - GG/MM
 st.sidebar.markdown("---")
 st.sidebar.subheader("🚫 Esclusioni Ribilanciamento")
 esclusioni_input = st.sidebar.text_area("Titoli da escludere (separati da virgola):", value=impostazioni.get("esclusioni", ""), height=80, help="Es: SOFI, TTD. Non appariranno nelle proposte di vendita.")
+st.sidebar.markdown("---")
+st.sidebar.subheader("💵 Liquidità Aggiuntiva")
+liq_aggiuntiva_sim = st.sidebar.number_input("Disponibilità extra da aggiungere (€):", min_value=0.0, value=0.0, step=50.0, key="liq_aggiuntiva_sim", help="Imposta 0 se non vuoi aggiungere denaro esterno: il sistema userà solo cassa broker e vendite consentite.")
+st.sidebar.markdown("---")
+st.sidebar.subheader("📌 Titoli da Acquistare (Priorità)")
+titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input", help="I titoli scritti qui hanno priorità su tutti i segnali dello scanner nell'ordine esatto in cui li inserisci.")
+
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔧 Debug Segnali")
 
@@ -2473,10 +2596,9 @@ with tab_riepilogo:
 
     ign_list = (st.session_state.get('dashboard_stats') or {}).get('ignition_oggi', [])
     ign_tickers_str = ', '.join([x['ticker'] for x in ign_list]) if ign_list else 'Nessuno oggi'
-    c_ign1, c_ign2 = st.columns([1, 2.6])
-    with c_ign1:
+    c_buy1, c_buy2, c_buy3 = st.columns(3)
+    with c_buy1:
         st.metric('🚀 IGNITION (Inizio Salita)', len(ign_list), ign_tickers_str)
-    with c_ign2:
         with st.expander('ℹ️ Spiegazione & Dettagli IGNITION', expanded=bool(ign_list)):
             st.caption('Intercetta l\'inizio del rialzo: Squeeze Bollinger o riconquista SMA 20 + sopra VPOC Balene + S-Score >= 60 + Squeeze Bollinger o riconquista SMA 20 + sopra VPOC Balene + Volumi >= 1.35x + RSI 45-63 in salita.')
             if ign_list:
@@ -2484,22 +2606,23 @@ with tab_riepilogo:
                     st.markdown(f"- **{x['ticker']}**: {x['motivo']}")
             else:
                 st.info('Nessun titolo attiva tutti i 4 filtri di accensione oggi.')
-    c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
-    with c_kpi1:
+    with c_buy2:
         st.metric("🟢 Ingressi BY FABIO", len(by_fabio_list), ", ".join(by_fabio_list) if by_fabio_list else "Nessuno")
         with st.expander("ℹ️ Spiegazione BY FABIO"):
             if by_fabio_list:
                 st.markdown(f"**Titoli attivi:** `{', '.join(by_fabio_list)}`\n\nSetup matematico ad alta probabilità: ritracciamento su **SMA 50**, volumi superiori alla media e punteggio fondamentale elevato.")
             else:
                 st.caption("Nessun titolo soddisfa oggi tutti i filtri severi BY FABIO.")
-    with c_kpi2:
+    with c_buy3:
         st.metric("🔵 Ingressi BY Standard", len(by_std_list), ", ".join(by_std_list[:4]) if by_std_list else "Nessuno")
         with st.expander("ℹ️ Spiegazione BY"):
             if by_std_list:
                 st.markdown(f"**Titoli attivi:** `{', '.join(by_std_list)}`\n\nSegnale tecnico di rimbalzo su SMA 50 confermato con volumi.")
             else:
                 st.caption("Nessun segnale BY tecnico standard attivo al momento.")
-    with c_kpi3:
+
+    c_gest1, c_gest2 = st.columns(2)
+    with c_gest1:
         st.metric("🎯 Take Profit / Pyramiding", f"{len(tp_list)} TP / {len(pyr_list)} PYR")
         with st.expander("ℹ️ Vedi titoli TP / PYR"):
             if tp_list:
@@ -2510,12 +2633,42 @@ with tab_riepilogo:
                     st.markdown(f"🔵 **Pyramiding — {_py.get('ticker')}**: trend forte, puoi aggiungere **{_py.get('pyramiding', {}).get('azioni')} az.** (~€{_py.get('pyramiding', {}).get('capitale')}).")
             if not tp_list and not pyr_list:
                 st.caption("Nessun titolo in zona Take Profit o Pyramiding.")
-    with c_kpi4:
+    with c_gest2:
         st.metric("🟡 Zona SMA 200", len(zona_list), "Supporti chiave")
         with st.expander("ℹ️ Vedi titoli su SMA 200"):
             if zona_list:
                 for _z in zona_list:
                     st.markdown(f"🟡 **{_z.get('ticker')}**: distanza **{_z.get('distanza_pct')}%** dalla SMA 200.")
+
+    st.markdown("---")
+    st.subheader("🎯 Regia Acquisti Prioritizzata & Fonti di Finanziamento")
+    _taglia_ok = float(st.session_state.get("sim_importo_box", 200.0) or 200.0)
+    _df_m = {str(_r.get("Ticker", "")).strip().upper(): _r for _r in (risultati if "risultati" in locals() and isinstance(risultati, list) else []) if isinstance(_r, dict)}
+    _cassa_ok = float(_liq_net) if "_liq_net" in locals() else float(st.session_state.get("liquidita", 0.0) or 0.0)
+    _extra_ok = float(st.session_state.get("liq_aggiuntiva_sim", 0.0) or 0.0)
+    _escl_ok = {x.strip().upper() for x in re.split(r"[,;\s\n]+", str(esclusioni_input if "esclusioni_input" in locals() else "")) if x.strip()}
+    _cat_ok = {x.split(":")[0].strip().upper() for x in str(catalizzatori_input if "catalizzatori_input" in locals() else "").splitlines() if ":" in x}
+    _port_ok = portafoglio_attuale if "portafoglio_attuale" in locals() else st.session_state.get("portafoglio", [])
+    _piano_ok, _scart_ok = calcola_regia_acquisti(ign_list if "ign_list" in locals() else [], by_fabio_list if "by_fabio_list" in locals() else [], by_std_list if "by_std_list" in locals() else [], tp_list if "tp_list" in locals() else [], _port_ok, _df_m, _cassa_ok, _extra_ok, _escl_ok, _cat_ok, _taglia_ok, manual_l=[x.strip().upper() for x in re.split(r"[,;\s\n]+", str(st.session_state.get("titoli_priorita_input", ""))) if x.strip()])
+    if _piano_ok:
+        st.caption(f"Taglia per singolo ordine: **€ {_taglia_ok:,.2f}** | Allocazione automatica per priorità e potenziale:")
+        for _rk_i, _tk_i, _tp_i, _pt_i, _sc_i, _nt_i, _fn_i, _cp_i in _piano_ok:
+            _med = "🥇" if _rk_i == 1 else ("🥈" if _rk_i == 2 else ("🥉" if _rk_i == 3 else f"#{_rk_i}"))
+            _c1, _c2 = st.columns([1.1, 1.9])
+            with _c1:
+                st.markdown(f"### {_med} {_tk_i} ({_tp_i})\n- **Stato:** {_nt_i}\n- **Potenziale:** +{_pt_i:.1f}% | **Score:** {_sc_i:.0f}")
+            with _c2:
+                if _cp_i <= 0:
+                    st.success(f"✅ **Finanziato (€ {_taglia_ok:,.2f}):**\n" + "\n".join([f"- {x}" for x in _fn_i]))
+                else:
+                    _parz = " + ".join(_fn_i) if _fn_i else "Nessuna risorsa residua"
+                    st.warning(f"⚠️ **Risorse insufficienti:** disponibile ({_parz}). **Mancano € {_cp_i:,.2f}** di liquidità extra: lascia passare o aggiungi € {_cp_i:,.2f} nella sidebar.")
+    else:
+        st.info("Nessun segnale BUY supera oggi i filtri di qualità (potenziale ≥ +10% e regola mediazione).")
+    if _scart_ok:
+        with st.expander("🚫 Segnali BUY scartati dai filtri di qualità"):
+            for _sm in _scart_ok:
+                st.markdown(f"- {_sm}")
                 st.caption("Area di supporto istituzionale di lungo periodo: attendi conferma rialzista prima di entrare.")
             else:
                 st.caption("Nessun titolo della watchlist vicino alla SMA 200.")
@@ -3487,6 +3640,79 @@ with tab_analisi:
             sim_ticker = st.text_input("Titolo da acquistare:", value=r['ticker'])
         with col_sim2:
             sim_importo = st.number_input("Importo (€):", min_value=100, max_value=100000, value=200, step=100)
+        try:
+            _cassa_broker = float(_liq_net) if "_liq_net" in locals() else float(st.session_state.get("liquidita", 0.0) or 0.0)
+            _escl_raw = str(esclusioni_input) if "esclusioni_input" in locals() else str(impostazioni.get("esclusioni", "") if "impostazioni" in locals() else "")
+            _escl_set = {x.strip().upper() for x in re.split(r"[,;\s\n]+", _escl_raw) if x.strip()}
+            _cat_raw = str(catalizzatori_input) if "catalizzatori_input" in locals() else ""
+            _cat_set = {x.split(":")[0].strip().upper() for x in _cat_raw.splitlines() if ":" in x}
+            _port_src = portafoglio_attuale if "portafoglio_attuale" in locals() else st.session_state.get("portafoglio", [])
+            _vendibili = []
+            _tot_vend_netto = 0.0
+            for _p_s in _port_src:
+                _tk_s = str(_p_s.get("Ticker", "")).strip().upper()
+                _va_s = float(_p_s.get("Valore_Attuale", 0.0) or 0.0)
+                _pnl_s = float(_p_s.get("PnL_EUR", 0.0) or 0.0)
+                if not _tk_s or _tk_s in _escl_set or _tk_s in _cat_set or _va_s <= 0:
+                    continue
+                _tassa_s = max(0.0, _pnl_s * 0.26)
+                _netto_s = round(_va_s - _tassa_s, 2)
+                _fase_s = str(_p_s.get("Fase", _p_s.get("fase", ""))).upper()
+                _score_s = float(_p_s.get("S_Score", _p_s.get("Score", 0)) or 0)
+                _rsi_s = float(_p_s.get("RSI", 50) or 50)
+                _pac_s = bool(_p_s.get("PAC_Attivo", False)) and not bool(_p_s.get("PAC_Sospeso", False))
+                _ut_gg = int(_p_s.get("Giorni_Utili", 999) or 999)
+                if _pnl_s > 0 and ("2" in _fase_s or _score_s >= 85) and _rsi_s < 75 and _ut_gg > 7:
+                    continue
+                if _tk_s == "NKE" or _ut_gg <= 7:
+                    _prio = 0
+                    _tag_s = "Trimestrale / Investor Day imminente"
+                elif _tk_s == "TTD" or "4" in _fase_s or _rsi_s >= 70:
+                    _prio = 1
+                    _tag_s = "Fase 4 / RSI>70"
+                elif _pnl_s > 0 and not _pac_s:
+                    _prio = 2
+                    _tag_s = "Gain Spot non in Fase 2"
+                elif _pnl_s <= 0 and not _pac_s:
+                    _prio = 3
+                    _tag_s = "Sfoltimento 0 tasse"
+                else:
+                    continue
+                _motivo_s = f"{_tag_s} | netto €{_netto_s:.2f}" + (f" (-€{_tassa_s:.2f} tasse)" if _tassa_s > 0 else " (0 tasse)")
+                _vendibili.append((_prio, _va_s, _tk_s, _netto_s, _motivo_s))
+                _tot_vend_netto += _netto_s
+            _vendibili.sort(key=lambda x: (x[0], x[1]))
+            _liq_extra = float(st.session_state.get("liq_aggiuntiva_sim", 0.0) or 0.0)
+            _cassa_tot = round(_cassa_broker + _liq_extra, 2)
+            _tot_disponibile = round(_cassa_tot + _tot_vend_netto, 2)
+            _imp_req = float(sim_importo) if "sim_importo" in locals() else 200.0
+            _tk_req = str(sim_ticker).upper().strip() if "sim_ticker" in locals() else "TITOLO"
+            _mancante = round(max(0.0, _imp_req - _tot_disponibile), 2)
+            _c_r1, _c_r2, _c_r3 = st.columns(3)
+            _c_r1.metric("💳 Cassa Broker + Extra", f"€ {_cassa_tot:,.2f}", f"Broker €{_cassa_broker:.2f} + Extra €{_liq_extra:.2f}")
+            _c_r2.metric("🔄 Vendibili (Netto Tasse)", f"€ {_tot_vend_netto:,.2f}", f"{len(_vendibili)} titoli sbloccati")
+            _c_r3.metric("🎯 Copertura Totale", f"€ {_tot_disponibile:,.2f}", "Pronto" if _mancante == 0 else f"Mancano € {_mancante:,.2f}", delta_color="normal" if _mancante == 0 else "inverse")
+            if _mancante > 0:
+                st.warning(f"⚠️ **Fabio, per acquistare {_tk_req} da € {_imp_req:,.2f} ti mancano ancora € {_mancante:,.2f}** di liquidità aggiuntiva (hai € {_cassa_broker:,.2f} sul broker + € {_liq_extra:,.2f} extra nella sidebar + € {_tot_vend_netto:,.2f} netti dai titoli non esclusi).")
+            else:
+                _piano_step = []
+                _residuo = _imp_req
+                if _cassa_broker > 0 and _residuo > 0:
+                    _usa_b = min(_residuo, _cassa_broker)
+                    _piano_step.append(f"1️⃣ **Cassa Broker:** € {_usa_b:,.2f}")
+                    _residuo = round(max(0.0, _residuo - _usa_b), 2)
+                if _liq_extra > 0 and _residuo > 0:
+                    _usa_e = min(_residuo, _liq_extra)
+                    _piano_step.append(f"2️⃣ **Liquidità Aggiuntiva (Sidebar):** € {_usa_e:,.2f}")
+                    _residuo = round(max(0.0, _residuo - _usa_e), 2)
+                for _pr, _va_o, _v_tk, _v_net, _v_mot in _vendibili:
+                    if _residuo <= 0:
+                        break
+                    _piano_step.append(f"🔄 **Vendi {_v_tk}** ({_v_mot}) -> incasso netto **€ {_v_net:,.2f}**")
+                    _residuo = round(max(0.0, _residuo - _v_net), 2)
+                st.success(f"✅ **Acquisto {_tk_req} (€ {_imp_req:,.2f}) coperto!** Piano consigliato:\n\n" + "\n".join([f"- {s}" for s in _piano_step]))
+        except Exception:
+            pass
         if st.button("🔍 Analizza Finanziamento", type="secondary", use_container_width=True):
             portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
             esclusioni_list = [t.strip().upper() for t in esclusioni_input.split(",") if t.strip()]
