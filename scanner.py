@@ -4081,6 +4081,7 @@ with tab_paper:
         df_paper['P&L Virtuale'] = pnl_virtuali
         df_paper['Ultimo Segnale'] = ultimo_segnale_col
 
+        stats_pnl_list = [x for x in stats_pnl_list if x is not None and not math.isnan(float(x))]
         if stats_pnl_list:
             win_count = sum(1 for x in stats_pnl_list if x > 0)
             win_rate = (win_count / len(stats_pnl_list)) * 100
