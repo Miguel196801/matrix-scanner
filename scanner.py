@@ -1,3 +1,4 @@
+import regia_tracker
 # MATRIX DVMS V6.1.3 Desktop - Terminale Trader Professionale
 import streamlit as st
 import yfinance as yf
@@ -382,7 +383,11 @@ def calcola_regia_acquisti(ign_l, fabio_l, std_l, tp_l, port_l, df_map, cassa_b,
             if tk and not any(x == tk for x in raw):
                 raw.append((tk, nome, rk))
     approvati, scartati = [], []
+    _att_sh_set = regia_tracker.get_ticker_attivi_shadow() if 'regia_tracker' in globals() else set()
     for tk, tipo, rk in raw:
+        if tk in _att_sh_set:
+            scartati.append(f"📌 **{tk}** ({tipo}): già registrato nel Tracker Regia (Attivo) — nessun doppione")
+            continue
         is_manual = rk < 0
         info = df_map.get(tk, {})
         pot = float(info.get("Upside_%", info.get("Potenziale_%", info.get("Target1_%", 15.0))) or 15.0)
@@ -2673,6 +2678,8 @@ with tab_riepilogo:
             else:
                 st.caption("Nessun titolo della watchlist vicino alla SMA 200.")
 
+    import importlib; importlib.reload(regia_tracker)
+    regia_tracker.render_tracker_regia(_piano_ok, _port_ok, eurusd_rate, _taglia_ok)
     st.markdown("---")
     col_op1, col_op2 = st.columns(2)
 
@@ -3892,7 +3899,7 @@ with tab_registro:
                     st.success(f"✅ Operazione #{id_da_cancellare} eliminata")
                     st.rerun()
                 else:
-                    st.info("Nessuna operazione da eliminare")
+                    st.info("📭 Nessuna operazione registrata.")
     with col_act2:
         st.markdown("**📥 Esporta CSV**")
         csv_data = None
@@ -4079,11 +4086,16 @@ with tab_paper:
             win_rate = (win_count / len(stats_pnl_list)) * 100
             avg_ret = sum(stats_pnl_list) / len(stats_pnl_list)
             tot_ret = sum(stats_pnl_list)
-            cs1, cs2, cs3, cs4 = st.columns(4)
+            _taglia_sp = float(st.session_state.get("sim_importo_box", 200.0) or 200.0)
+            _pnl_lordo_eur = sum((_taglia_sp * (x / 100.0)) for x in stats_pnl_list)
+            _tasse_sp = sum(max(0.0, (_taglia_sp * (x / 100.0)) * 0.26) for x in stats_pnl_list)
+            _gain_netto_eur = round(_pnl_lordo_eur - _tasse_sp, 2)
+            cs1, cs2, cs3, cs4, cs5 = st.columns(5)
             cs1.metric("🎯 Win Rate Strategia", f"{win_rate:.0f}%", f"{win_count} vincenti su {len(stats_pnl_list)}")
             cs2.metric("📊 Rendimento Medio", f"{avg_ret:+.2f}%", "Per singolo trade")
             cs3.metric("📈 P&L Cumulato", f"{tot_ret:+.1f}%", "Somma segnali")
-            cs4.metric("📁 Posizioni Tracciate", f"{len(stats_pnl_list)}", f"{sum(1 for s in df_paper['Stato'] if s == 'Attivo')} attive")
+            cs4.metric("💶 Gain Netto (26%)", f"€ {_gain_netto_eur:+,.2f}", f"Su taglia €{_taglia_sp:.0f} (-€{_tasse_sp:.2f} tasse)")
+            cs5.metric("📁 Posizioni Tracciate", f"{len(stats_pnl_list)}", f"{sum(1 for s in df_paper['Stato'] if s == 'Attivo')} attive")
 
         st.dataframe(df_paper[['Ticker', 'Entry', 'Stop_Loss', 'Target', 'Data_Ingresso', 'Stato', 'P&L Virtuale', 'Ultimo Segnale']], use_container_width=True, hide_index=True, height=340)
         st.markdown("---")
