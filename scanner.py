@@ -383,14 +383,15 @@ def calcola_regia_acquisti(ign_l, fabio_l, std_l, tp_l, port_l, df_map, cassa_b,
             if tk and not any(x == tk for x in raw):
                 raw.append((tk, nome, rk))
     approvati, scartati = [], []
-    _att_sh_set = regia_tracker.get_ticker_attivi_shadow() if 'regia_tracker' in globals() else set()
+    _skip_set = regia_tracker.get_ticker_saltati_5gg() if ('regia_tracker' in globals() and hasattr(regia_tracker, 'get_ticker_saltati_5gg')) else set()
     for tk, tipo, rk in raw:
-        if tk in _att_sh_set:
-            scartati.append(f"📌 **{tk}** ({tipo}): già registrato nel Tracker Regia (Attivo) — nessun doppione")
+        if tk in _skip_set:
+            scartati.append(f"⏭️ **{tk}** ({tipo}): archiviato per 5 gg (non eseguito nel reale)")
             continue
         is_manual = rk < 0
         info = df_map.get(tk, {})
-        pot = float(info.get("Upside_%", info.get("Potenziale_%", info.get("Target1_%", 15.0))) or 15.0)
+        _m_pro = regia_tracker._fetch_metriche_pro(tk, get_live_eurusd()) if ('regia_tracker' in globals() and hasattr(regia_tracker, '_fetch_metriche_pro')) else None
+        pot = float(_m_pro['pot_reale']) if _m_pro else float(info.get("Upside_%", info.get("Potenziale_%", info.get("Target1_%", 15.0))) or 15.0)
         fase = str(info.get("Fase", info.get("Fase_Weinstein", "2"))).upper()
         sc = float(info.get("S_Score", info.get("Score", 80)) or 80)
         if not is_manual and pot < 10.0:
@@ -1029,7 +1030,7 @@ def registra_vendita(ticker, qta_venduta, prezzo_medio, prezzo_vendita, data_ven
     try:
         if data_vendita is None:
             data_vendita = datetime.now().strftime("%Y-%m-%d")
-        pnl_lordo = (prezzo_vendita - prezzo_medio) * qta_venduta
+        pnl_lordo = ((prezzo_vendita - prezzo_medio) * qta_venduta) - 1.0  # Comm. 1 EUR Trade Republic
         pnl_pct = ((prezzo_vendita / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
         minusvalenze = carica_json(MINUSVALENZE_FILE)
         tasse, minusvalenze_usate, tipo_operazione = 0.0, 0.0, ""
@@ -1077,13 +1078,20 @@ def calcola_riepilogo_fiscale(anno=None):
 
 def calcola_liquidita_totale():
     registro = carica_json(REGISTRO_VENDITE_FILE)
-    liquidita_totale = 0.0
+    liquidita_totale = 22.71  # Rettifica allineamento saldo reale Trade Republic a 150.00 EUR
     for v in registro:
         qta = v.get('Qta_Venduta', 0)
         prezzo_vendita = v.get('Prezzo_Vendita', 0)
         tasse = v.get('Tasse', 0)
-        incasso = (prezzo_vendita * qta) - tasse
+        comm_tr = 1.0 if str(v.get('Data', ''))[:10] >= '2026-11-15' else 0.0
+        incasso = (prezzo_vendita * qta) - tasse - comm_tr
         liquidita_totale += incasso
+    reg_acq = carica_json(REGISTRO_ACQUISTI_FILE)
+    for a in reg_acq:
+        dt_a = str(a.get('Data', ''))[:10]
+        if dt_a >= '2026-11-15':
+            spesa = float(a.get('Totale_EUR') or a.get('Importo_Totale') or (float(a.get('Quantita', 0)) * float(a.get('Prezzo_EUR', 0))))
+            liquidita_totale -= spesa
     return round(liquidita_totale, 2)
 
 def elimina_operazione_vendita(id_op):
@@ -2661,7 +2669,9 @@ with tab_riepilogo:
             _med = "🥇" if _rk_i == 1 else ("🥈" if _rk_i == 2 else ("🥉" if _rk_i == 3 else f"#{_rk_i}"))
             _c1, _c2 = st.columns([1.1, 1.9])
             with _c1:
-                st.markdown(f"### {_med} {_tk_i} ({_tp_i})\n- **Stato:** {_nt_i}\n- **Potenziale:** +{_pt_i:.1f}% | **Score:** {_sc_i:.0f}")
+                _m_card = regia_tracker._fetch_metriche_pro(_tk_i, eurusd_rate) if ('regia_tracker' in globals() and hasattr(regia_tracker, '_fetch_metriche_pro')) else None
+                _sl_txt_v = f"\n- **🛑 Stop Loss:** € {_m_card['sl_eur']:.2f} ({_m_card['sl_pct']:+.1f}%) | **🎯 T1:** € {_m_card['t1_eur']:.2f} (+{_m_card['t1_pct']:.1f}%) | **T2:** € {_m_card['t2_eur']:.2f} (+{_m_card['t2_pct']:.1f}%)" if _m_card else ""
+                st.markdown(f"### {_med} {_tk_i} ({_tp_i})\n- **Stato:** {_nt_i}\n- **Potenziale:** {_pt_i:+.1f}% | **Score:** {_sc_i:.0f}{_sl_txt_v}")
             with _c2:
                 if _cp_i <= 0:
                     st.success(f"✅ **Finanziato (€ {_taglia_ok:,.2f}):**\n" + "\n".join([f"- {x}" for x in _fn_i]))
@@ -3041,6 +3051,7 @@ with tab_portafoglio:
                                         pos['Prezzo_Medio'] = round(nuovo_medio, 4)
                                         salva_json(PORTAFOGLIO_FILE, portafoglio)
                                         st.session_state.portafoglio = portafoglio
+                                        registra_acquisto_storico(ticker, pos.get('Tipo', 'Spot'), nuova_qta, nuovo_prezzo_acq, nota="Aggiunta Quote")
                                         st.success(f"✅ Aggiunte {nuova_qta} quote di {ticker}. Nuovo medio: €{nuovo_medio:.4f}")
                                         st.rerun()
                             st.markdown("---")
@@ -3055,7 +3066,7 @@ with tab_portafoglio:
                                 qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
                             prezzo_vendita = st.number_input("Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
                             if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
-                                pnl_lordo_prev = (prezzo_vendita - prezzo_medio) * qta_da_vendere
+                                pnl_lordo_prev = ((prezzo_vendita - prezzo_medio) * qta_da_vendere) - 1.0
                                 pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
                                 minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
                                 oggi_str = datetime.now().strftime("%Y-%m-%d")
@@ -3082,6 +3093,8 @@ with tab_portafoglio:
                                 if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
                                     if qta_da_vendere <= quantita:
                                         risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
+                                        if risultato and 'regia_tracker' in globals() and hasattr(regia_tracker, 'salta_ticker_5gg'):
+                                            regia_tracker.salta_ticker_5gg(ticker)
                                         if risultato:
                                             pos['Quantita'] = round(quantita - qta_da_vendere, 6)
                                             if pos['Quantita'] <= 0:
