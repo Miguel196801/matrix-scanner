@@ -1078,7 +1078,7 @@ def calcola_riepilogo_fiscale(anno=None):
 
 def calcola_liquidita_totale():
     registro = carica_json(REGISTRO_VENDITE_FILE)
-    liquidita_totale = 22.71  # Rettifica allineamento saldo reale Trade Republic a 150.00 EUR
+    liquidita_totale = 29.10  # Rettifica allineamento saldo reale Trade Republic a 150.00 EUR
     for v in registro:
         qta = v.get('Qta_Venduta', 0)
         prezzo_vendita = v.get('Prezzo_Vendita', 0)
@@ -2274,13 +2274,15 @@ st.markdown(f'''
 <div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
     <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
-        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {st.session_state.get("_last_price_update") or (datetime.fromtimestamp(os.path.getmtime("portafoglio.json")).strftime("%d/%m/%Y %H:%M") if os.path.exists("portafoglio.json") else "-")}</span>
+        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {st.session_state.get("_last_price_update") or (datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "portafoglio.json"))).strftime("%d/%m/%Y %H:%M") if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "portafoglio.json")) else "-")}</span>
     </div>
     <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
         {sem_display}
     </div>
 </div>
 ''', unsafe_allow_html=True)
+if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_usa'):
+    regia_tracker.render_barra_indici_usa()
 
 if os.path.exists(IMPOSTAZIONI_FILE):
     with open(IMPOSTAZIONI_FILE, 'r', encoding='utf-8') as f:
@@ -2518,6 +2520,20 @@ if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True
     registra_proposta("SCANSIONE", "RIEPILOGO_SCANSIONE", "SISTEMA", f"BY: {stats['by_count']}, HOLD: {stats['hold_count']}, SELL: {stats['sell_count']}, BY_FABIO: {len(stats.get('by_fabio_tickers', list()))}, SMCI: {len(stats.get('smci_tickers', list()))}", stato="N/D")
     progress_bar.empty()
     st.session_state.dashboard_stats = stats
+    try:
+        if st.session_state.get('portafoglio'):
+            st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
+            _ora_p = datetime.now().strftime('%d/%m/%Y %H:%M')
+            st.session_state['_last_price_update'] = _ora_p
+            try:
+                _imp_p = carica_json('impostazioni.json', {})
+                _imp_p['_saved_last_price_update'] = _ora_p
+                salva_json('impostazioni.json', _imp_p)
+            except Exception:
+                pass
+        st.session_state['_last_price_update'] = datetime.now().strftime('%d/%m/%Y %H:%M')
+    except Exception:
+        pass
     st.session_state.pyramiding_alerts = pyramiding_alerts
     st.session_state.take_profit_alerts = take_profit_alerts
     st.session_state.zona_interesse_alerts = zona_interesse_alerts
@@ -2573,14 +2589,14 @@ st.markdown("<div style='margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True
 # ==============================================================================
 # TAB PRINCIPALI (7 SCHEDE CON RIEPILOGO OPERATIVO IN PRIMA PAGINA)
 # ==============================================================================
-tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_analisi, tab_registro, tab_paper, tab_insider = st.tabs(["Riepilogo",
+tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_analisi, tab_registro, tab_paper, tab_insider, tab_check_regole = st.tabs(["Riepilogo",
     "Portafoglio",
     "Console Operativa",
     "Confronto BY",
     "Scanner Dashboard",
     "Analisi Singola",
     "Registro Acquisti & Vendite",
-    "Portfolio AI", "🕵️ Insider & Stagionalità"])
+    "Portfolio AI", "🕵️ Insider & Stagionalità", "🩺 Check Regole"])
 
 with tab_riepilogo:
     st.subheader("🎯 Riepilogo Operativo — Cose da Fare & Valutare Oggi")
@@ -2654,6 +2670,17 @@ with tab_riepilogo:
                     st.markdown(f"🟡 **{_z.get('ticker')}**: distanza **{_z.get('distanza_pct')}%** dalla SMA 200.")
 
     st.markdown("---")
+    if st.session_state.get('extended_hours_alerts'):
+        st.subheader('⚡ ALERT MOVIMENTI ANOMALI (Fuori Orario > ±5%)')
+        col_ex1, col_ex2 = st.columns(2)
+        for idx_ex, al_ex in enumerate(st.session_state.extended_hours_alerts):
+            bx_c = 'signal-green' if al_ex['variazione'] > 0 else 'signal-red'
+            htm_ex = f'<div class="signal-box {bx_c}"><h4 style="margin:0">{al_ex["colore"]} {al_ex["ticker"]} - ({al_ex["sessione"]})</h4><p style="margin:0.5rem 0">Variazione: <strong>{al_ex["variazione"]:+.2f}%</strong> | Prezzo: €{al_ex["prezzo_eur"]:.2f}</p></div>'
+            if idx_ex % 2 == 0:
+                col_ex1.markdown(htm_ex, unsafe_allow_html=True)
+            else:
+                col_ex2.markdown(htm_ex, unsafe_allow_html=True)
+        st.markdown('---')
     st.subheader("🎯 Regia Acquisti Prioritizzata & Fonti di Finanziamento")
     _taglia_ok = float(st.session_state.get("sim_importo_box", 200.0) or 200.0)
     _df_m = {str(_r.get("Ticker", "")).strip().upper(): _r for _r in (risultati if "risultati" in locals() and isinstance(risultati, list) else []) if isinstance(_r, dict)}
@@ -2670,8 +2697,11 @@ with tab_riepilogo:
             _c1, _c2 = st.columns([1.1, 1.9])
             with _c1:
                 _m_card = regia_tracker._fetch_metriche_pro(_tk_i, eurusd_rate) if ('regia_tracker' in globals() and hasattr(regia_tracker, '_fetch_metriche_pro')) else None
+                _pt_show = _m_card['pot_reale'] if _m_card else _pt_i
                 _sl_txt_v = f"\n- **🛑 Stop Loss:** € {_m_card['sl_eur']:.2f} ({_m_card['sl_pct']:+.1f}%) | **🎯 T1:** € {_m_card['t1_eur']:.2f} (+{_m_card['t1_pct']:.1f}%) | **T2:** € {_m_card['t2_eur']:.2f} (+{_m_card['t2_pct']:.1f}%)" if _m_card else ""
-                st.markdown(f"### {_med} {_tk_i} ({_tp_i})\n- **Stato:** {_nt_i}\n- **Potenziale:** {_pt_i:+.1f}% | **Score:** {_sc_i:.0f}{_sl_txt_v}")
+                st.markdown(f"### {_med} {_tk_i} ({_tp_i})\n- **Stato:** {_nt_i}\n- **Potenziale:** {_pt_show:+.1f}% | **Score:** {_sc_i:.0f}{_sl_txt_v}")
+                if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_stella_watchlist'):
+                    regia_tracker.render_stella_watchlist(_tk_i, f'regia_{_rk_i}')
             with _c2:
                 if _cp_i <= 0:
                     st.success(f"✅ **Finanziato (€ {_taglia_ok:,.2f}):**\n" + "\n".join([f"- {x}" for x in _fn_i]))
@@ -3499,7 +3529,7 @@ with tab_scanner:
             st.info("Nessun titolo con breakout imminente al momento.")
         if st.session_state.scansione_completata:
             st.markdown("---")
-            tab_f, tab_c, tab_m, tab_p = st.tabs(["🏰 Fortezza Reale", "🎪 Arena Cavalli Pazzi", "👁️ Da Monitorare (HOLD)", "🤖 Setup Palantir"])
+            tab_f, tab_c, tab_m, tab_p, tab_check_regole = st.tabs(["🏰 Fortezza Reale", "🎪 Arena Cavalli Pazzi", "👁️ Da Monitorare (HOLD)", "🤖 Setup Palantir", "🩺 Check Regole"])
             with tab_f:
                 st.subheader("Asset Strutturali (S-Score > 60, Fase 2)")
                 if st.session_state.df_fortezza is not None:
@@ -3533,6 +3563,20 @@ with tab_analisi:
     col_in1, col_in2 = st.columns([2, 1])
     with col_in1:
         ticker_input = st.text_input("Inserisci Ticker:", value="SOFI")
+        if ticker_input.strip():
+            c_wl_1, c_wl_2 = st.columns(2)
+            with c_wl_1:
+                if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_stella_watchlist'):
+                    regia_tracker.render_stella_watchlist(ticker_input.strip().upper(), 'singola_top')
+            with c_wl_2:
+                if st.button("🩺 Check 3 Regole", key="btn_check_singola_3reg", use_container_width=True):
+                    st.session_state["_run_check_singola"] = ticker_input.strip().upper()
+            if st.session_state.get("_run_check_singola") == ticker_input.strip().upper():
+                if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
+                    regia_tracker.render_check_3_regole([ticker_input.strip().upper()], eurusd_rate)
+                if st.button("✖️ Chiudi Check", key="btn_chiudi_check_singola"):
+                    st.session_state.pop("_run_check_singola", None)
+                    st.rerun()
     with col_in2:
         st.write("")
         st.write("")
@@ -3698,7 +3742,8 @@ with tab_analisi:
                     _tag_s = "Sfoltimento 0 tasse"
                 else:
                     continue
-                _motivo_s = f"{_tag_s} | netto €{_netto_s:.2f}" + (f" (-€{_tassa_s:.2f} tasse)" if _tassa_s > 0 else " (0 tasse)")
+                _pnl_netto_sim = round((_pnl_s - _tassa_s - 1.0) if "_pnl_s" in locals() else (_netto_s - _va_s), 2)
+                _motivo_s = f"{_tag_s} | P&L Netto: €{_pnl_netto_sim:+.2f} | netto €{max(0.0, _netto_s - 1.0):.2f}" + (f" (-€{_tassa_s:.2f} tasse -€1 comm.)" if _tassa_s > 0 else " (0 tasse, -€1 comm.)")
                 _vendibili.append((_prio, _va_s, _tk_s, _netto_s, _motivo_s))
                 _tot_vend_netto += _netto_s
             _vendibili.sort(key=lambda x: (x[0], x[1]))
@@ -4134,6 +4179,23 @@ with tab_paper:
             st.info("Nessuna posizione attiva da chiudere.")
     else:
         st.info("📭 Il portfolio sperimentale è vuoto. Usa il pulsante 'Scansione AI' per iniziare a tracciare i setup.")
+
+with tab_check_regole:
+    st.subheader("🩺 Check-Up 3 Regole (IGNITION • BY FABIO • BY Standard)")
+    st.caption("Inserisci uno o più ticker separati da virgola per verificare su quali motori passano (✅) o si bloccano (❌).")
+    chk_in = st.text_input("Ticker da verificare (es. MU, NVDA, PLTR, TSLA):", value="MU, NVDA, PLTR", key="txt_check_multi_regole")
+    c_chk1, c_chk2, _ = st.columns([1.2, 1.2, 3])
+    with c_chk1:
+        if st.button("🔍 Avvia Check Regole", key="btn_avvia_check_multi", type="primary", use_container_width=True):
+            st.session_state["_multi_check_list"] = [t.strip().upper() for t in chk_in.replace("\n", ",").split(",") if t.strip()]
+    with c_chk2:
+        if st.session_state.get("_multi_check_list"):
+            if st.button("✖️ Chiudi Check", key="btn_chiudi_check_multi", use_container_width=True):
+                st.session_state.pop("_multi_check_list", None)
+                st.rerun()
+    if st.session_state.get("_multi_check_list"):
+        if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
+            regia_tracker.render_check_3_regole(st.session_state["_multi_check_list"], eurusd_rate)
 
 with tab_insider:
     st.markdown("### 🕵️ Insider Tracker (SEC Form 4) & Stagionalità 10 Anni")

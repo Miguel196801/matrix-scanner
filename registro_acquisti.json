@@ -1,0 +1,11 @@
+[
+    {
+        "Data": "2026-11-16 22:03",
+        "Ticker": "ONDS",
+        "Operazione": "Aggiunta Quote",
+        "Tipo": "Spot",
+        "Quantita": 58.0,
+        "Prezzo_EUR": 4.29,
+        "Totale_EUR": 248.82
+    }
+]

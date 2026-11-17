@@ -12,5 +12,33 @@
         "Tasse": 11.05,
         "PnL_Netto": 31.46,
         "Tipo": "plusvalenza"
+    },
+    {
+        "id": 2,
+        "Data": "2026-11-16",
+        "Ticker": "NKE",
+        "Qta_Venduta": 7.27427,
+        "Prezzo_Medio": 32.21,
+        "Prezzo_Vendita": 34.77,
+        "PnL_Lordo": 17.62,
+        "PnL_Pct": 7.95,
+        "Minusvalenze_Usate": 0.0,
+        "Tasse": 4.58,
+        "PnL_Netto": 13.04,
+        "Tipo": "plusvalenza"
+    },
+    {
+        "id": 3,
+        "Data": "2026-11-16",
+        "Ticker": "APP",
+        "Qta_Venduta": 0.286317,
+        "Prezzo_Medio": 239.58,
+        "Prezzo_Vendita": 371.35,
+        "PnL_Lordo": 36.73,
+        "PnL_Pct": 55.0,
+        "Minusvalenze_Usate": 0.0,
+        "Tasse": 9.55,
+        "PnL_Netto": 27.18,
+        "Tipo": "plusvalenza"
     }
 ]
