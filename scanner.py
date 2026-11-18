@@ -2293,7 +2293,7 @@ else:
 avvia_scansione_btn = st.sidebar.button("🚀 AVVIA SCANSIONE", type="primary", use_container_width=True, key="btn_avvia_scansione_top")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**💼 Selezione Rapida Portafoglio**")
-_sb_list = [p['Ticker'] for p in (st.session_state.portafoglio or list())] or ["TTWO", "SOFI", "VRT", "CRWD"]
+_sb_list = [p['Ticker'] for p in (st.session_state.portafoglio or list())] or ["Portafoglio vuoto"]
 if "sb_quick_ticker" not in st.session_state or st.session_state["sb_quick_ticker"] not in _sb_list:
     st.session_state["sb_quick_ticker"] = next(iter(_sb_list))
 
@@ -3587,6 +3587,16 @@ with tab_analisi:
     st.subheader("🔍 Analisi Singola & Grafico")
     col_in1, col_in2 = st.columns([2, 1])
     with col_in1:
+        st.markdown("**📊 Indici USA (Solo Grafico & Trend):**")
+        ic1, ic2, ic3, ic4 = st.columns(4)
+        if ic1.button("📈 S&P 500 (SPY)", use_container_width=True, key="btn_idx_spy"):
+            st.session_state["txt_analisi_singola_tk"] = "SPY"
+        if ic2.button("💻 Nasdaq 100 (QQQ)", use_container_width=True, key="btn_idx_qqq"):
+            st.session_state["txt_analisi_singola_tk"] = "QQQ"
+        if ic3.button("🏭 Dow Jones (DIA)", use_container_width=True, key="btn_idx_dia"):
+            st.session_state["txt_analisi_singola_tk"] = "DIA"
+        if ic4.button("🚀 Russell 2000 (IWM)", use_container_width=True, key="btn_idx_iwm"):
+            st.session_state["txt_analisi_singola_tk"] = "IWM"
         ticker_input = st.text_input("Inserisci Ticker:", value=st.session_state.get("sb_quick_ticker", "SOFI"), key="txt_analisi_singola_tk")
         if ticker_input.strip():
             c_wl_1, c_wl_2 = st.columns(2)
@@ -3598,7 +3608,7 @@ with tab_analisi:
                     st.session_state["_run_check_singola"] = ticker_input.strip().upper()
             if st.session_state.get("_run_check_singola") == ticker_input.strip().upper():
                 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
-                    regia_tracker.render_check_3_regole([ticker_input.strip().upper()], eurusd_rate)
+                    import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole([ticker_input.strip().upper()], eurusd_rate)
                 if st.button("✖️ Chiudi Check", key="btn_chiudi_check_singola"):
                     st.session_state.pop("_run_check_singola", None)
                     st.rerun()
@@ -4205,6 +4215,38 @@ with tab_paper:
     else:
         st.info("📭 Il portfolio sperimentale è vuoto. Usa il pulsante 'Scansione AI' per iniziare a tracciare i setup.")
 
+def _leggi_tutti_ticker_wl():
+    _tks = []
+    _base = os.path.dirname(os.path.abspath(__file__))
+    _fp_imp = os.path.join(_base, 'impostazioni.json')
+    if os.path.exists(_fp_imp):
+        try:
+            with open(_fp_imp, 'r', encoding='utf-8') as _f:
+                _d = json.load(_f)
+            if isinstance(_d, dict):
+                for _k in ['tickers', 'lista_ticker_default', 'watchlist']:
+                    _raw = _d.get(_k, '')
+                    _items = _raw if isinstance(_raw, list) else str(_raw).replace('\n', ',').split(',')
+                    for _el in _items:
+                        _tc = str(_el.get('Ticker', _el) if isinstance(_el, dict) else _el).strip().upper()
+                        if 1 <= len(_tc) <= 5 and _tc.isalpha() and _tc not in _tks:
+                            _tks.append(_tc)
+        except Exception:
+            pass
+    _fp_wl = os.path.join(_base, 'watchlist.json')
+    if os.path.exists(_fp_wl):
+        try:
+            with open(_fp_wl, 'r', encoding='utf-8') as _f:
+                _w = json.load(_f)
+            if isinstance(_w, list):
+                for _el in _w:
+                    _tc = str(_el.get('Ticker', _el) if isinstance(_el, dict) else _el).strip().upper()
+                    if 1 <= len(_tc) <= 5 and _tc.isalpha() and _tc not in _tks:
+                        _tks.append(_tc)
+        except Exception:
+            pass
+    return _tks
+
 with tab_check_regole:
     st.subheader('🩺 Check-Up 3 Regole (IGNITION • BY FABIO • BY Standard)')
     st.caption('Lascia in bianco e clicca Controlla Tutta la Watchlist per filtrare tutti i 71 titoli, oppure inserisci ticker specifici.')
@@ -4221,27 +4263,10 @@ with tab_check_regole:
     with c_chk1:
         if st.button('🔍 Avvia Check Ticker', key='btn_avvia_check_multi', type='primary', use_container_width=True):
             t_man = [t.strip().upper() for t in chk_in.replace('\n', ',').split(',') if t.strip()]
-            if t_man:
-                st.session_state['_multi_check_list'] = t_man
-            else:
-                _imp = carica_json('impostazioni.json') or {}
-                _raw_str = str(_imp.get('lista_ticker_default', '')) if isinstance(_imp, dict) else ''
-                _wl_file = carica_json('watchlist.json')
-                _wl_all = [t.strip().upper() for t in _raw_str.replace('\n', ',').split(',') if t.strip()]
-                _extra = _wl_file if isinstance(_wl_file, list) else (str(_wl_file).replace('\n', ',').split(',') if isinstance(_wl_file, str) else [])
-                for t in _extra:
-                    tc = str(t).strip().upper()
-                    if len(tc) >= 2 and tc.isalpha() and tc not in _wl_all:
-                        _wl_all.append(tc)
-                _wl_all = [t for t in _wl_all if len(t) >= 2 and t.isalpha()]
-                st.session_state['_multi_check_list'] = _wl_all
+            st.session_state['_multi_check_list'] = t_man if t_man else _leggi_tutti_ticker_wl()
     with c_chk2:
         if st.button('📋 Controlla Tutta la Watchlist (~71)', key='btn_avvia_check_wl_all', use_container_width=True):
-            _imp = carica_json('impostazioni.json') or {}
-            _wl_all = (_imp.get('tickers', []) or _imp.get('watchlist', [])) if isinstance(_imp, dict) else []
-            if not _wl_all and 'watchlist' in st.session_state:
-                _wl_all = st.session_state['watchlist']
-            st.session_state['_multi_check_list'] = [str(t).strip().upper() for t in _wl_all if str(t).strip()]
+            st.session_state['_multi_check_list'] = _leggi_tutti_ticker_wl()
     with c_chk3:
         if st.session_state.get('_multi_check_list'):
             if st.button('✖️ Chiudi Check', key='btn_chiudi_check_multi', use_container_width=True):
@@ -4249,7 +4274,7 @@ with tab_check_regole:
                 st.rerun()
     if st.session_state.get('_multi_check_list'):
         if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
-            regia_tracker.render_check_3_regole(st.session_state['_multi_check_list'], eurusd_rate, solo_fase2=filtro_fase, min_score=min_score, solo_pre_ign=solo_pre_ign)
+            import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole(st.session_state['_multi_check_list'], eurusd_rate, solo_fase2=filtro_fase, min_score=min_score, solo_pre_ign=solo_pre_ign)
 with tab_insider:
     st.markdown("### 🕵️ Insider Tracker (SEC Form 4) & Stagionalità 10 Anni")
     st.caption("Individua acquisti reali dei dirigenti (Cluster Buying) su titoli sottovalutati vicini ai minimi con stagionalità favorevole.")
