@@ -1410,7 +1410,7 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
 
     p_usd = float(r.get('prezzo_usd', 0))
     p_eur = float(r.get('prezzo_eur', 0))
-    var_pct = float(r.get('var_oggi_pct', r.get('var_pct', 0)))
+    var_pct = float(r.get('var_oggi_pct') or r.get('var_pct') or 0)
     col_v = "#089981" if var_pct >= 0 else "#F23645"
     day_low = float(info_y.get('dayLow') or (df_1y['Low'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
     day_high = float(info_y.get('dayHigh') or (df_1y['High'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
@@ -2290,74 +2290,51 @@ if os.path.exists(IMPOSTAZIONI_FILE):
 else:
     impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, PLTR, ZETA, NKE, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC, SOFI, NBIS, VRT, ANET", "catalizzatori": "", "esclusioni": ""}
 
-st.sidebar.markdown("**Ticker watchlist**")
+avvia_scansione_btn = st.sidebar.button("🚀 AVVIA SCANSIONE", type="primary", use_container_width=True, key="btn_avvia_scansione_top")
+st.sidebar.markdown("---")
+st.sidebar.markdown("**💼 Selezione Rapida Portafoglio**")
 _sb_list = [p['Ticker'] for p in (st.session_state.portafoglio or list())] or ["TTWO", "SOFI", "VRT", "CRWD"]
-_sb_sel = st.sidebar.radio("Ticker watchlist", _sb_list, label_visibility="collapsed", key="sb_ticker_list")
-if _sb_sel:
-    st.session_state.port_selected_chart = _sb_sel
-tickers_input = st.sidebar.text_area("Ticker (virgola):", value=impostazioni.get("lista_ticker_default", ""))
-tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
-period = st.sidebar.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
-sma_short = st.sidebar.slider("SMA Breve:", 10, 100, 50)
-sma_long = st.sidebar.slider("SMA Lunga:", 50, 200, 200)
-eurusd_rate = st.sidebar.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=get_live_eurusd(), step=0.001, format="%.4f")
-if "_fx_init_done" not in st.session_state and "portafoglio" in st.session_state and st.session_state.portafoglio:
-    for _p_fx in st.session_state.portafoglio:
-        _usd_p = float(_p_fx.get("Prezzo_Attuale_USD", 0) or 0)
-        _q_p = float(_p_fx.get("Quantita", 0) or 0)
-        _vc_p = float(_p_fx.get("Valore_Carico", 0) or 0)
-        if _usd_p > 0 and eurusd_rate > 0:
-            _eur_p = round(_usd_p / eurusd_rate, 2)
-            _va_p = round(_eur_p * _q_p, 2)
-            _p_fx["Prezzo_Attuale_EUR"] = _eur_p
-            _p_fx["Valore_Attuale"] = _va_p
-            if _vc_p > 0:
-                _p_fx["PnL_EUR"] = round(_va_p - _vc_p, 2)
-                _p_fx["PnL_%"] = round(((_va_p - _vc_p) / _vc_p) * 100, 2)
-    st.session_state["_fx_init_done"] = True
-st.sidebar.markdown("---")
-ignore_fase_4 = st.sidebar.checkbox("Blocca Fase 4", True)
-st.sidebar.markdown("---")
-st.sidebar.subheader("📅 Catalizzatori Eventi")
-catalizzatori_input = st.sidebar.text_area("Formato: TICKER: Descrizione - GG/MM/AA", value=impostazioni.get("catalizzatori", ""), height=100, help="Es: TTWO: Lancio GTA VI - 15/12/2026; AAPL: Evento - 20/12/2026")
-st.sidebar.markdown("---")
-st.sidebar.subheader("🚫 Esclusioni Ribilanciamento")
-esclusioni_input = st.sidebar.text_area("Titoli da escludere (separati da virgola):", value=impostazioni.get("esclusioni", ""), height=80, help="Es: SOFI, TTD. Non appariranno nelle proposte di vendita.")
-st.sidebar.markdown("---")
-st.sidebar.subheader("💵 Liquidità Aggiuntiva")
-liq_aggiuntiva_sim = st.sidebar.number_input("Disponibilità extra da aggiungere (€):", min_value=0.0, value=0.0, step=50.0, key="liq_aggiuntiva_sim", help="Imposta 0 se non vuoi aggiungere denaro esterno: il sistema userà solo cassa broker e vendite consentite.")
+if "sb_quick_ticker" not in st.session_state or st.session_state["sb_quick_ticker"] not in _sb_list:
+    st.session_state["sb_quick_ticker"] = next(iter(_sb_list))
+
+def _on_sb_ticker_change():
+    val = st.session_state.get("sb_ticker_radio")
+    if val:
+        st.session_state["sb_quick_ticker"] = val
+        st.session_state["port_selected_chart"] = val
+        st.session_state["txt_analisi_singola_tk"] = val
+
+_sb_sel = st.sidebar.radio("Selezione Rapida", _sb_list, index=_sb_list.index(st.session_state["sb_quick_ticker"]), label_visibility="collapsed", key="sb_ticker_radio", on_change=_on_sb_ticker_change)
 st.sidebar.markdown("---")
 st.sidebar.subheader("📌 Titoli da Acquistare (Priorità)")
-titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input", help="I titoli scritti qui hanno priorità su tutti i segnali dello scanner nell'ordine esatto in cui li inserisci.")
+titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input")
+st.sidebar.subheader("💵 Liquidità Aggiuntiva")
+liq_aggiuntiva_sim = st.sidebar.number_input("Disponibilità extra (€):", min_value=0.0, value=0.0, step=50.0, key="liq_aggiuntiva_sim")
+st.sidebar.subheader("📅 Catalizzatori Eventi")
+catalizzatori_input = st.sidebar.text_area("Formato: TICKER: Desc - GG/MM/AA", value=impostazioni.get("catalizzatori", ""), height=75)
+st.sidebar.subheader("🚫 Esclusioni Ribilanciamento")
+esclusioni_input = st.sidebar.text_area("Titoli da escludere (virgola):", value=impostazioni.get("esclusioni", ""), height=65)
 
+with st.sidebar.expander("⚙️ Impostazioni Avanzate & Watchlist", expanded=False):
+    tickers_input = st.text_area("Watchlist Scanner (virgola):", value=impostazioni.get("lista_ticker_default", ""), height=95)
+    period = st.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
+    sma_short = st.slider("SMA Breve:", 10, 100, 50)
+    sma_long = st.slider("SMA Lunga:", 50, 200, 200)
+    eurusd_rate = st.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=get_live_eurusd(), step=0.001, format="%.4f")
+    ignore_fase_4 = st.checkbox("Blocca Fase 4", True)
+    if st.button("🔍 Verifica Segnali Storici", key="btn_dbg_storici"):
+        segnali = carica_json(SEGNALI_STORICI_FILE)
+        st.info(f"Totale segnali: {len(segnali)}")
+    if st.button("🔄 Ricostruisci Segnali (1 anno)", key="btn_dbg_ricostr"):
+        tks_ric = list(set([t.strip().upper() for t in tickers_input.split(",") if t.strip()] + [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",")]))
+        pb = st.progress(0)
+        tot = sum(ricostruisci_segnali_retroattivi(tk, 1) for i, tk in enumerate(tks_ric) if not pb.progress((i + 1) / len(tks_ric)))
+        pb.empty()
+        st.success(f"✅ Aggiunti {tot} segnali storici.")
+        st.rerun()
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔧 Debug Segnali")
-
-if st.sidebar.button("🔍 Verifica Segnali Storici"):
-    segnali = carica_json(SEGNALI_STORICI_FILE)
-    if segnali:
-        st.sidebar.info(f"Totale segnali: {len(segnali)}")
-        for s in reversed(segnali[-10:] if len(segnali) > 10 else segnali):
-            st.sidebar.text(f"{s.get('Ticker', 'N/D')}: {s.get('Tipo', 'N/D')} - {s.get('Data', 'N/D')} - ${s.get('Prezzo', 'N/D')}")
-    else:
-        st.sidebar.warning("Nessun segnale registrato")
-
-if st.sidebar.button("🔄 Ricostruisci Segnali Retroattivi (1 anno)"):
-    tickers_da_scansionare = list(set(tickers + [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",")]))
-    progress_bar = st.progress(0)
-    totale = 0
-    for i, ticker in enumerate(tickers_da_scansionare):
-        progress_bar.progress((i + 1) / len(tickers_da_scansionare))
-        try:
-            totale += ricostruisci_segnali_retroattivi(ticker, anni_indietro=1)
-        except Exception as e:
-            st.sidebar.error(f"Errore su {ticker}: {e}")
-    progress_bar.empty()
-    st.success(f"✅ Ricostruzione completata! Aggiunti {totale} segnali storici.")
-    st.rerun()
-
-if st.sidebar.button("AVVIA SCANSIONE", type="primary", use_container_width=True):
+tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+if avvia_scansione_btn:
     impostazioni["lista_ticker_default"] = tickers_input
     impostazioni["catalizzatori"] = catalizzatori_input
     impostazioni["esclusioni"] = esclusioni_input
@@ -2925,6 +2902,54 @@ if False:
 
 with tab_portafoglio:
     st.session_state["_grafico_uid_cnt"] = 0
+    with st.expander("➕ Aggiungi / Modifica Titoli in Portafoglio", expanded=(len(st.session_state.portafoglio or []) == 0)):
+        col_add1, col_add2, col_add3, col_add4 = st.columns(4)
+        with col_add1:
+            new_ticker = st.text_input("Ticker (es. META, GOOGL, MU)", key="inp_new_tk_port").upper()
+        with col_add2:
+            new_tipo = st.selectbox("Tipo", ["Spot", "PAC"], key="sel_new_tp_port")
+        with col_add3:
+            new_qta = st.number_input("Quantità", min_value=0.0001, step=0.0001, format="%.6f", key="num_new_qta_port")
+        with col_add4:
+            new_medio = st.number_input("Prezzo Medio €", min_value=0.01, step=0.01, key="num_new_pmc_port")
+        if st.button("✅ Conferma Acquisto in Portafoglio", type="primary", key="btn_add_port_direct"):
+            _tk_clean = str(new_ticker).strip().upper()
+            if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
+                _trovato_m = False
+                for _item_m in st.session_state.portafoglio:
+                    if str(_item_m.get("Ticker", "")).upper() == _tk_clean and str(_item_m.get("Tipo", "Spot")) == str(new_tipo):
+                        _q_old = float(_item_m.get("Quantita", 0) or 0)
+                        _pmc_old = float(_item_m.get("Prezzo_Medio", 0) or 0)
+                        _q_new = round(_q_old + float(new_qta), 6)
+                        _pmc_new = round(((_q_old * _pmc_old) + (float(new_qta) * float(new_medio))) / _q_new, 4)
+                        _item_m["Quantita"] = _q_new
+                        _item_m["Prezzo_Medio"] = _pmc_new
+                        _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
+                        _trovato_m = True
+                        st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        salva_json("portafoglio.json", st.session_state.portafoglio)
+                        registra_acquisto_storico(_tk_clean, str(new_tipo), float(new_qta), float(new_medio), nota="Mediazione PMC")
+                        break
+                if not _trovato_m:
+                    _q_n = round(float(new_qta), 6)
+                    _pm_n = round(float(new_medio), 4)
+                    st.session_state.portafoglio.append({
+                        "Ticker": _tk_clean,
+                        "Tipo": str(new_tipo),
+                        "Quantita": _q_n,
+                        "Prezzo_Medio": _pm_n,
+                        "Valore_Carico": round(_q_n * _pm_n, 2),
+                        "Prezzo_Attuale_EUR": _pm_n,
+                        "Valore_Attuale": round(_q_n * _pm_n, 2),
+                        "PnL_EUR": 0.0,
+                        "PnL_%": 0.0,
+                        "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
+                    })
+                    st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    salva_json("portafoglio.json", st.session_state.portafoglio)
+                    registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto")
+                st.rerun()
+
     for _p_chk in st.session_state.portafoglio:
         _q_c = float(_p_chk.get('Quantita', 0) or 0)
         _pmc_c = float(_p_chk.get('Prezzo_Medio', 0) or 0)
@@ -3529,7 +3554,7 @@ with tab_scanner:
             st.info("Nessun titolo con breakout imminente al momento.")
         if st.session_state.scansione_completata:
             st.markdown("---")
-            tab_f, tab_c, tab_m, tab_p, tab_check_regole = st.tabs(["🏰 Fortezza Reale", "🎪 Arena Cavalli Pazzi", "👁️ Da Monitorare (HOLD)", "🤖 Setup Palantir", "🩺 Check Regole"])
+            tab_f, tab_c, tab_m, tab_p = st.tabs(["🏰 Fortezza Reale", "🎪 Arena Cavalli Pazzi", "👁️ Da Monitorare (HOLD)", "🤖 Setup Palantir"])
             with tab_f:
                 st.subheader("Asset Strutturali (S-Score > 60, Fase 2)")
                 if st.session_state.df_fortezza is not None:
@@ -3562,7 +3587,7 @@ with tab_analisi:
     st.subheader("🔍 Analisi Singola & Grafico")
     col_in1, col_in2 = st.columns([2, 1])
     with col_in1:
-        ticker_input = st.text_input("Inserisci Ticker:", value="SOFI")
+        ticker_input = st.text_input("Inserisci Ticker:", value=st.session_state.get("sb_quick_ticker", "SOFI"), key="txt_analisi_singola_tk")
         if ticker_input.strip():
             c_wl_1, c_wl_2 = st.columns(2)
             with c_wl_1:
@@ -4181,22 +4206,50 @@ with tab_paper:
         st.info("📭 Il portfolio sperimentale è vuoto. Usa il pulsante 'Scansione AI' per iniziare a tracciare i setup.")
 
 with tab_check_regole:
-    st.subheader("🩺 Check-Up 3 Regole (IGNITION • BY FABIO • BY Standard)")
-    st.caption("Inserisci uno o più ticker separati da virgola per verificare su quali motori passano (✅) o si bloccano (❌).")
-    chk_in = st.text_input("Ticker da verificare (es. MU, NVDA, PLTR, TSLA):", value="MU, NVDA, PLTR", key="txt_check_multi_regole")
-    c_chk1, c_chk2, _ = st.columns([1.2, 1.2, 3])
+    st.subheader('🩺 Check-Up 3 Regole (IGNITION • BY FABIO • BY Standard)')
+    st.caption('Lascia in bianco e clicca Controlla Tutta la Watchlist per filtrare tutti i 71 titoli, oppure inserisci ticker specifici.')
+    chk_in = st.text_input('Ticker specifici (opzionale, es. MU, GOOGL, META):', value='', key='txt_check_multi_regole')
+    f_col1, f_col2, f_col3 = st.columns([1.6, 1.3, 1.8])
+    with f_col1:
+        filtro_fase = st.selectbox('📊 Filtro Fase Weinstein', ['Tutte le Fasi', '✅ Solo Fase 2 (Rialzo)', '🧱 Solo Fase 1 (Accumulo)'], key='sel_fase_multi')
+    with f_col2:
+        st.write('')
+        solo_pre_ign = st.checkbox('⏳ Solo PRE-IGNITION', value=False, key='chk_pre_ign_multi')
+    with f_col3:
+        min_score = st.slider('🎯 S-Score Minimo (0 = Tutti)', 0, 100, 0, 5, key='sld_min_score_multi')
+    c_chk1, c_chk2, c_chk3 = st.columns([1.2, 1.8, 1.0])
     with c_chk1:
-        if st.button("🔍 Avvia Check Regole", key="btn_avvia_check_multi", type="primary", use_container_width=True):
-            st.session_state["_multi_check_list"] = [t.strip().upper() for t in chk_in.replace("\n", ",").split(",") if t.strip()]
+        if st.button('🔍 Avvia Check Ticker', key='btn_avvia_check_multi', type='primary', use_container_width=True):
+            t_man = [t.strip().upper() for t in chk_in.replace('\n', ',').split(',') if t.strip()]
+            if t_man:
+                st.session_state['_multi_check_list'] = t_man
+            else:
+                _imp = carica_json('impostazioni.json') or {}
+                _raw_str = str(_imp.get('lista_ticker_default', '')) if isinstance(_imp, dict) else ''
+                _wl_file = carica_json('watchlist.json')
+                _wl_all = [t.strip().upper() for t in _raw_str.replace('\n', ',').split(',') if t.strip()]
+                _extra = _wl_file if isinstance(_wl_file, list) else (str(_wl_file).replace('\n', ',').split(',') if isinstance(_wl_file, str) else [])
+                for t in _extra:
+                    tc = str(t).strip().upper()
+                    if len(tc) >= 2 and tc.isalpha() and tc not in _wl_all:
+                        _wl_all.append(tc)
+                _wl_all = [t for t in _wl_all if len(t) >= 2 and t.isalpha()]
+                st.session_state['_multi_check_list'] = _wl_all
     with c_chk2:
-        if st.session_state.get("_multi_check_list"):
-            if st.button("✖️ Chiudi Check", key="btn_chiudi_check_multi", use_container_width=True):
-                st.session_state.pop("_multi_check_list", None)
+        if st.button('📋 Controlla Tutta la Watchlist (~71)', key='btn_avvia_check_wl_all', use_container_width=True):
+            _imp = carica_json('impostazioni.json') or {}
+            _wl_all = (_imp.get('tickers', []) or _imp.get('watchlist', [])) if isinstance(_imp, dict) else []
+            if not _wl_all and 'watchlist' in st.session_state:
+                _wl_all = st.session_state['watchlist']
+            st.session_state['_multi_check_list'] = [str(t).strip().upper() for t in _wl_all if str(t).strip()]
+    with c_chk3:
+        if st.session_state.get('_multi_check_list'):
+            if st.button('✖️ Chiudi Check', key='btn_chiudi_check_multi', use_container_width=True):
+                st.session_state.pop('_multi_check_list', None)
                 st.rerun()
-    if st.session_state.get("_multi_check_list"):
+    if st.session_state.get('_multi_check_list'):
         if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
-            regia_tracker.render_check_3_regole(st.session_state["_multi_check_list"], eurusd_rate)
-
+            regia_tracker.render_check_3_regole(st.session_state['_multi_check_list'], eurusd_rate, solo_fase2=filtro_fase, min_score=min_score, solo_pre_ign=solo_pre_ign)
 with tab_insider:
     st.markdown("### 🕵️ Insider Tracker (SEC Form 4) & Stagionalità 10 Anni")
     st.caption("Individua acquisti reali dei dirigenti (Cluster Buying) su titoli sottovalutati vicini ai minimi con stagionalità favorevole.")
