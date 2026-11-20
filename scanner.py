@@ -477,7 +477,7 @@ def carica_json(file_path):
                 pass
     if f"_pulled_{os.path.basename(file_path)}" not in st.session_state:
         st.session_state[f"_pulled_{os.path.basename(file_path)}"] = True
-        _rem = _sync_github_file(file_path, "", mode="pull")
+        _rem = None if os.name == "nt" else _sync_github_file(file_path, "", mode="pull")
         if _rem:
             try:
                 with open(file_path, "w", encoding="utf-8") as _fw:
@@ -499,6 +499,96 @@ def salva_json(file_path, data):
         _sync_github_file(file_path, json.dumps(data, indent=4, ensure_ascii=False), mode='push')
     except Exception:
         pass
+
+def _get_impostazioni_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), IMPOSTAZIONI_FILE)
+
+def _parse_ora_agg(val):
+    if not val:
+        return None
+    try:
+        return datetime.strptime(str(val).strip(), "%d/%m/%Y %H:%M")
+    except Exception:
+        return None
+
+def _scegli_ora_piu_recente(*candidati):
+    best_dt = None
+    best_str = None
+    fallback_str = None
+    for c in candidati:
+        if not c:
+            continue
+        s = str(c).strip()
+        if not s or s == "-":
+            continue
+        if fallback_str is None:
+            fallback_str = s
+        dt = _parse_ora_agg(s)
+        if dt is not None and (best_dt is None or dt > best_dt):
+            best_dt = dt
+            best_str = s
+    return best_str or fallback_str
+
+def leggi_ultimo_agg_prezzi():
+    imp = {}
+    fp_imp = _get_impostazioni_path()
+    if os.path.exists(fp_imp):
+        try:
+            with open(fp_imp, 'r', encoding='utf-8') as f_imp:
+                data_imp = json.load(f_imp)
+            if isinstance(data_imp, dict):
+                imp = data_imp
+        except Exception:
+            imp = {}
+    ora_best = _scegli_ora_piu_recente(
+        imp.get("ultimo_agg_prezzi"),
+        imp.get("_saved_last_price_update"),
+        st.session_state.get("_last_price_update")
+    )
+    if not ora_best:
+        fp_port = os.path.join(os.path.dirname(os.path.abspath(__file__)), PORTAFOGLIO_FILE)
+        if os.path.exists(fp_port):
+            try:
+                ora_best = datetime.fromtimestamp(os.path.getmtime(fp_port)).strftime("%d/%m/%Y %H:%M")
+            except Exception:
+                ora_best = "-"
+        else:
+            ora_best = "-"
+    if ora_best and ora_best != "-":
+        st.session_state["_last_price_update"] = ora_best
+    return ora_best
+
+def salva_ultimo_agg_prezzi(ora_str=None):
+    nuova_ora = str(ora_str).strip() if ora_str else datetime.now().strftime("%d/%m/%Y %H:%M")
+    fp_imp = _get_impostazioni_path()
+    imp = {}
+    if os.path.exists(fp_imp):
+        try:
+            with open(fp_imp, 'r', encoding='utf-8') as f_imp:
+                data_imp = json.load(f_imp)
+            if isinstance(data_imp, dict):
+                imp = data_imp
+        except Exception:
+            imp = {}
+    ora_finale = _scegli_ora_piu_recente(
+        nuova_ora,
+        imp.get("ultimo_agg_prezzi"),
+        imp.get("_saved_last_price_update"),
+        st.session_state.get("_last_price_update")
+    ) or nuova_ora
+    imp["ultimo_agg_prezzi"] = ora_finale
+    imp.pop("_saved_last_price_update", None)
+    try:
+        with open(fp_imp, 'w', encoding='utf-8') as f_imp:
+            json.dump(imp, f_imp, indent=4, ensure_ascii=False)
+        try:
+            _sync_github_file(IMPOSTAZIONI_FILE, json.dumps(imp, indent=4, ensure_ascii=False), mode='push')
+        except Exception:
+            pass
+    except Exception:
+        pass
+    st.session_state["_last_price_update"] = ora_finale
+    return ora_finale
 
 def registra_proposta(modulo, azione, ticker, dettaglio, stato="N/D"):
     try:
@@ -2091,6 +2181,7 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
             risultati.append({**pos, "Prezzo_Attuale_EUR": round(prezzo_eur, 2), "Prezzo_Attuale_USD": round(prezzo_usd, 2), "Valore_Attuale": round(valore_attuale, 2), "PnL_EUR": round(pnl_eur, 2), "PnL_%": round(pnl_pct, 2), "Trend": trend, "Earnings": earnings_msg, "Variazione_Pct": var_pct, "Stato_PAC": stato_pac, "Ultimo_Segnale": ultimo_segnale_display})
         except Exception:
             risultati.append({**pos, "Prezzo_Attuale_EUR": None, "Prezzo_Attuale_USD": None, "PnL_EUR": None, "PnL_%": None, "Trend": "Errore", "Earnings": "N/D", "Variazione_Pct": None, "Stato_PAC": "Errore", "Ultimo_Segnale": "N/D"})
+    salva_ultimo_agg_prezzi()
     return risultati
 
 def calcola_target(ticker_obj, prezzo_medio, prezzo_attuale):
@@ -2270,11 +2361,12 @@ if semaforo_header['spy_prezzo'] is None or semaforo_header['vix'] is None:
 else:
     sem_display = f"{sem_icon} {sem_msg}  |  SPY: ${semaforo_header['spy_prezzo']}  |  VIX: {semaforo_header['vix']}"
 
+_agg_prezzi_display = leggi_ultimo_agg_prezzi()
 st.markdown(f'''
 <div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
     <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
-        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {st.session_state.get("_last_price_update") or (datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "portafoglio.json"))).strftime("%d/%m/%Y %H:%M") if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "portafoglio.json")) else "-")}</span>
+        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {_agg_prezzi_display}</span>
     </div>
     <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
         {sem_display}
@@ -2284,8 +2376,9 @@ st.markdown(f'''
 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_usa'):
     regia_tracker.render_barra_indici_usa()
 
-if os.path.exists(IMPOSTAZIONI_FILE):
-    with open(IMPOSTAZIONI_FILE, 'r', encoding='utf-8') as f:
+_fp_impostazioni = _get_impostazioni_path()
+if os.path.exists(_fp_impostazioni):
+    with open(_fp_impostazioni, 'r', encoding='utf-8') as f:
         impostazioni = json.load(f)
 else:
     impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, PLTR, ZETA, NKE, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC, SOFI, NBIS, VRT, ANET", "catalizzatori": "", "esclusioni": ""}
@@ -2293,18 +2386,21 @@ else:
 avvia_scansione_btn = st.sidebar.button("🚀 AVVIA SCANSIONE", type="primary", use_container_width=True, key="btn_avvia_scansione_top")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**💼 Selezione Rapida Portafoglio**")
-_sb_list = [p['Ticker'] for p in (st.session_state.portafoglio or list())] or ["Portafoglio vuoto"]
+_sb_list = list(dict.fromkeys([p['Ticker'] for p in (st.session_state.portafoglio or list()) if p.get('Ticker')])) or ["Portafoglio vuoto"]
 if "sb_quick_ticker" not in st.session_state or st.session_state["sb_quick_ticker"] not in _sb_list:
     st.session_state["sb_quick_ticker"] = next(iter(_sb_list))
+if "sb_ticker_radio" not in st.session_state or st.session_state["sb_ticker_radio"] not in _sb_list:
+    st.session_state["sb_ticker_radio"] = st.session_state["sb_quick_ticker"]
 
 def _on_sb_ticker_change():
     val = st.session_state.get("sb_ticker_radio")
-    if val:
+    if val and val != "Portafoglio vuoto":
         st.session_state["sb_quick_ticker"] = val
         st.session_state["port_selected_chart"] = val
+        st.session_state["sel_chart_port_side"] = val
         st.session_state["txt_analisi_singola_tk"] = val
 
-_sb_sel = st.sidebar.radio("Selezione Rapida", _sb_list, index=_sb_list.index(st.session_state["sb_quick_ticker"]), label_visibility="collapsed", key="sb_ticker_radio", on_change=_on_sb_ticker_change)
+_sb_sel = st.sidebar.radio("Selezione Rapida", _sb_list, label_visibility="collapsed", key="sb_ticker_radio", on_change=_on_sb_ticker_change)
 st.sidebar.markdown("---")
 st.sidebar.subheader("📌 Titoli da Acquistare (Priorità)")
 titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input")
@@ -2338,8 +2434,8 @@ if avvia_scansione_btn:
     impostazioni["lista_ticker_default"] = tickers_input
     impostazioni["catalizzatori"] = catalizzatori_input
     impostazioni["esclusioni"] = esclusioni_input
-    with open(IMPOSTAZIONI_FILE, 'w', encoding='utf-8') as f:
-        json.dump(impostazioni, f)
+    with open(_fp_impostazioni, 'w', encoding='utf-8') as f:
+        json.dump(impostazioni, f, indent=4, ensure_ascii=False)
         try:
             _sync_github_file(IMPOSTAZIONI_FILE, json.dumps(impostazioni, indent=4, ensure_ascii=False), mode='push')
         except Exception:
@@ -2500,15 +2596,7 @@ if avvia_scansione_btn:
     try:
         if st.session_state.get('portafoglio'):
             st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
-            _ora_p = datetime.now().strftime('%d/%m/%Y %H:%M')
-            st.session_state['_last_price_update'] = _ora_p
-            try:
-                _imp_p = carica_json('impostazioni.json', {})
-                _imp_p['_saved_last_price_update'] = _ora_p
-                salva_json('impostazioni.json', _imp_p)
-            except Exception:
-                pass
-        st.session_state['_last_price_update'] = datetime.now().strftime('%d/%m/%Y %H:%M')
+        salva_ultimo_agg_prezzi()
     except Exception:
         pass
     st.session_state.pyramiding_alerts = pyramiding_alerts
@@ -2585,6 +2673,7 @@ with tab_riepilogo:
             with st.spinner("🔄 Aggiornamento quotazioni in corso..."):
                 st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
                 st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
+                salva_ultimo_agg_prezzi()
             st.rerun()
     with col_r_btn2:
         st.info("💡 Per aggiornare segnali BY / BY FABIO e alert tecnici, usa **🔴 AVVIA SCANSIONE** nella barra a sinistra.")
@@ -2926,7 +3015,7 @@ with tab_portafoglio:
                         _item_m["Prezzo_Medio"] = _pmc_new
                         _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
                         _trovato_m = True
-                        st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                        salva_ultimo_agg_prezzi()
                         salva_json("portafoglio.json", st.session_state.portafoglio)
                         registra_acquisto_storico(_tk_clean, str(new_tipo), float(new_qta), float(new_medio), nota="Mediazione PMC")
                         break
@@ -2945,7 +3034,7 @@ with tab_portafoglio:
                         "PnL_%": 0.0,
                         "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
                     })
-                    st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    salva_ultimo_agg_prezzi()
                     salva_json("portafoglio.json", st.session_state.portafoglio)
                     registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto")
                 st.rerun()
@@ -2968,9 +3057,21 @@ with tab_portafoglio:
         if not has_live_data:
             st.info("👆 Clicca **🔄 Aggiorna Quotazioni** per caricare i dati di mercato")
         else:
-            _tickers_p = [p['Ticker'] for p in portafoglio]
+            _tickers_p = list(dict.fromkeys([p['Ticker'] for p in portafoglio if p.get('Ticker')]))
             if 'port_selected_chart' not in st.session_state or st.session_state.port_selected_chart not in _tickers_p:
-                st.session_state.port_selected_chart = next(iter(_tickers_p))
+                _init_tk_port = st.session_state.get("sb_quick_ticker")
+                st.session_state.port_selected_chart = _init_tk_port if _init_tk_port in _tickers_p else next(iter(_tickers_p))
+            if 'sel_chart_port_side' not in st.session_state or st.session_state['sel_chart_port_side'] not in _tickers_p:
+                st.session_state['sel_chart_port_side'] = st.session_state.port_selected_chart
+
+            def _on_port_chart_change():
+                val_p = st.session_state.get("sel_chart_port_side")
+                if val_p:
+                    st.session_state["port_selected_chart"] = val_p
+                    st.session_state["sb_quick_ticker"] = val_p
+                    st.session_state["sb_ticker_radio"] = val_p
+                    st.session_state["txt_analisi_singola_tk"] = val_p
+
             col_port_left, col_port_right = st.columns((0.65, 1.6)) if st.session_state.get('port_big_chart', False) else st.columns((1.25, 1))
             with col_port_right:
                 _g_c1, _g_c2 = st.columns([2.2, 1])
@@ -2982,7 +3083,7 @@ with tab_portafoglio:
                         st.session_state.port_big_chart = not _is_big
                         st.rerun()
                 st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                sel_t = st.selectbox("Seleziona titolo:", _tickers_p, index=_tickers_p.index(st.session_state.port_selected_chart), label_visibility="collapsed", key="sel_chart_port_side")
+                sel_t = st.selectbox("Seleziona titolo:", _tickers_p, label_visibility="collapsed", key="sel_chart_port_side", on_change=_on_port_chart_change)
                 st.session_state.port_selected_chart = sel_t
                 pmc_sel = next((p['Prezzo_Medio'] for p in portafoglio if p['Ticker'] == sel_t), None)
                 tf_port_sel = st.session_state.get(f"tf_sel_port_{sel_t}", "3M")
@@ -2990,7 +3091,7 @@ with tab_portafoglio:
                 fig_side = genera_grafico_baleine(sel_t, per_port, sma_short, sma_long, prezzo_medio_eur=pmc_sel, timeframe=tf_port_sel, interval="1d", eurusd_rate=eurusd_rate, height=780 if st.session_state.get('port_big_chart', False) else 580)
                 if fig_side:
                     fig_side = applica_controlli_grafico(fig_side, 2)
-                    st.plotly_chart(fig_side, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False}, key="port_side_live_chart")
+                    st.plotly_chart(fig_side, use_container_width=True, config={'scrollZoom': True, 'displayModeBar': False}, key=f"port_side_live_chart_{sel_t}")
                     render_barra_intervalli_yahoo(sel_t, "port", default_tf="3M")
             with col_port_left:
                 _hdr_c1, _hdr_c2 = st.columns((1.6, 1))
@@ -3001,6 +3102,7 @@ with tab_portafoglio:
                         with st.spinner("Aggiornamento..."):
                             st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
                             st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
+                            salva_ultimo_agg_prezzi()
                         st.rerun()
                 for idx_pos, pos in enumerate(portafoglio):
                     if idx_pos % 2 == 0:
@@ -3364,7 +3466,7 @@ with tab_console:
                             _item_m["Prezzo_Medio"] = _pmc_new
                             _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
                             _trovato_m = True
-                            st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M"); salva_json("portafoglio.json", st.session_state.portafoglio)
+                            salva_ultimo_agg_prezzi(); salva_json("portafoglio.json", st.session_state.portafoglio)
                             registra_acquisto_storico(_tk_clean, "Spot", _q_new - _q_old, (_pmc_new * _q_new - _pmc_old * _q_old) / max(0.0001, _q_new - _q_old), nota="Mediazione PMC"); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
                             break
                     if not _trovato_m:
@@ -3382,7 +3484,7 @@ with tab_console:
                             "PnL_%": 0.0,
                             "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
                         })
-                        st.session_state["_last_price_update"] = datetime.now().strftime("%d/%m/%Y %H:%M"); salva_json("portafoglio.json", st.session_state.portafoglio)
+                        salva_ultimo_agg_prezzi(); salva_json("portafoglio.json", st.session_state.portafoglio)
                         registra_acquisto_storico(_tk_clean, "Spot", _q_n, _pm_n, nota="Nuovo Acquisto"); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
             st.markdown("---")
             st.write("Rimuovi un titolo:")
@@ -3597,7 +3699,10 @@ with tab_analisi:
             st.session_state["txt_analisi_singola_tk"] = "DIA"
         if ic4.button("🚀 Russell 2000 (IWM)", use_container_width=True, key="btn_idx_iwm"):
             st.session_state["txt_analisi_singola_tk"] = "IWM"
-        ticker_input = st.text_input("Inserisci Ticker:", value=st.session_state.get("sb_quick_ticker", "SOFI"), key="txt_analisi_singola_tk")
+        if "txt_analisi_singola_tk" not in st.session_state:
+            _def_an_tk = st.session_state.get("sb_quick_ticker", "SOFI")
+            st.session_state["txt_analisi_singola_tk"] = _def_an_tk if _def_an_tk != "Portafoglio vuoto" else "SOFI"
+        ticker_input = st.text_input("Inserisci Ticker:", key="txt_analisi_singola_tk")
         if ticker_input.strip():
             c_wl_1, c_wl_2 = st.columns(2)
             with c_wl_1:
