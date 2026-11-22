@@ -28,8 +28,9 @@
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-16",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "Ignorata (Tengo)"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 3.9
     },
     {
         "Ticker": "APP",
@@ -45,7 +46,7 @@
         "Data_Ingresso": "2026-11-18",
         "Fonti": "Portafoglio Reale",
         "Stato": "Chiuso (Trailing)",
-        "Esito_Reale": "Da Gestire",
+        "Esito_Reale": "Ignorato",
         "Prezzo_Uscita": 358.02
     },
     {
@@ -61,8 +62,9 @@
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-17",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "Ignorata (Tengo)"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 11.55
     },
     {
         "Ticker": "NKE",
@@ -88,7 +90,7 @@
         "Stop_Loss": 11.91,
         "T1": 15.21,
         "Target": 16.54,
-        "Max_Price": 14.22,
+        "Max_Price": 14.47,
         "Step_Trailing": 0,
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-15",
@@ -104,13 +106,14 @@
         "Stop_Loss": 158.41,
         "T1": 204.88,
         "Target": 223.46,
-        "Max_Price": 183.28,
+        "Max_Price": 183.61,
         "Step_Trailing": 0,
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-15",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "In Portafoglio"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 158.41
     },
     {
         "Ticker": "CRWD",
@@ -120,7 +123,7 @@
         "Stop_Loss": 190.96,
         "T1": 246.96,
         "Target": 269.37,
-        "Max_Price": 218.51,
+        "Max_Price": 234.03,
         "Step_Trailing": 0,
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-15",
@@ -141,8 +144,9 @@
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-16",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "Ignorata (Tengo)"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 12.38
     },
     {
         "Ticker": "SMCI",
@@ -157,8 +161,9 @@
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-16",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "Ignorata (Tengo)"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 20.95
     },
     {
         "Ticker": "NVDA",
@@ -173,7 +178,8 @@
         "Avviso_SL": "",
         "Data_Ingresso": "2026-11-15",
         "Fonti": "Portafoglio Reale",
-        "Stato": "Attivo",
-        "Esito_Reale": "In Portafoglio"
+        "Stato": "Chiuso (SL)",
+        "Esito_Reale": "Da Gestire",
+        "Prezzo_Uscita": 134.76
     }
 ]
