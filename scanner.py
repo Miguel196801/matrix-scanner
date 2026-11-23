@@ -533,40 +533,686 @@ def calcola_regia_acquisti(ign_l, fabio_l, std_l, tp_l, port_l, df_map, cassa_b,
     return out, scartati
 
 def carica_json(file_path, default=None):
+    # Risolve il percorso locale assoluto rispetto alla cartella di scanner.py
+    _abs_fp = file_path if os.path.isabs(file_path) else os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
+    _esiste_locale = os.path.exists(_abs_fp) or os.path.exists(file_path)
+    _is_locale_pc = (os.name == "nt")
+    # In locale su Windows, se il file esiste su disco NON scarica mai da GitHub (evita sovrascritture con copie vecchie).
+    # Lo scaricamento da GitHub resta attivo solo su Streamlit Cloud / Mobile (Linux) oppure se il file locale manca.
+    _deve_pull_gh = (not _is_locale_pc) or (not _esiste_locale)
+
     _k_pull = f"_gh_pulled_{os.path.basename(file_path)}"
-    if _k_pull not in st.session_state and "_sync_github_file" in globals():
+    if _deve_pull_gh and _k_pull not in st.session_state and "_sync_github_file" in globals():
         st.session_state[_k_pull] = True
         _rem_txt = _sync_github_file(file_path, "", mode="pull")
         if _rem_txt:
             try:
-                with open(file_path, "w", encoding="utf-8") as _fw:
+                with open(_abs_fp, "w", encoding="utf-8") as _fw:
                     _fw.write(_rem_txt)
             except Exception:
                 pass
-    if f"_pulled_{os.path.basename(file_path)}" not in st.session_state:
-        st.session_state[f"_pulled_{os.path.basename(file_path)}"] = True
-        _rem = None if os.name == "nt" else _sync_github_file(file_path, "", mode="pull")
-        if _rem:
-            try:
-                with open(file_path, "w", encoding="utf-8") as _fw:
-                    _fw.write(_rem)
-            except Exception:
-                pass
-    if os.path.exists(file_path):
+    elif _k_pull not in st.session_state:
+        st.session_state[_k_pull] = True
+
+    _target_fp = _abs_fp if os.path.exists(_abs_fp) else file_path
+    if os.path.exists(_target_fp):
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(_target_fp, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception:
             return list() if default is None else default
     return list() if default is None else default
 
 def salva_json(file_path, data):
-    with open(file_path, 'w', encoding='utf-8') as f:
+    _abs_fp = file_path if os.path.isabs(file_path) else os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
+    with open(_abs_fp, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
     try:
         _sync_github_file(file_path, json.dumps(data, indent=4, ensure_ascii=False), mode='push')
     except Exception:
         pass
+
+def ricarica_portafoglio_da_disco(push_github=True):
+    """Rilegge portafoglio.json direttamente dal disco locale, aggiorna la sessione e opzionalmente carica su GitHub."""
+    _fp_disk = os.path.join(os.path.dirname(os.path.abspath(__file__)), PORTAFOGLIO_FILE)
+    if not os.path.exists(_fp_disk):
+        return False, "File portafoglio.json non trovato su disco."
+    try:
+        with open(_fp_disk, "r", encoding="utf-8") as _f_disk:
+            _dati_disk = json.load(_f_disk)
+        if not isinstance(_dati_disk, list):
+            return False, "Formato portafoglio.json non valido (attesa una lista)."
+        st.session_state["portafoglio"] = _dati_disk
+        if push_github and "_sync_github_file" in globals():
+            _sync_github_file(PORTAFOGLIO_FILE, json.dumps(_dati_disk, indent=4, ensure_ascii=False), mode="push")
+            return True, f"Ricaricati {len(_dati_disk)} titoli da portafoglio.json locale e sincronizzati su GitHub."
+        return True, f"Ricaricati {len(_dati_disk)} titoli da portafoglio.json locale."
+    except Exception as _e_disk:
+        return False, f"Errore lettura portafoglio.json: {_e_disk}"
+
+SEGNALI_ATTIVI_FILE = "segnali_attivi.json"
+
+def _get_segnali_attivi_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), SEGNALI_ATTIVI_FILE)
+
+def _carica_segnali_attivi():
+    """Carica la bacheca persistente dei segnali attivi e dello storico chiusi da segnali_attivi.json."""
+    fp = _get_segnali_attivi_path()
+    if os.path.exists(fp):
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                dati = json.load(f)
+            if isinstance(dati, dict):
+                dati.setdefault("aperti", [])
+                dati.setdefault("chiusi", [])
+                return dati
+        except Exception:
+            pass
+    return {"aperti": [], "chiusi": []}
+
+def _salva_segnali_attivi(dati):
+    """Salva su disco locale segnali_attivi.json mantenendo al massimo gli ultimi 10 segnali chiusi."""
+    if not isinstance(dati, dict):
+        dati = {"aperti": [], "chiusi": []}
+    dati["aperti"] = list(dati.get("aperti") or [])
+    dati["chiusi"] = list(dati.get("chiusi") or [])[:10]
+    fp = _get_segnali_attivi_path()
+    with open(fp, "w", encoding="utf-8") as f:
+        json.dump(dati, f, indent=4, ensure_ascii=False)
+
+def _calcola_livello_rischio_segnale(stop_pct, s_score=None):
+    """Restituisce il livello di rischio visivo con peperoncini in base allo stop e all'S-Score."""
+    sp = abs(float(stop_pct or 10.0))
+    sc = int(s_score) if s_score is not None else 65
+    if sp <= 7.0 and sc >= 75:
+        return "🌶️ Basso-Medio"
+    if sp <= 12.5 and sc >= 60:
+        return "🌶️🌶️ Medio"
+    return "🌶️🌶️🌶️ Medio-Alto"
+
+def _valuta_cluster_insider_bacheca(ticker, df, info, sec_ins, s_score, fase, currency="USD"):
+    """
+    Valuta un candidato per la FONTE B ('🏛️ CLUSTER INSIDER SEC') della Bacheca Segnali Attivi:
+    richiede acquisti ufficiali SEC Form 4 negli ultimi 12 giorni, almeno 2 dirigenti acquirenti
+    e controvalore complessivo >= $1.000.000.
+    """
+    try:
+        if not isinstance(sec_ins, dict) or df is None or len(df) < 20:
+            return None
+        dettagli = sec_ins.get("dettagli") or []
+        if not dettagli:
+            return None
+        dt_12g = (datetime.now() - timedelta(days=12)).strftime("%Y-%m-%d")
+        dir_12g = set()
+        n_acq_12g = 0
+        val_12g = 0.0
+        ult_12g = ""
+        for row in dettagli:
+            d_tx = str(row.get("Data", "")).strip()[:10]
+            if not d_tx or d_tx < dt_12g:
+                continue
+            n_acq_12g += 1
+            nome = str(row.get("Insider", "Dirigente")).strip()
+            if nome:
+                dir_12g.add(nome)
+            imp_raw = str(row.get("Importo $", "0")).replace("$", "").replace(",", "").strip()
+            try:
+                val_12g += float(imp_raw)
+            except Exception:
+                pass
+            if not ult_12g or d_tx > ult_12g:
+                ult_12g = d_tx
+
+        # Criteri rigorosi Fonte B: ultimi 12gg, >= 2 dirigenti distinti, >= $1.000.000
+        if len(dir_12g) < 2 or val_12g < 1000000.0:
+            return None
+
+        prezzo = float(df["Close"].iloc[-1])
+        if prezzo <= 0:
+            return None
+        # Stop di riferimento sul minimo recente (~ -12%)
+        min_15 = float(df["Low"].tail(15).min())
+        if prezzo * 0.84 <= min_15 <= prezzo * 0.92:
+            stop_loss = round(min_15, 2)
+        else:
+            stop_loss = round(prezzo * 0.88, 2)
+        stop_pct = round(((stop_loss - prezzo) / prezzo) * 100.0, 1)
+
+        # Target sul Fair Value analisti oppure resistenza chiave a 52 settimane
+        fv = float((info or {}).get("targetMeanPrice") or 0.0)
+        res_52w = float(df["High"].max())
+        if fv >= prezzo * 1.12:
+            target = round(fv, 2)
+            target_lbl = "Fair Value analisti"
+        else:
+            target = round(max(res_52w, prezzo * 1.25), 2)
+            target_lbl = "resistenza chiave 52w"
+        target_pct = round(((target - prezzo) / prezzo) * 100.0, 1)
+
+        simb = "$" if str(currency).upper() == "USD" else "€"
+        # Formatta la data dell'ultimo acquisto SEC Form 4 in formato italiano GG/MM/AAAA
+        _ult_raw = (ult_12g or str(sec_ins.get("ultimo_acquisto") or "")).strip()[:10]
+        try:
+            ult_it = datetime.strptime(_ult_raw, "%Y-%m-%d").strftime("%d/%m/%Y") if _ult_raw else ""
+        except Exception:
+            ult_it = _ult_raw
+        _ult_tag_b = f" — ultimo: {ult_it}" if ult_it else ""
+        nomi_preview = ", ".join(sorted(list(dir_12g))[:3])
+        motivo = (
+            f"🏛️ Insider SEC ({n_acq_12g} acq / ${val_12g:,.0f}{_ult_tag_b}) da {len(dir_12g)} dirigenti "
+            f"({nomi_preview}). Target su {target_lbl} ({target_pct:+.1f}%), S-Score: {int(s_score or 0)}/100."
+        )
+        return {
+            "ticker": str(ticker).strip().upper(),
+            "fonte": f"🏛️ CLUSTER INSIDER SEC{_ult_tag_b}",
+            "fonte_code": "INSIDER_SEC",
+            "sec_ultimo_acquisto": ult_it,
+            "prezzo_segnale": round(prezzo, 2),
+            "prezzo_attuale": round(prezzo, 2),
+            "trigger_y": round(prezzo, 2),
+            "stop_loss": stop_loss,
+            "target": target,
+            "orizzonte": "3-9 Mesi (Accumulo Insider)",
+            "rischio": _calcola_livello_rischio_segnale(stop_pct, s_score),
+            "fase_attuale": str(fase or "N/D"),
+            "motivazione": motivo,
+            "simbolo": simb,
+            "_val_12g": val_12g,
+            "_dir_12g": len(dir_12g),
+            "_s_score": int(s_score or 0),
+        }
+    except Exception:
+        return None
+
+def _aggiorna_bacheca_segnali_attivi(pattern_alerts, cluster_candidati, scan_price_map):
+    """
+    Aggiorna tutti i segnali APERTI (chiusura automatica su Target, Stop o Fase 4 per Fonte A)
+    e aggiunge i nuovi segnali ufficiali Fonte A (BREAKOUT MATRIX) e Fonte B (max 1 CLUSTER INSIDER SEC).
+    """
+    dati = _carica_segnali_attivi()
+    aperti = dati.get("aperti") or []
+    chiusi = dati.get("chiusi") or []
+    oggi_str = datetime.now().strftime("%Y-%m-%d")
+
+    nuovi_aperti = []
+    # 1) Aggiornamento e verifica chiusura automatica sui segnali già APERTI
+    for sig in aperti:
+        if not isinstance(sig, dict):
+            continue
+        tk = str(sig.get("ticker", "")).strip().upper()
+        if not tk:
+            continue
+        info_live = (scan_price_map or {}).get(tk)
+        prezzo_att = None
+        fase_att = sig.get("fase_attuale", "N/D")
+        if isinstance(info_live, dict) and info_live.get("prezzo"):
+            prezzo_att = float(info_live["prezzo"])
+            fase_att = info_live.get("fase") or fase_att
+        else:
+            # Recupero diretto da yfinance se il titolo non era nella scansione corrente
+            try:
+                df_tmp = yf.Ticker(tk).history(period="1y", interval="1d")
+                if df_tmp is not None and not df_tmp.empty:
+                    df_tmp = df_tmp.dropna(subset=["Close"])
+                    if not df_tmp.empty:
+                        prezzo_att = float(df_tmp["Close"].iloc[-1])
+                        if len(df_tmp) >= 200:
+                            fase_att = rileva_fase_weinstein(df_tmp)
+            except Exception:
+                pass
+
+        if prezzo_att is not None and prezzo_att > 0:
+            sig["prezzo_attuale"] = round(prezzo_att, 2)
+        sig["fase_attuale"] = str(fase_att or "N/D")
+
+        p_sig = float(sig.get("prezzo_segnale") or 0.0)
+        p_now = float(sig.get("prezzo_attuale") or p_sig)
+        stop_l = float(sig.get("stop_loss") or 0.0)
+        target_p = float(sig.get("target") or 0.0)
+        rend_pct = round(((p_now - p_sig) / p_sig) * 100.0, 2) if p_sig > 0 else 0.0
+        sig["rendimento_pct"] = rend_pct
+
+        nuovo_stato = "APERTO"
+        if target_p > 0 and p_now >= target_p:
+            nuovo_stato = "CHIUSO_TARGET"
+        elif stop_l > 0 and p_now <= stop_l:
+            nuovo_stato = "CHIUSO_STOP"
+        elif sig.get("fonte_code") == "BREAKOUT" and "FASE 4" in str(sig.get("fase_attuale", "")).upper():
+            # Chiusura per deterioramento trend (Fase 4) applicata solo ai segnali tecnici Fonte A
+            nuovo_stato = "CHIUSO_TREND"
+
+        if nuovo_stato != "APERTO":
+            sig["stato"] = nuovo_stato
+            sig["data_chiusura"] = oggi_str
+            chiusi.insert(0, sig)
+        else:
+            sig["stato"] = "APERTO"
+            nuovi_aperti.append(sig)
+
+    chiavi_aperte = {(str(s.get("ticker", "")).upper(), str(s.get("fonte_code", ""))) for s in nuovi_aperti}
+
+    # 2) FONTE A — Tutti i segnali BUY ufficiali generati da pattern_engine.py
+    if isinstance(pattern_alerts, dict):
+        for cat_a in ("buy_nuovo", "buy_incremento", "buy_mediazione"):
+            for al in (pattern_alerts.get(cat_a) or []):
+                if not isinstance(al, dict):
+                    continue
+                tk_a = str(al.get("ticker", "")).strip().upper()
+                if not tk_a or (tk_a, "BREAKOUT") in chiavi_aperte:
+                    continue
+                p_sig_a = float(al.get("prezzo") or al.get("trigger_y") or 0.0)
+                if p_sig_a <= 0:
+                    continue
+                fig_nome = str(al.get("figura", "Breakout"))
+                orizz_a = "2-4 Mesi" if fig_nome in ("Cup & Handle", "Flat Base", "Doppio Minimo (W)") else "3-8 Settimane"
+                simb_a = "$" if str(al.get("currency", "USD")).upper() == "USD" else "€"
+                fase_a = (scan_price_map.get(tk_a) or {}).get("fase", "FASE 2")
+                motivo_a = (
+                    f"{al.get('badge', 'BUY')} — {fig_nome} (Confidenza {al.get('confidenza', 0)}%, "
+                    f"R/R 1:{float(al.get('rr', 0) or 0):.2f}). {al.get('motivo', '')}"
+                )
+                nuovi_aperti.insert(0, {
+                    "id": f"{tk_a}_BREAKOUT_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    "ticker": tk_a,
+                    "fonte": "🎯 BREAKOUT MATRIX",
+                    "fonte_code": "BREAKOUT",
+                    "stato": "APERTO",
+                    "data_segnale": oggi_str,
+                    "prezzo_segnale": round(p_sig_a, 2),
+                    "prezzo_attuale": round(p_sig_a, 2),
+                    "trigger_y": round(float(al.get("trigger_y") or p_sig_a), 2),
+                    "stop_loss": round(float(al.get("stop_price") or p_sig_a * 0.92), 2),
+                    "target": round(float(al.get("target_price") or p_sig_a * 1.18), 2),
+                    "orizzonte": orizz_a,
+                    "rischio": _calcola_livello_rischio_segnale(al.get("stop_pct", -8.0), al.get("s_score")),
+                    "fase_attuale": str(fase_a),
+                    "motivazione": motivo_a,
+                    "simbolo": simb_a,
+                    "data_chiusura": "",
+                    "rendimento_pct": 0.0,
+                })
+                chiavi_aperte.add((tk_a, "BREAKOUT"))
+
+    # 3) FONTE B — Max 1 titolo top fresco "🏛️ CLUSTER INSIDER SEC" per scansione
+    if cluster_candidati:
+        cand_ordinati = sorted(
+            [c for c in cluster_candidati if isinstance(c, dict) and (c.get("ticker"), "INSIDER_SEC") not in chiavi_aperte],
+            key=lambda x: (float(x.get("_val_12g", 0.0)), int(x.get("_dir_12g", 0)), int(x.get("_s_score", 0))),
+            reverse=True,
+        )
+        if cand_ordinati:
+            top_b = dict(cand_ordinati[0])
+            tk_b = top_b["ticker"]
+            nuovi_aperti.insert(0, {
+                "id": f"{tk_b}_INSIDER_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "ticker": tk_b,
+                "fonte": top_b.get("fonte", "🏛️ CLUSTER INSIDER SEC"),
+                "fonte_code": "INSIDER_SEC",
+                "sec_ultimo_acquisto": top_b.get("sec_ultimo_acquisto", ""),
+                "stato": "APERTO",
+                "data_segnale": oggi_str,
+                "prezzo_segnale": top_b["prezzo_segnale"],
+                "prezzo_attuale": top_b["prezzo_attuale"],
+                "trigger_y": top_b["trigger_y"],
+                "stop_loss": top_b["stop_loss"],
+                "target": top_b["target"],
+                "orizzonte": top_b["orizzonte"],
+                "rischio": top_b["rischio"],
+                "fase_attuale": top_b["fase_attuale"],
+                "motivazione": top_b["motivazione"],
+                "simbolo": top_b.get("simbolo", "$"),
+                "data_chiusura": "",
+                "rendimento_pct": 0.0,
+            })
+
+    dati["aperti"] = nuovi_aperti
+    dati["chiusi"] = chiusi[:10]
+    _salva_segnali_attivi(dati)
+    return dati
+
+def render_bacheca_segnali_attivi(eurusd_rate=1.12):
+    """Renderizza la Bacheca Segnali Attivi completa e immediata nel Riepilogo Operativo."""
+    st.subheader("📋 Bacheca Segnali Attivi (Operazioni in Corso fino a chiusura)")
+    dati = _carica_segnali_attivi()
+    aperti = dati.get("aperti") or []
+    chiusi = dati.get("chiusi") or []
+
+    if not aperti:
+        st.info(
+            "Nessun segnale attivo in bacheca al momento. Avvia **🚀 AVVIA SCANSIONE** per registrare "
+            "automaticamente eventuali segnali **🎯 BREAKOUT MATRIX** o **🏛️ CLUSTER INSIDER SEC**."
+        )
+    else:
+        st.caption(
+            f"Operazioni aperte monitorate automaticamente fino a Target, Stop Loss o cambio trend: **{len(aperti)}** "
+            "(Fonti: **🎯 BREAKOUT MATRIX** e **🏛️ CLUSTER INSIDER SEC**)."
+        )
+        for idx_s, sig in enumerate(aperti):
+            sig_id = str(sig.get("id") or f"{sig.get('ticker')}_{idx_s}")
+            tk = str(sig.get("ticker", ""))
+            fonte = str(sig.get("fonte", "🎯 BREAKOUT MATRIX"))
+            is_insider_b = (sig.get("fonte_code") == "INSIDER_SEC")
+            b_col = "#A855F7" if is_insider_b else "#10B981"
+            badge_bg = "rgba(168,85,247,0.20)" if is_insider_b else "rgba(16,185,129,0.20)"
+            badge_txt = "#E9D5FF" if is_insider_b else "#6EE7B7"
+
+            simb = sig.get("simbolo", "$")
+            p_sig = float(sig.get("prezzo_segnale") or 0.0)
+            p_att = float(sig.get("prezzo_attuale") or p_sig)
+            var_pct = ((p_att - p_sig) / p_sig) * 100.0 if p_sig > 0 else 0.0
+            var_col = "#4ADE80" if var_pct >= 0 else "#F87171"
+
+            # Semaforo immediato "Ancora Comprabile" vs "Già Corso / Solo Gestione"
+            if var_pct <= 3.5:
+                sem_html = (
+                    "<span style='background:rgba(16,185,129,0.18); color:#4ADE80; border:1px solid rgba(16,185,129,0.55); "
+                    "padding:3px 9px; border-radius:5px; font-size:0.78rem; font-weight:800;'>"
+                    "🟢 ANCORA COMPRABILE (entro +3.5% dal segnale)</span>"
+                )
+            else:
+                sem_html = (
+                    f"<span style='background:rgba(245,158,11,0.18); color:#FBBF24; border:1px solid rgba(245,158,11,0.55); "
+                    f"padding:3px 9px; border-radius:5px; font-size:0.78rem; font-weight:800;'>"
+                    f"🟡 GIÀ CORSO ({var_pct:+.1f}% dal segnale) — NON INSEGUIRE, SOLO GESTIONE</span>"
+                )
+
+            stop_v = float(sig.get("stop_loss") or 0.0)
+            target_v = float(sig.get("target") or 0.0)
+            trig_v = float(sig.get("trigger_y") or p_sig)
+            stop_pct_d = ((stop_v - p_sig) / p_sig) * 100.0 if p_sig > 0 else 0.0
+            tgt_pct_d = ((target_v - p_sig) / p_sig) * 100.0 if p_sig > 0 else 0.0
+            trig_html = f"<span>⚡ <b>Trigger Y:</b> {simb}{trig_v:.2f}</span>" if not is_insider_b else ""
+
+            c_card, c_act = st.columns([6.2, 1.0])
+            with c_card:
+                st.markdown(
+                    f"""
+                    <div style="background:#131722; border:1px solid #2A2E39; border-left:4px solid {b_col};
+                                border-radius:8px; padding:0.80rem 1.0rem; margin-bottom:0.55rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:0.40rem;">
+                            <div>
+                                <span style="background:{badge_bg}; color:{badge_txt}; border:1px solid {b_col};
+                                             font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:4px;">{fonte}</span>
+                                <span style="font-size:1.12rem; font-weight:800; color:#FFFFFF; margin-left:8px;">{tk}</span>
+                                <span style="color:#94A3B8; font-size:0.80rem; margin-left:8px;">📅 Segnale: <b>{sig.get('data_segnale', '-')}</b></span>
+                            </div>
+                            <div>{sem_html}</div>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:14px; font-family:'JetBrains Mono', monospace;
+                                    font-size:0.83rem; color:#E2E8F0; margin-bottom:0.35rem;">
+                            <span>📌 <b>Prezzo Segnale:</b> {simb}{p_sig:.2f}</span>
+                            <span>💹 <b>Attuale:</b> {simb}{p_att:.2f} <b style="color:{var_col};">({var_pct:+.1f}%)</b></span>
+                            {trig_html}
+                            <span style="color:#F87171;">🛑 <b>Stop:</b> {simb}{stop_v:.2f} ({stop_pct_d:+.1f}%)</span>
+                            <span style="color:#4ADE80;">🎯 <b>Target:</b> {simb}{target_v:.2f} ({tgt_pct_d:+.1f}%)</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:14px; font-size:0.80rem; color:#CBD5E1; margin-bottom:0.30rem;">
+                            <span>⏳ <b>Orizzonte:</b> {sig.get('orizzonte', '-')}</span>
+                            <span>⚖️ <b>Rischio:</b> {sig.get('rischio', '🌶️🌶️ Medio')}</span>
+                            <span>🏛️ <b>Fase:</b> {sig.get('fase_attuale', 'N/D')}</span>
+                        </div>
+                        <div style="font-size:0.81rem; color:#94A3B8; border-top:1px solid #1E222D; padding-top:0.35rem;">
+                            📝 <b style="color:#E2E8F0;">Motivazione:</b> {sig.get('motivazione', '')}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with c_act:
+                st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+                if st.button("❌ Archivia", key=f"btn_arch_sig_{sig_id}_{idx_s}", use_container_width=True):
+                    sig_arch = dict(sig)
+                    sig_arch["stato"] = "ARCHIVIATO"
+                    sig_arch["data_chiusura"] = datetime.now().strftime("%Y-%m-%d")
+                    sig_arch["rendimento_pct"] = round(var_pct, 2)
+                    dati["aperti"] = [x for k_x, x in enumerate(aperti) if k_x != idx_s]
+                    dati["chiusi"] = ([sig_arch] + chiusi)[:10]
+                    _salva_segnali_attivi(dati)
+                    st.rerun()
+
+    # Storico richiudibile degli ultimi 10 segnali chiusi / archiviati
+    with st.expander(f"📜 Storico Ultimi Segnali Chiusi / Archiviati ({len(chiusi)}/10)", expanded=False):
+        if chiusi:
+            mappa_esiti = {
+                "CHIUSO_TARGET": "✅ TARGET RAGGIUNTO",
+                "CHIUSO_STOP": "🛑 STOP LOSS",
+                "CHIUSO_TREND": "📉 TREND FASE 4",
+                "ARCHIVIATO": "🗂️ ARCHIVIATO",
+            }
+            righe_ch = []
+            for ch in chiusi[:10]:
+                sb = ch.get("simbolo", "$")
+                righe_ch.append({
+                    "Chiusura": ch.get("data_chiusura", "-"),
+                    "Fonte": ch.get("fonte", "-"),
+                    "Ticker": ch.get("ticker", "-"),
+                    "Esito": mappa_esiti.get(ch.get("stato", ""), ch.get("stato", "-")),
+                    "Data Segnale": ch.get("data_segnale", "-"),
+                    "Ingresso": f"{sb}{float(ch.get('prezzo_segnale') or 0):.2f}",
+                    "Chiusura $": f"{sb}{float(ch.get('prezzo_attuale') or 0):.2f}",
+                    "Rendimento %": f"{float(ch.get('rendimento_pct') or 0):+.2f}%",
+                })
+            st.dataframe(pd.DataFrame(righe_ch), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nessun segnale chiuso o archiviato finora.")
+
+def render_simulatore_mediazione_portafoglio(portafoglio):
+    """
+    Renderizza nella scheda Portafoglio il box richiudibile ad alto contrasto
+    '🧮 Simulatore Mediazione & Gain Portafoglio' con calcolo su azioni intere,
+    confronto rimbalzo necessario al pareggio e tabella rapida riduzione perdita (-15%, -10%, -5%).
+    """
+    with st.expander("🧮 Simulatore Mediazione & Gain Portafoglio", expanded=False):
+        pos_valide = []
+        for p in (portafoglio or []):
+            tk = str(p.get("Ticker", "")).strip().upper()
+            qta = float(p.get("Quantita", 0) or 0)
+            pmc = float(p.get("Prezzo_Medio", 0) or 0)
+            p_att = float(p.get("Prezzo_Attuale_EUR") or 0)
+            if not tk or qta <= 0 or pmc <= 0:
+                continue
+            has_live = p_att > 0
+            if not has_live:
+                p_att = pmc
+            val_car = qta * pmc
+            val_att = qta * p_att
+            pnl_eur = val_att - val_car
+            pnl_pct = ((p_att / pmc) - 1.0) * 100.0 if pmc > 0 else 0.0
+            pos_valide.append({
+                "ticker": tk,
+                "tipo": str(p.get("Tipo", "Spot")),
+                "qta": qta,
+                "pmc": pmc,
+                "p_att": p_att,
+                "has_live": has_live,
+                "val_car": val_car,
+                "val_att": val_att,
+                "pnl_eur": pnl_eur,
+                "pnl_pct": pnl_pct,
+            })
+
+        if not pos_valide:
+            st.info("Nessuna posizione valida in portafoglio per la simulazione.")
+            return
+
+        # 1) Panoramica rapida GAIN / LOSS in due colonnine compatte
+        gain_list = sorted([x for x in pos_valide if x["pnl_pct"] >= 0], key=lambda x: x["pnl_pct"], reverse=True)
+        loss_list = sorted([x for x in pos_valide if x["pnl_pct"] < 0], key=lambda x: x["pnl_pct"])
+
+        cg_col, cl_col = st.columns(2)
+        with cg_col:
+            righe_g = ""
+            if gain_list:
+                for g in gain_list:
+                    righe_g += (
+                        f"<div style='display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #1E293B; "
+                        f"font-family:\"JetBrains Mono\", monospace; font-size:0.83rem; color:#F8FAFC;'>"
+                        f"<span><b>{g['ticker']}</b> <span style='color:#94A3B8; font-size:0.75rem;'>({g['tipo']})</span></span>"
+                        f"<span style='color:#4ADE80; font-weight:700;'>{g['pnl_pct']:+.1f}% &nbsp;|&nbsp; € {g['pnl_eur']:+,.2f}</span>"
+                        f"</div>"
+                    )
+            else:
+                righe_g = "<div style='color:#E2E8F0; font-size:0.82rem;'>Nessun titolo attualmente in gain.</div>"
+            st.markdown(
+                f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #10B981; border-radius:8px; padding:0.70rem 0.90rem;'>"
+                f"<div style='font-weight:800; color:#F8FAFC; font-size:0.90rem; margin-bottom:0.40rem;'>🟢 Titoli in GAIN ({len(gain_list)})</div>"
+                f"{righe_g}</div>",
+                unsafe_allow_html=True,
+            )
+        with cl_col:
+            righe_l = ""
+            if loss_list:
+                for l in loss_list:
+                    righe_l += (
+                        f"<div style='display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #1E293B; "
+                        f"font-family:\"JetBrains Mono\", monospace; font-size:0.83rem; color:#F8FAFC;'>"
+                        f"<span><b>{l['ticker']}</b> <span style='color:#94A3B8; font-size:0.75rem;'>({l['tipo']})</span></span>"
+                        f"<span style='color:#F87171; font-weight:700;'>{l['pnl_pct']:+.1f}% &nbsp;|&nbsp; € {l['pnl_eur']:+,.2f}</span>"
+                        f"</div>"
+                    )
+            else:
+                righe_l = "<div style='color:#E2E8F0; font-size:0.82rem;'>Nessun titolo attualmente in perdita.</div>"
+            st.markdown(
+                f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #EF4444; border-radius:8px; padding:0.70rem 0.90rem;'>"
+                f"<div style='font-weight:800; color:#F8FAFC; font-size:0.90rem; margin-bottom:0.40rem;'>🔴 Titoli in LOSS ({len(loss_list)})</div>"
+                f"{righe_l}</div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+
+        # Ordina per perdita % più profonda così di default viene preselezionato il titolo con il loss maggiore
+        ordinati_sel = sorted(pos_valide, key=lambda x: x["pnl_pct"])
+        etichette_sel = [
+            f"{x['ticker']} ({x['pnl_pct']:+.1f}% | Att. €{x['p_att']:.2f} | PMC €{x['pmc']:.2f})"
+            for x in ordinati_sel
+        ]
+        c_sel_tk, c_sel_imp = st.columns([1.4, 1.0])
+        with c_sel_tk:
+            scelta_lbl = st.selectbox(
+                "📌 Seleziona titolo da simulare (default: perdita % maggiore):",
+                etichette_sel,
+                index=0,
+                key="sim_med_select_ticker",
+            )
+        with c_sel_imp:
+            imp_sim = st.number_input(
+                "💶 Importo indicativo da investire (€):",
+                min_value=1.0,
+                max_value=500000.0,
+                value=300.0,
+                step=50.0,
+                key="sim_med_importo_eur",
+            )
+
+        idx_scelto = etichette_sel.index(scelta_lbl)
+        pos_sel = ordinati_sel[idx_scelto]
+        tk_s = pos_sel["ticker"]
+        q_old = pos_sel["qta"]
+        pmc_old = pos_sel["pmc"]
+        p_att = pos_sel["p_att"]
+        cap_old = pos_sel["val_car"]
+        pnl_old = pos_sel["pnl_pct"]
+
+        if not pos_sel["has_live"]:
+            st.caption("ℹ️ Quotazione live non ancora caricata per questo titolo: clicca **🔄 Aggiorna Prezzi** per usare il prezzo di mercato reale.")
+
+        # 2) Calcolo con AZIONI INTERE (arrotondate all'intero più vicino, minimo 1 azione)
+        az_intere = max(1, int(round(float(imp_sim) / p_att))) if p_att > 0 else 1
+        costo_esatto = az_intere * p_att
+
+        # Opzioni +/- 1 azione (in particolare quando l'arrotondamento supera leggermente il budget)
+        opz_alt = []
+        if az_intere > 1:
+            az_m = az_intere - 1
+            opz_alt.append(f"<b>{az_m} azioni</b> = € {az_m * p_att:,.2f}" + (" (entro budget)" if costo_esatto > imp_sim else ""))
+        az_p = az_intere + 1
+        opz_alt.append(f"<b>{az_p} azioni</b> = € {az_p * p_att:,.2f}")
+        nota_budget = " (leggermente sopra budget)" if costo_esatto > imp_sim else " (entro budget)"
+
+        q_new = q_old + az_intere
+        cap_new = cap_old + costo_esatto
+        pmc_new = cap_new / q_new if q_new > 0 else pmc_old
+        pnl_new = ((p_att / pmc_new) - 1.0) * 100.0 if pmc_new > 0 else 0.0
+
+        # Rimbalzo necessario per tornare esattamente a 0,00% (pareggio)
+        if pnl_old < 0:
+            rimb_prima = ((pmc_old / p_att) - 1.0) * 100.0 if p_att > 0 else 0.0
+            rimb_dopo = ((pmc_new / p_att) - 1.0) * 100.0 if p_att > 0 else 0.0
+            stato_riga = (
+                f"📉 <b>Perdita %:</b> da <b style='color:#F87171;'>{pnl_old:+.2f}%</b> a <b style='color:#F8FAFC;'>{pnl_new:+.2f}%</b> "
+                f"&nbsp;|&nbsp; 🚀 <b>Rimbalzo per pareggio (0,00%):</b> da <b>+{rimb_prima:.2f}%</b> a <b style='color:#4ADE80;'>+{rimb_dopo:.2f}%</b> "
+                f"(risparmi <b>{max(0.0, rimb_prima - rimb_dopo):.2f} punti %</b>)"
+            )
+            bordo_ris = "#38BDF8"
+        else:
+            cuscinetto_new = ((p_att / pmc_new) - 1.0) * 100.0 if pmc_new > 0 else 0.0
+            stato_riga = (
+                f"📈 <b>Gain % aggiornato:</b> da <b style='color:#4ADE80;'>{pnl_old:+.2f}%</b> a <b style='color:#F8FAFC;'>{pnl_new:+.2f}%</b> "
+                f"&nbsp;|&nbsp; 🛡️ <b>Nuovo livello di pareggio (PMC):</b> <b style='color:#F8FAFC;'>€ {pmc_new:.2f}</b> "
+                f"(margine cuscinetto: <b>{cuscinetto_new:+.2f}%</b>)"
+            )
+            bordo_ris = "#10B981"
+
+        st.markdown(
+            f"""
+            <div style="background:#131722; border:1px solid #334155; border-left:4px solid {bordo_ris};
+                        border-radius:8px; padding:0.85rem 1.05rem; margin-top:0.35rem; margin-bottom:0.70rem;">
+                <div style="font-size:0.96rem; font-weight:800; color:#F8FAFC; margin-bottom:0.40rem;">
+                    🧾 Simulazione su {tk_s} @ € {p_att:.2f} — <span style="color:#4ADE80;">{az_intere} azioni intere = € {costo_esatto:,.2f}</span>
+                    <span style="font-size:0.80rem; font-weight:600; color:#E2E8F0;">{nota_budget}</span>
+                </div>
+                <div style="font-size:0.80rem; color:#E2E8F0; margin-bottom:0.45rem;">
+                    🔁 Alternative ±1 azione: {' &nbsp;|&nbsp; '.join(opz_alt)}
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:18px; font-family:'JetBrains Mono', monospace;
+                            font-size:0.85rem; color:#F8FAFC; margin-bottom:0.45rem; padding:0.45rem 0.65rem;
+                            background:#0B0E11; border:1px solid #1E293B; border-radius:6px;">
+                    <span>🎯 <b>Nuovo PMC:</b> € {pmc_new:.2f} <span style="color:#E2E8F0;">(prima € {pmc_old:.2f})</span></span>
+                    <span>📦 <b>Azioni Totali:</b> {q_new:.4f} <span style="color:#E2E8F0;">(prima {q_old:.4f})</span></span>
+                    <span>💶 <b>Capitale Investito:</b> € {cap_new:,.2f} <span style="color:#E2E8F0;">(prima € {cap_old:,.2f})</span></span>
+                </div>
+                <div style="font-size:0.85rem; color:#F8FAFC; line-height:1.5;">
+                    {stato_riga}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # 3) Tabella rapida "Quanto serve per ridurre la perdita" (SOLO per titoli in LOSS)
+        if pnl_old < 0 and p_att > 0:
+            st.markdown(f"**📊 Quanto serve per ridurre la perdita di `{tk_s}` (Azioni Intere @ € {p_att:.2f}):**")
+            righe_ob = []
+            for target_loss_pct in (15.0, 10.0, 5.0):
+                L = target_loss_pct / 100.0
+                if pnl_old >= -target_loss_pct:
+                    righe_ob.append({
+                        "Obiettivo Perdita": f"-{int(target_loss_pct)}%",
+                        "Azioni Intere da Comprare": 0,
+                        "Costo Stimato (€)": "€ 0,00",
+                        "Nuovo PMC (€)": f"€ {pmc_old:.2f}",
+                        "Perdita Risultante": f"{pnl_old:+.2f}% (✅ già raggiunto)",
+                        "Rimbalzo per Pareggio": f"+{((pmc_old / p_att) - 1.0) * 100.0:.2f}%",
+                    })
+                else:
+                    pmc_target = p_att / (1.0 - L)
+                    denom = pmc_target - p_att
+                    n_esatto = (q_old * (pmc_old - pmc_target)) / denom if denom > 0 else 0.0
+                    n_int = max(1, int(math.ceil(n_esatto)))
+                    costo_ob = n_int * p_att
+                    pmc_ris = (cap_old + costo_ob) / (q_old + n_int)
+                    pnl_ris = ((p_att / pmc_ris) - 1.0) * 100.0
+                    rimb_ris = ((pmc_ris / p_att) - 1.0) * 100.0
+                    righe_ob.append({
+                        "Obiettivo Perdita": f"-{int(target_loss_pct)}%",
+                        "Azioni Intere da Comprare": n_int,
+                        "Costo Stimato (€)": f"€ {costo_ob:,.2f}",
+                        "Nuovo PMC (€)": f"€ {pmc_ris:.2f}",
+                        "Perdita Risultante": f"{pnl_ris:+.2f}%",
+                        "Rimbalzo per Pareggio": f"+{rimb_ris:.2f}%",
+                    })
+            st.dataframe(pd.DataFrame(righe_ob), use_container_width=True, hide_index=True)
 
 def _get_impostazioni_path():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), IMPOSTAZIONI_FILE)
@@ -1566,9 +2212,29 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     if b_ins:
         st.info(f"**Segnale Insider Attivo:** {b_ins}")
 
-    p_usd = float(r.get('prezzo_usd', 0))
-    p_eur = float(r.get('prezzo_eur', 0))
-    var_pct = float(r.get('var_oggi_pct') or r.get('var_pct') or 0)
+    # Acquisti reali sul mercato aperto (Form 4 codice "P") letti direttamente dalla SEC EDGAR API
+    if 'get_sec_insider_buys_90gg' in globals():
+        try:
+            _sec_scheda = get_sec_insider_buys_90gg(tk)
+            if isinstance(_sec_scheda, dict) and _sec_scheda.get("buys", 0) > 0:
+                _val_s = float(_sec_scheda.get("valore_usd", 0) or 0)
+                _ult_s = _sec_scheda.get("ultimo_acquisto") or "N/D"
+                st.success(
+                    f"🕵️ **SEC Form 4 (90gg):** {_sec_scheda['buys']} acquisti reali sul mercato aperto "
+                    f"({_sec_scheda['num_insider']} insider) | Totale stimato: **${_val_s:,.0f}** | Ultimo: **{_ult_s}**"
+                )
+                _det_sec = _sec_scheda.get("dettagli") or []
+                if _det_sec:
+                    with st.expander(f"📋 Dettaglio Acquisti Insider SEC Form 4 — {tk} ({len(_det_sec)} op.)", expanded=False):
+                        st.dataframe(pd.DataFrame(_det_sec), use_container_width=True, hide_index=True)
+            else:
+                st.caption("🕵️ SEC Form 4 (90gg): nessun acquisto sul mercato aperto (codice P) rilevato.")
+        except Exception:
+            pass
+
+    p_usd = float(r.get('prezzo_usd') or 0)
+    p_eur = float(r.get('prezzo_eur') or 0)
+    var_pct = float(r.get('var_oggi_pct') if r.get('var_oggi_pct') is not None else (r.get('var_pct') or 0))
     col_v = "#089981" if var_pct >= 0 else "#F23645"
     day_low = float(info_y.get('dayLow') or (df_1y['Low'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
     day_high = float(info_y.get('dayHigh') or (df_1y['High'].iloc[-1] if df_1y is not None and not df_1y.empty else p_usd))
@@ -1612,8 +2278,12 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     _fw_desc = "Rialzo (Ideale)" if "2" in _fw_raw else ("Accumulo (Attesa Breakout)" if "1" in _fw_raw else ("Distribuzione (Tattico)" if "3" in _fw_raw else ("Ribasso (Evitare)" if "4" in _fw_raw else "")))
     _fw_col = "normal" if "2" in _fw_raw else ("inverse" if "4" in _fw_raw else "off")
     c1.metric("🏛️ Fase Weinstein", _fw_lbl, _fw_desc, delta_color=_fw_col)
-    c2.metric("📈 SMA 50 / SMA 200", f"${_v50:.2f}", f"SMA200: ${_v200:.2f}")
-    c3.metric("🐋 VPOC Balene", f"${vpoc_val:.2f}" if vpoc_val else "N/D", f"RSI (14): {r.get('rsi', 0):.1f}")
+    _sma50_lbl = f"${_v50:.2f}" if _v50 > 0 else "N/D (<50g)"
+    _sma200_lbl = f"SMA200: ${_v200:.2f}" if _v200 > 0 else "SMA200: N/D (<200g)"
+    c2.metric("📈 SMA 50 / SMA 200", _sma50_lbl, _sma200_lbl)
+    _rsi_val_scheda = r.get('rsi')
+    _rsi_lbl_scheda = f"RSI (14): {float(_rsi_val_scheda):.1f}" if (_rsi_val_scheda is not None and pd.notna(_rsi_val_scheda) and not (r.get('is_ipo_recente') and int(r.get('n_sedute') or 0) < 15)) else "RSI (14): N/D"
+    c3.metric("🐋 VPOC Balene", f"${vpoc_val:.2f}" if vpoc_val else "N/D", _rsi_lbl_scheda)
     c4.metric("📊 Volumi (Oggi/Med)", vol_str, f"Figura Z: {'SÌ ✅' if r.get('figura_z') else 'No'}")
 
     mcap = float(info_y.get('marketCap') or 0)
@@ -1730,6 +2400,191 @@ def uniforma_tabella_scanner(df_in):
     col_finali = [c for c in col_std if c in df_out.columns] + [c for c in df_out.columns if c not in col_std]
     return df_out[col_finali]
 
+# Header conforme alle regole SEC EDGAR (richiesto User-Agent descrittivo + contatto)
+SEC_EDGAR_HEADERS = {
+    "User-Agent": "MatrixScannerPro/1.0 (contatto@matrixscanner.local)",
+    "Accept-Encoding": "gzip, deflate",
+}
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_sec_ticker_cik_map():
+    """Scarica e memorizza in cache la mappa ufficiale Ticker -> CIK (10 cifre) dalla SEC."""
+    import requests
+    mappa = {}
+    try:
+        r = requests.get(
+            "https://www.sec.gov/files/company_tickers.json",
+            headers=SEC_EDGAR_HEADERS,
+            timeout=12,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, dict):
+                for entry in data.values():
+                    tk_sec = str(entry.get("ticker", "")).strip().upper()
+                    cik_raw = entry.get("cik_str")
+                    if tk_sec and cik_raw is not None:
+                        cik_10 = str(cik_raw).strip().zfill(10)
+                        mappa[tk_sec] = cik_10
+                        if "-" in tk_sec:
+                            mappa[tk_sec.replace("-", ".")] = cik_10
+                        if "." in tk_sec:
+                            mappa[tk_sec.replace(".", "-")] = cik_10
+    except Exception:
+        pass
+    return mappa
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_sec_insider_buys_90gg(ticker, max_docs=14):
+    """
+    Interroga direttamente la SEC EDGAR API (Form 4 XML) per rilevare gli acquisti reali
+    sul mercato aperto (transactionCode == 'P') negli ultimi 90 giorni.
+    """
+    import time
+    import requests
+    import xml.etree.ElementTree as ET
+
+    tk_up = str(ticker or "").strip().upper()
+    vuoto = {
+        "fonte": "SEC Form 4",
+        "ticker": tk_up,
+        "cik": "",
+        "buys": 0,
+        "num_insider": 0,
+        "nomi_insider": [],
+        "valore_usd": 0.0,
+        "ultimo_acquisto": "",
+        "dettagli": [],
+        "form4_analizzati": 0,
+    }
+    if not tk_up:
+        return vuoto
+
+    try:
+        cik_map = get_sec_ticker_cik_map()
+        cik_10 = cik_map.get(tk_up) or cik_map.get(tk_up.replace(".", "-")) or cik_map.get(tk_up.replace("-", "."))
+        if not cik_10:
+            return vuoto
+        cik_num = str(int(cik_10))
+
+        # Scarica l'elenco depositi ufficiali SEC per il CIK
+        sub_url = f"https://data.sec.gov/submissions/CIK{cik_10}.json"
+        r_sub = requests.get(sub_url, headers=SEC_EDGAR_HEADERS, timeout=8)
+        if r_sub.status_code != 200:
+            return vuoto
+        recent = (r_sub.json().get("filings") or {}).get("recent") or {}
+        forms = recent.get("form") or []
+        filing_dates = recent.get("filingDate") or []
+        accessions = recent.get("accessionNumber") or []
+        primary_docs = recent.get("primaryDocument") or []
+
+        cutoff_dt = datetime.now() - timedelta(days=90)
+        cutoff_str = cutoff_dt.strftime("%Y-%m-%d")
+        cutoff_tx_str = (datetime.now() - timedelta(days=95)).strftime("%Y-%m-%d")
+
+        # Filtra i Form 4 depositati negli ultimi 90 giorni (fino a max_docs documenti per velocità)
+        candidati_f4 = []
+        n_rec = min(len(forms), len(filing_dates), len(accessions), len(primary_docs))
+        for i in range(n_rec):
+            if str(forms[i]).strip().upper() == "4" and str(filing_dates[i]) >= cutoff_str:
+                candidati_f4.append((str(filing_dates[i]), str(accessions[i]), str(primary_docs[i])))
+                if len(candidati_f4) >= int(max_docs):
+                    break
+
+        if not candidati_f4:
+            vuoto["cik"] = cik_10
+            return vuoto
+
+        buys_count = 0
+        valore_tot = 0.0
+        insider_names = set()
+        ultimo_acq = ""
+        dettagli = []
+        analizzati = 0
+
+        for idx_doc, (f_date, acc_num, prim_doc) in enumerate(candidati_f4):
+            if idx_doc > 0:
+                # Rispetta il rate limit ufficiale SEC (max 10 req/sec)
+                time.sleep(0.11)
+            acc_nodash = acc_num.replace("-", "").strip()
+            # Rimuove l'eventuale prefisso XSLT (es. xslF345X06/form4.xml -> form4.xml) per scaricare l'XML grezzo
+            raw_doc = prim_doc.split("/")[-1].strip()
+            if not raw_doc or not raw_doc.lower().endswith(".xml"):
+                continue
+            xml_url = f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_nodash}/{raw_doc}"
+            try:
+                r_xml = requests.get(xml_url, headers=SEC_EDGAR_HEADERS, timeout=6)
+                if r_xml.status_code != 200 or not r_xml.content:
+                    continue
+                root = ET.fromstring(r_xml.content)
+                analizzati += 1
+            except Exception:
+                continue
+
+            # Estrae nome e ruolo dell'insider dichiarante
+            nome_ins = (root.findtext(".//reportingOwner/reportingOwnerId/rptOwnerName") or "Insider").strip()
+            ruolo_txt = (root.findtext(".//reportingOwner/reportingOwnerRelationship/officerTitle") or "").strip()
+            if not ruolo_txt:
+                ruoli_flag = []
+                if (root.findtext(".//reportingOwner/reportingOwnerRelationship/isOfficer") or "").strip().lower() in ("1", "true"):
+                    ruoli_flag.append("Officer")
+                if (root.findtext(".//reportingOwner/reportingOwnerRelationship/isDirector") or "").strip().lower() in ("1", "true"):
+                    ruoli_flag.append("Director")
+                if (root.findtext(".//reportingOwner/reportingOwnerRelationship/isTenPercentOwner") or "").strip().lower() in ("1", "true"):
+                    ruoli_flag.append("10% Owner")
+                ruolo_txt = " / ".join(ruoli_flag) if ruoli_flag else "Dirigente"
+
+            # Analizza tutte le transazioni non-derivative cercando gli acquisti reali sul mercato aperto (code == 'P')
+            for tx in root.findall(".//nonDerivativeTable/nonDerivativeTransaction"):
+                tx_code = (tx.findtext(".//transactionCoding/transactionCode") or "").strip().upper()
+                if tx_code != "P":
+                    continue
+                tx_date = (tx.findtext(".//transactionDate/value") or f_date).strip()[:10]
+                if tx_date and tx_date < cutoff_tx_str:
+                    continue
+                try:
+                    shares = float((tx.findtext(".//transactionAmounts/transactionShares/value") or "0").strip())
+                except Exception:
+                    shares = 0.0
+                if shares <= 0:
+                    continue
+                try:
+                    price_str = (tx.findtext(".//transactionAmounts/transactionPricePerShare/value") or "0").strip()
+                    price = float(price_str) if price_str else 0.0
+                except Exception:
+                    price = 0.0
+                imp_usd = shares * price if price > 0 else 0.0
+
+                buys_count += 1
+                valore_tot += imp_usd
+                insider_names.add(nome_ins)
+                if tx_date and (not ultimo_acq or tx_date > ultimo_acq):
+                    ultimo_acq = tx_date
+                dettagli.append({
+                    "Data": tx_date or f_date,
+                    "Insider": nome_ins[:32],
+                    "Ruolo": ruolo_txt[:28],
+                    "Azioni": f"{shares:,.0f}" if shares >= 10 else f"{shares:,.2f}",
+                    "Prezzo $": f"${price:,.2f}" if price > 0 else "N/D",
+                    "Importo $": f"${imp_usd:,.0f}" if imp_usd > 0 else "N/D",
+                })
+
+        dettagli.sort(key=lambda x: x.get("Data", ""), reverse=True)
+        return {
+            "fonte": "SEC Form 4",
+            "ticker": tk_up,
+            "cik": cik_10,
+            "buys": buys_count,
+            "num_insider": len(insider_names),
+            "nomi_insider": sorted(list(insider_names)),
+            "valore_usd": round(valore_tot, 2),
+            "ultimo_acquisto": ultimo_acq,
+            "dettagli": dettagli,
+            "form4_analizzati": analizzati,
+        }
+    except Exception:
+        return vuoto
+
 def analizza_insider_e_minimi(ticker):
     try:
         tk = yf.Ticker(ticker)
@@ -1759,31 +2614,64 @@ def analizza_insider_e_minimi(ticker):
         insider_names = set()
         min_days_ago = 999
         last_buy_dt = None
+        sec_dettagli = []
+        fonte_insider = "SEC Form 4"
+
+        # 1) Fonte ufficiale principale: SEC EDGAR Form 4 (transactionCode == 'P')
         try:
-            itx = tk.insider_transactions
-            if itx is not None and not itx.empty:
-                cutoff = pd.Timestamp.now() - pd.Timedelta(days=95)
-                for _, row in itx.iterrows():
-                    dt_val = pd.to_datetime(row.get('Start Date', row.name), errors='coerce')
-                    if pd.notna(dt_val):
-                        if dt_val.tzinfo is not None:
-                            dt_val = dt_val.tz_localize(None)
-                        if dt_val < cutoff:
-                            continue
-                    txt = str(row.get('Transaction', '') or row.get('Text', '')).lower()
-                    shares = float(row.get('Shares', 0) or 0)
-                    val = float(row.get('Value', 0) or 0)
-                    if ('purchase' in txt or 'buy' in txt) and 'sale' not in txt and shares > 0:
-                        insider_buys += 1
-                        insider_val += val
-                        insider_names.add(str(row.get('Insider', 'Dirigente')))
-                        if pd.notna(dt_val):
-                            gg = max(0, (pd.Timestamp.now() - dt_val).days)
-                            if gg < min_days_ago:
-                                min_days_ago = gg
-                                last_buy_dt = dt_val
+            sec_res = get_sec_insider_buys_90gg(ticker)
+            if isinstance(sec_res, dict) and sec_res.get("buys", 0) > 0:
+                insider_buys = int(sec_res.get("buys", 0))
+                insider_val = float(sec_res.get("valore_usd", 0.0) or 0.0)
+                insider_names = set(sec_res.get("nomi_insider") or [])
+                sec_dettagli = sec_res.get("dettagli") or []
+                fonte_insider = "SEC Form 4"
+                _ult_sec = sec_res.get("ultimo_acquisto") or ""
+                if _ult_sec:
+                    dt_sec = pd.to_datetime(_ult_sec, errors='coerce')
+                    if pd.notna(dt_sec):
+                        last_buy_dt = dt_sec.tz_localize(None) if dt_sec.tzinfo is not None else dt_sec
+                        min_days_ago = max(0, (pd.Timestamp.now() - last_buy_dt).days)
         except Exception:
             pass
+
+        # 2) Fallback Yahoo Finance se la SEC non riporta acquisti (es. titoli esteri/ADR senza CIK)
+        if insider_buys == 0:
+            try:
+                itx = tk.insider_transactions
+                if itx is not None and not itx.empty:
+                    cutoff = pd.Timestamp.now() - pd.Timedelta(days=95)
+                    for _, row in itx.iterrows():
+                        dt_val = pd.to_datetime(row.get('Start Date', row.name), errors='coerce')
+                        if pd.notna(dt_val):
+                            if dt_val.tzinfo is not None:
+                                dt_val = dt_val.tz_localize(None)
+                            if dt_val < cutoff:
+                                continue
+                        txt = str(row.get('Transaction', '') or row.get('Text', '')).lower()
+                        shares = float(row.get('Shares', 0) or 0)
+                        val = float(row.get('Value', 0) or 0)
+                        if ('purchase' in txt or 'buy' in txt) and 'sale' not in txt and shares > 0:
+                            insider_buys += 1
+                            insider_val += val
+                            nome_yf = str(row.get('Insider', 'Dirigente'))
+                            insider_names.add(nome_yf)
+                            fonte_insider = "Yahoo Finance"
+                            if pd.notna(dt_val):
+                                gg = max(0, (pd.Timestamp.now() - dt_val).days)
+                                if gg < min_days_ago:
+                                    min_days_ago = gg
+                                    last_buy_dt = dt_val
+                            sec_dettagli.append({
+                                "Data": dt_val.strftime("%Y-%m-%d") if pd.notna(dt_val) else "N/D",
+                                "Insider": nome_yf[:32],
+                                "Ruolo": str(row.get('Position', 'Dirigente'))[:28],
+                                "Azioni": f"{shares:,.0f}" if shares >= 10 else f"{shares:,.2f}",
+                                "Prezzo $": "N/D",
+                                "Importo $": f"${val:,.0f}" if val > 0 else "N/D",
+                            })
+            except Exception:
+                pass
 
         info = tk.info if isinstance(tk.info, dict) else {}
         target_mean = float(info.get('targetMeanPrice') or 0)
@@ -1830,6 +2718,7 @@ def analizza_insider_e_minimi(ticker):
             'Azienda': str(info.get('shortName', ticker))[:22],
             'Prezzo $': f"${prezzo:.2f}",
             'Insider (90gg)': f"{insider_buys} acq ({len(insider_names)} dir.)" if insider_buys > 0 else "0",
+            'Fonte': fonte_insider,
             'Ultimo Acq.': ultimo_acq_str,
             'Dal Acq. Ins.': var_da_acq_str,
             'Valore Insider $': f"${insider_val:,.0f}",
@@ -1841,7 +2730,8 @@ def analizza_insider_e_minimi(ticker):
             'Score': score_opp,
             '_buys': insider_buys,
             '_var_ins': var_ins if 'var_ins' in locals() else 0.0,
-            '_last_buy_str': last_buy_dt.strftime('%Y-%m-%d') if last_buy_dt is not None else ''
+            '_last_buy_str': last_buy_dt.strftime('%Y-%m-%d') if last_buy_dt is not None else '',
+            '_sec_dettagli': sec_dettagli,
         }
     except Exception:
         return None
@@ -2095,15 +2985,17 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if len(df) < 2:
         return None
 
-    window_s = min(sma_short, len(df))
-    window_l = min(sma_long, len(df))
+    # Calcola le medie mobili reali solo quando lo storico ha abbastanza candele (evita linee fittizie sulle IPO recenti)
+    has_sma20 = len(df) >= 20
+    has_sma_short = len(df) >= sma_short
+    has_sma_long = len(df) >= sma_long
     window_v = min(20, len(df))
-    df['SMA_20'] = df['Close'].rolling(window=window_v).mean()
-    std_20 = df['Close'].rolling(window=window_v).std()
-    df['BB_Upper'] = df['SMA_20'] + (2 * std_20)
-    df['BB_Lower'] = df['SMA_20'] - (2 * std_20)
-    df['SMA_Short'] = df['Close'].rolling(window=window_s).mean()
-    df['SMA_Long'] = df['Close'].rolling(window=window_l).mean()
+    df['SMA_20'] = df['Close'].rolling(window=20).mean() if has_sma20 else np.nan
+    std_20 = df['Close'].rolling(window=20).std() if has_sma20 else np.nan
+    df['BB_Upper'] = df['SMA_20'] + (2 * std_20) if has_sma20 else np.nan
+    df['BB_Lower'] = df['SMA_20'] - (2 * std_20) if has_sma20 else np.nan
+    df['SMA_Short'] = df['Close'].rolling(window=sma_short).mean() if has_sma_short else np.nan
+    df['SMA_Long'] = df['Close'].rolling(window=sma_long).mean() if has_sma_long else np.nan
     df['Vol_Media_20'] = df['Volume'].rolling(window=window_v).mean()
 
     delta = df['Close'].diff()
@@ -2148,9 +3040,10 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         col=1,
     )
 
-    fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Sup'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Inf'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#00BCD4', width=1.3), name='SMA 20'), row=1, col=1)
+    if has_sma20:
+        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Sup'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Inf'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#00BCD4', width=1.3), name='SMA 20'), row=1, col=1)
 
     # Candele nitide ad alto contrasto con bordi sottili su tutti i timeframe (Daily, Weekly, Monthly)
     fig.add_trace(
@@ -2172,8 +3065,10 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         row=1,
         col=1,
     )
-    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#F59E0B', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2962FF', width=1.7), name=f'SMA {sma_long}'), row=1, col=1)
+    if has_sma_short:
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Short'], line=dict(color='#F59E0B', width=1.5), name=f'SMA {sma_short}'), row=1, col=1)
+    if has_sma_long:
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2962FF', width=1.7), name=f'SMA {sma_long}'), row=1, col=1)
 
     if prezzo_medio_eur is not None:
         prezzo_medio_usd = prezzo_medio_eur * eurusd_rate
@@ -2187,15 +3082,16 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         fig.add_hline(y=gap_level, line_dash="dot", line_color="#F59E0B", line_width=1.5, annotation_text=f" Gap: {gap_level:.2f} ", annotation_position="top left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#F59E0B", size=10), row=1, col=1)
 
     by_x, by_y, sell_x, sell_y = list(), list(), list(), list()
-    for i in range(max(window_l, 20), len(df)):
-        sma_s_val, sma_l_val, sma_l_prev = df['SMA_Short'].iloc[i], df['SMA_Long'].iloc[i], df['SMA_Long'].iloc[i - 1]
-        vol_val, vol_m_val = df['Volume'].iloc[i], df['Vol_Media_20'].iloc[i]
-        if pd.notna(sma_s_val) and sma_s_val > 0 and pd.notna(vol_m_val):
-            if abs(df['Close'].iloc[i] - sma_s_val) / sma_s_val <= 0.02 and vol_val > vol_m_val and df['Close'].iloc[i] > df['Open'].iloc[i]:
-                by_x.append(df.index[i]); by_y.append(df['Low'].iloc[i] * 0.985)
-        if pd.notna(sma_l_val) and pd.notna(sma_l_prev) and pd.notna(vol_m_val):
-            if df['Close'].iloc[i] < sma_l_val and df['Close'].iloc[i - 1] >= sma_l_prev and vol_val > vol_m_val:
-                sell_x.append(df.index[i]); sell_y.append(df['High'].iloc[i] * 1.015)
+    if len(df) >= 60:
+        for i in range(max(sma_short, 20), len(df)):
+            sma_s_val, sma_l_val, sma_l_prev = df['SMA_Short'].iloc[i], df['SMA_Long'].iloc[i], df['SMA_Long'].iloc[i - 1]
+            vol_val, vol_m_val = df['Volume'].iloc[i], df['Vol_Media_20'].iloc[i]
+            if pd.notna(sma_s_val) and sma_s_val > 0 and pd.notna(vol_m_val):
+                if abs(df['Close'].iloc[i] - sma_s_val) / sma_s_val <= 0.02 and vol_val > vol_m_val and df['Close'].iloc[i] > df['Open'].iloc[i]:
+                    by_x.append(df.index[i]); by_y.append(df['Low'].iloc[i] * 0.985)
+            if pd.notna(sma_l_val) and pd.notna(sma_l_prev) and pd.notna(vol_m_val):
+                if df['Close'].iloc[i] < sma_l_val and df['Close'].iloc[i - 1] >= sma_l_prev and vol_val > vol_m_val:
+                    sell_x.append(df.index[i]); sell_y.append(df['High'].iloc[i] * 1.015)
 
     if by_x:
         fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=13, color='#10B981', line=dict(width=1.2, color='#FFFFFF')), name=f'▲ BY ({len(by_x)})'), row=1, col=1)
@@ -2617,6 +3513,10 @@ if avvia_scansione_btn:
     # Inizializza il contenitore degli alert del motore figure grafiche secondo il regime SPY
     _spy_regime_scan = (semaforo_header.get('stato') if isinstance(semaforo_header, dict) else 'verde') or 'verde'
     pattern_alerts_scan = pattern_engine.crea_contenitore_pattern_alerts(spy_regime=_spy_regime_scan)
+    sorvegliati_candidati_scan = list()
+    cluster_insider_bacheca_scan = list()
+    scan_price_map_bacheca = dict()
+    watchlist_only_set = {str(t).strip().upper() for t in tickers if str(t).strip()}
     portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
     ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
     tickers = list(set(tickers + list(ticker_in_portafoglio.keys())))
@@ -2734,6 +3634,29 @@ if avvia_scansione_btn:
                 pattern_engine.registra_alert_in_contenitore(pattern_alerts_scan, _pat_res)
             except Exception:
                 pass
+            # Valutazione "Sorvegliati Speciali — Luce Arancione" e candidati "Cluster Insider SEC" (Fonte B)
+            try:
+                _tk_up_sc = str(ticker).strip().upper()
+                scan_price_map_bacheca[_tk_up_sc] = {"prezzo": float(df["Close"].iloc[-1]), "fase": fase, "currency": currency}
+                if _tk_up_sc in watchlist_only_set:
+                    _sec_ins_scan = get_sec_insider_buys_90gg(ticker, max_docs=12) if 'get_sec_insider_buys_90gg' in globals() else None
+                    _sv_item = pattern_engine.valuta_sorvegliato_speciale(
+                        ticker=ticker,
+                        df=df,
+                        s_score=s_score,
+                        fase_weinstein=fase,
+                        currency=currency,
+                        eurusd_rate=eurusd_rate,
+                        spy_regime=_spy_regime_scan,
+                        sec_insider=_sec_ins_scan,
+                    )
+                    if _sv_item:
+                        sorvegliati_candidati_scan.append(_sv_item)
+                    _cl_item = _valuta_cluster_insider_bacheca(ticker, df, info, _sec_ins_scan, s_score, fase, currency=currency)
+                    if _cl_item:
+                        cluster_insider_bacheca_scan.append(_cl_item)
+            except Exception:
+                pass
             oggi_str = datetime.now().strftime("%Y-%m-%d")
             idx_oggi = len(df) - 1
             trigger_by_tecnico_oggi = False
@@ -2825,6 +3748,30 @@ if avvia_scansione_btn:
     st.session_state.extended_hours_alerts = extended_hours_alerts
     # Salva i risultati ordinati del motore figure grafiche in session_state per non rallentare la navigazione
     st.session_state.pattern_alerts = pattern_engine.ordina_contenitore_pattern_alerts(pattern_alerts_scan)
+    # Esclude dai Sorvegliati Speciali tutti i titoli già promossi a BUY verde
+    _buy_esclusi_sorv = set(stats.get('by_tickers', []) or []) | set(stats.get('by_fabio_tickers', []) or [])
+    for _ig_s in (stats.get('ignition_oggi') or []):
+        if isinstance(_ig_s, dict) and _ig_s.get('ticker'):
+            _buy_esclusi_sorv.add(str(_ig_s.get('ticker')).upper())
+    for _cat_b in ('buy_nuovo', 'buy_incremento', 'buy_mediazione'):
+        for _al_b in (st.session_state.pattern_alerts.get(_cat_b) or []):
+            if isinstance(_al_b, dict) and _al_b.get('ticker'):
+                _buy_esclusi_sorv.add(str(_al_b.get('ticker')).upper())
+    st.session_state.pattern_alerts["sorvegliati_speciali"] = pattern_engine.ordina_sorvegliati_speciali(
+        sorvegliati_candidati_scan,
+        buy_tickers_set=_buy_esclusi_sorv,
+        max_items=8,
+        max_grafici=3,
+    )
+    # Aggiorna la Bacheca Segnali Attivi (Fonte A Breakout Matrix + Fonte B max 1 Cluster Insider SEC + chiusure auto)
+    try:
+        _aggiorna_bacheca_segnali_attivi(
+            st.session_state.pattern_alerts,
+            cluster_insider_bacheca_scan,
+            scan_price_map_bacheca,
+        )
+    except Exception:
+        pass
     st.session_state.df_palantir = pd.DataFrame(lista_palantir) if lista_palantir else None
     if lista_fortezza or lista_cavalli or lista_monitor or lista_palantir:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
@@ -2960,6 +3907,10 @@ with tab_riepilogo:
     st.markdown("---")
     # Sezione 4 alert distinti del motore figure grafiche ad alta probabilità
     pattern_engine.render_sezione_pattern_riepilogo(st, st.session_state.get("pattern_alerts"))
+
+    st.markdown("---")
+    # Bacheca Segnali Attivi persistente (Fonte A Breakout Matrix + Fonte B Cluster Insider SEC)
+    render_bacheca_segnali_attivi(eurusd_rate)
 
     st.markdown("---")
     if st.session_state.get('extended_hours_alerts'):
@@ -3233,8 +4184,9 @@ with tab_portafoglio:
             _tk_clean = str(new_ticker).strip().upper()
             if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
                 _trovato_m = False
+                # Fonde sempre sul ticker esistente (anche se PAC vs Spot) per evitare schede duplicate
                 for _item_m in st.session_state.portafoglio:
-                    if str(_item_m.get("Ticker", "")).upper() == _tk_clean and str(_item_m.get("Tipo", "Spot")) == str(new_tipo):
+                    if str(_item_m.get("Ticker", "")).strip().upper() == _tk_clean:
                         _q_old = float(_item_m.get("Quantita", 0) or 0)
                         _pmc_old = float(_item_m.get("Prezzo_Medio", 0) or 0)
                         _q_new = round(_q_old + float(new_qta), 6)
@@ -3242,10 +4194,15 @@ with tab_portafoglio:
                         _item_m["Quantita"] = _q_new
                         _item_m["Prezzo_Medio"] = _pmc_new
                         _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
+                        _pe_es = float(_item_m.get("Prezzo_Attuale_EUR") or 0)
+                        if _pe_es > 0:
+                            _item_m["Valore_Attuale"] = round(_q_new * _pe_es, 2)
+                            _item_m["PnL_EUR"] = round(_item_m["Valore_Attuale"] - _item_m["Valore_Carico"], 2)
+                            _item_m["PnL_%"] = round(((_item_m["Valore_Attuale"] / _item_m["Valore_Carico"]) - 1) * 100, 2) if _item_m["Valore_Carico"] > 0 else 0.0
                         _trovato_m = True
                         salva_ultimo_agg_prezzi()
-                        salva_json("portafoglio.json", st.session_state.portafoglio)
-                        registra_acquisto_storico(_tk_clean, str(new_tipo), float(new_qta), float(new_medio), nota="Mediazione PMC")
+                        salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
+                        registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC")
                         break
                 if not _trovato_m:
                     _q_n = round(float(new_qta), 6)
@@ -3263,9 +4220,13 @@ with tab_portafoglio:
                         "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
                     })
                     salva_ultimo_agg_prezzi()
-                    salva_json("portafoglio.json", st.session_state.portafoglio)
+                    salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
                     registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto")
                 st.rerun()
+
+    _msg_rld_port = st.session_state.pop("_msg_reload_disk", None)
+    if _msg_rld_port:
+        st.success(f"✅ {_msg_rld_port}")
 
     for _p_chk in st.session_state.portafoglio:
         _q_c = float(_p_chk.get('Quantita', 0) or 0)
@@ -3278,12 +4239,29 @@ with tab_portafoglio:
                 _p_chk['PnL_EUR'] = round(_p_chk['Valore_Attuale'] - _p_chk['Valore_Carico'], 2)
                 _p_chk['PnL_%'] = round(((_p_chk['Valore_Attuale'] / _p_chk['Valore_Carico']) - 1) * 100, 2)
     portafoglio = sorted(st.session_state.portafoglio, key=lambda x: float(x.get('Valore_Carico') or (float(x.get('Quantita', 0) or 0) * float(x.get('Prezzo_Medio', 0) or 0))), reverse=True)
+    # Simulatore Mediazione & Gain Portafoglio subito sotto l'expander Aggiungi / Modifica Titoli
+    if portafoglio:
+        render_simulatore_mediazione_portafoglio(portafoglio)
     if not portafoglio or len(portafoglio) == 0:
         st.warning("⚠️ Portafoglio vuoto. Aggiungi titoli usando l'expander sopra o carica il file portafoglio.json")
+        if st.button("📂 Ricarica portafoglio.json da disco", key="btn_reload_port_disk_empty"):
+            _ok_r, _msg_r = ricarica_portafoglio_da_disco(push_github=True)
+            if _ok_r:
+                st.session_state["_msg_reload_disk"] = _msg_r
+                st.rerun()
+            else:
+                st.error(_msg_r)
     else:
         has_live_data = any(p.get('Prezzo_Attuale_EUR') is not None for p in portafoglio)
         if not has_live_data:
             st.info("👆 Clicca **🔄 Aggiorna Quotazioni** per caricare i dati di mercato")
+            if st.button("📂 Ricarica portafoglio.json da disco", key="btn_reload_port_disk_nolive"):
+                _ok_r, _msg_r = ricarica_portafoglio_da_disco(push_github=True)
+                if _ok_r:
+                    st.session_state["_msg_reload_disk"] = _msg_r
+                    st.rerun()
+                else:
+                    st.error(_msg_r)
         else:
             _tickers_p = list(dict.fromkeys([p['Ticker'] for p in portafoglio if p.get('Ticker')]))
             if 'port_selected_chart' not in st.session_state or st.session_state.port_selected_chart not in _tickers_p:
@@ -3333,16 +4311,24 @@ with tab_portafoglio:
                     st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True}, key=f"port_side_live_chart_{sel_t}")
                     render_barra_intervalli_yahoo(sel_t, "port", default_tf="3M")
             with col_port_left:
-                _hdr_c1, _hdr_c2 = st.columns((1.6, 1))
+                _hdr_c1, _hdr_c2, _hdr_c3 = st.columns((1.25, 0.95, 1.15))
                 with _hdr_c1:
                     st.markdown("#### 💼 Posizioni in Portafoglio")
                 with _hdr_c2:
-                    if st.button("🔄 Aggiorna Prezzi", type="primary", key="btn_upd_fast_top"):
+                    if st.button("🔄 Aggiorna Prezzi", type="primary", key="btn_upd_fast_top", use_container_width=True):
                         with st.spinner("Aggiornamento..."):
                             st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_rate)
                             st.session_state.last_update = datetime.now().strftime("%H:%M:%S")
                             salva_ultimo_agg_prezzi()
                         st.rerun()
+                with _hdr_c3:
+                    if st.button("📂 Ricarica portafoglio.json da disco", key="btn_reload_port_disk", use_container_width=True):
+                        _ok_r, _msg_r = ricarica_portafoglio_da_disco(push_github=True)
+                        if _ok_r:
+                            st.session_state["_msg_reload_disk"] = _msg_r
+                            st.rerun()
+                        else:
+                            st.error(_msg_r)
                 for idx_pos, pos in enumerate(portafoglio):
                     if idx_pos % 2 == 0:
                         grid_cols = st.columns(2)
@@ -3514,7 +4500,6 @@ with tab_console:
     if not portafoglio:
         st.warning('⚠️ Portafoglio vuoto.')
     else:
-        st.markdown("---")
         st.markdown("#### 🛠️ Strumenti Operativi & Gestione Capitale")
         _m2, _m3, _m4 = st.columns(3)
         with _m2:
@@ -3695,21 +4680,27 @@ with tab_console:
                 _tk_clean = str(new_ticker).strip().upper()
                 if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
                     _trovato_m = False
+                    # Fonde sempre sul ticker esistente (anche se PAC vs Spot) per evitare schede duplicate
                     for _item_m in st.session_state.portafoglio:
-                        if str(_item_m.get("Ticker", "")).upper() == _tk_clean and str(_item_m.get("Tipo", "Spot")) == str(new_tipo):
+                        if str(_item_m.get("Ticker", "")).strip().upper() == _tk_clean:
                             _q_old = float(_item_m.get("Quantita", 0) or 0)
                             _pmc_old = float(_item_m.get("Prezzo_Medio", 0) or 0)
-                            _q_new = round(_q_old + float(new_qta), 4)
+                            _q_new = round(_q_old + float(new_qta), 6)
                             _pmc_new = round(((_q_old * _pmc_old) + (float(new_qta) * float(new_medio))) / _q_new, 4)
                             _item_m["Quantita"] = _q_new
                             _item_m["Prezzo_Medio"] = _pmc_new
                             _item_m["Valore_Carico"] = round(_q_new * _pmc_new, 2)
+                            _pe_es = float(_item_m.get("Prezzo_Attuale_EUR") or 0)
+                            if _pe_es > 0:
+                                _item_m["Valore_Attuale"] = round(_q_new * _pe_es, 2)
+                                _item_m["PnL_EUR"] = round(_item_m["Valore_Attuale"] - _item_m["Valore_Carico"], 2)
+                                _item_m["PnL_%"] = round(((_item_m["Valore_Attuale"] / _item_m["Valore_Carico"]) - 1) * 100, 2) if _item_m["Valore_Carico"] > 0 else 0.0
                             _trovato_m = True
-                            salva_ultimo_agg_prezzi(); salva_json("portafoglio.json", st.session_state.portafoglio)
-                            registra_acquisto_storico(_tk_clean, "Spot", _q_new - _q_old, (_pmc_new * _q_new - _pmc_old * _q_old) / max(0.0001, _q_new - _q_old), nota="Mediazione PMC"); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
+                            salva_ultimo_agg_prezzi(); salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
+                            registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC"); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
                             break
                     if not _trovato_m:
-                        _q_n = round(float(new_qta), 4)
+                        _q_n = round(float(new_qta), 6)
                         _pm_n = round(float(new_medio), 4)
                         st.session_state.portafoglio.append({
                             "Ticker": _tk_clean,
@@ -3723,8 +4714,8 @@ with tab_console:
                             "PnL_%": 0.0,
                             "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
                         })
-                        salva_ultimo_agg_prezzi(); salva_json("portafoglio.json", st.session_state.portafoglio)
-                        registra_acquisto_storico(_tk_clean, "Spot", _q_n, _pm_n, nota="Nuovo Acquisto"); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
+                        salva_ultimo_agg_prezzi(); salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
+                        registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto"); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
             st.markdown("---")
             st.write("Rimuovi un titolo:")
             port_att = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
@@ -3952,7 +4943,7 @@ with tab_analisi:
                     st.session_state["_run_check_singola"] = ticker_input.strip().upper()
             if st.session_state.get("_run_check_singola") == ticker_input.strip().upper():
                 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
-                    import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole([ticker_input.strip().upper()], eurusd_rate)
+                    import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole([ticker_input.strip().upper()], eurusd_rate, rileva_fase_fn=rileva_fase_weinstein)
                 if st.button("✖️ Chiudi Check", key="btn_chiudi_check_singola"):
                     st.session_state.pop("_run_check_singola", None)
                     st.rerun()
@@ -3964,33 +4955,47 @@ with tab_analisi:
             try:
                 ticker_obj = yf.Ticker(ticker_s)
                 df = ticker_obj.history(period="1y")
-                info = ticker_obj.info
-                if df.empty or len(df) < 50:
-                    st.error("Dati insufficienti")
+                if df is not None and not df.empty:
+                    df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
+                info = ticker_obj.info if isinstance(ticker_obj.info, dict) else {}
+                # In Analisi Singola consentiamo anche titoli neo-quotati (IPO recenti) con almeno 2 candele
+                if df is None or df.empty or len(df) < 2:
+                    st.error("Dati insufficienti (meno di 2 candele disponibili)")
                 else:
+                    n_sedute = int(len(df))
+                    is_ipo_recente = n_sedute < 60
                     prezzo_eur, prezzo_usd, currency = get_prezzi_corretti(ticker_obj, eurusd_rate)
-                    df['SMA_Short'] = df['Close'].rolling(window=50).mean()
-                    df['SMA_Long'] = df['Close'].rolling(window=200).mean()
-                    df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
-                    vol_ratio = df.iloc[-1]['Volume'] / df.iloc[-1]['Vol_Media_20'] if df.iloc[-1]['Vol_Media_20'] > 0 else 0
-                    s_score = calcola_s_score(info, ticker_s)
-                    fase = rileva_fase_weinstein(df)
-                    figura_z, _ = rileva_figura_z(df)
-                    trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
-                    trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(df, 50, ticker_obj)
-                    earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
+                    # Fallback sul Close dell'ultima candela se history(period='1d') risultasse vuoto
+                    if prezzo_usd is None or prezzo_eur is None:
+                        _p_raw = float(df['Close'].iloc[-1])
+                        if str(currency).upper() == 'USD':
+                            prezzo_usd = round(_p_raw, 2)
+                            prezzo_eur = round(_p_raw / eurusd_rate, 2) if eurusd_rate > 0 else round(_p_raw, 2)
+                        else:
+                            prezzo_eur = round(_p_raw, 2)
+                            prezzo_usd = round(_p_raw * eurusd_rate, 2)
                     var_pct, var_abs = calcola_variazione_giornaliera(ticker_obj)
-                    sma50_usd = round(df['Close'].rolling(window=50).mean().iloc[-1], 2)
-                    sma200_usd = round(df['Close'].rolling(window=200).mean().iloc[-1], 2)
-                    vol_oggi = df['Volume'].iloc[-1]
-                    vol_medio = round(df['Volume'].rolling(window=20).mean().iloc[-1], 0)
-                    supporto = round(df.tail(60)['Low'].min(), 2)
-                    resistenza = round(df.tail(60)['High'].max(), 2)
+                    if var_pct is None and n_sedute >= 2:
+                        _c_last = float(df['Close'].iloc[-1])
+                        _c_prev = float(df['Close'].iloc[-2])
+                        if _c_prev > 0:
+                            var_pct = round(((_c_last - _c_prev) / _c_prev) * 100.0, 2)
+                            var_abs = round(_c_last - _c_prev, 2)
+                    vol_oggi = float(df['Volume'].iloc[-1]) if 'Volume' in df.columns else 0.0
+                    _win_vol = min(20, n_sedute)
+                    _vm_raw = df['Volume'].rolling(window=_win_vol).mean().iloc[-1] if 'Volume' in df.columns else 0.0
+                    vol_medio = round(float(_vm_raw), 0) if pd.notna(_vm_raw) else 0.0
+                    vol_ratio = (vol_oggi / vol_medio) if vol_medio > 0 else 0.0
+                    s_score = calcola_s_score(info, ticker_s)
+                    earnings_giorni, earnings_msg, _ = controlla_earnings(ticker_obj)
+                    supporto = round(float(df.tail(min(60, n_sedute))['Low'].min()), 2)
+                    resistenza = round(float(df.tail(min(60, n_sedute))['High'].max()), 2)
                     delta_rsi = df['Close'].diff()
                     gain_rsi = (delta_rsi.where(delta_rsi > 0, 0)).rolling(window=14).mean()
                     loss_rsi = (-delta_rsi.where(delta_rsi < 0, 0)).rolling(window=14).mean()
-                    rs_rsi = gain_rsi / loss_rsi
-                    rsi_oggi = float((100 - (100 / (1 + rs_rsi))).iloc[-1]) if not rs_rsi.empty else 50
+                    rs_rsi = gain_rsi / loss_rsi.replace(0, np.nan)
+                    _rsi_last = (100 - (100 / (1 + rs_rsi))).iloc[-1] if n_sedute >= 15 and not rs_rsi.empty else np.nan
+                    rsi_oggi = float(_rsi_last) if pd.notna(_rsi_last) else 50.0
                     post_price = info.get('postMarketPrice')
                     post_change = info.get('postMarketChangePercent')
                     pre_price = info.get('preMarketPrice')
@@ -4001,25 +5006,86 @@ with tab_analisi:
                         market_msg = f"🌅 Pre-Market: ${pre_price:.2f} ({pre_change:+.2f}%)"
                     else:
                         market_msg = "🌞 Regular Market (o N/D fuori orario)"
-                    distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 0
-                    pre_golden_cross = distanza_medie_pct < 3.0 and sma50_usd < sma200_usd
-                    pre_death_cross = distanza_medie_pct < 3.0 and sma50_usd > sma200_usd
-                    if trigger_by_fabio:
-                        segnale = "🟢 BY FABIO - Ingresso Matematico"
-                    elif trigger_by:
-                        segnale = "🟢 BY - Acquista"
-                    elif "FASE 4" in fase or s_score < 40:
-                        segnale = "🔴 SELL - Evita"
-                    elif s_score >= 60 and "FASE 2" in fase:
-                        segnale = "🟡 HOLD - Monitora"
-                    else:
-                        segnale = "🟡 HOLD - In attesa"
                     hist_intraday = ticker_obj.history(period='5d', interval='1d')
                     if not hist_intraday.empty:
                         last_day = hist_intraday.iloc[-1]
-                        min_oggi, max_oggi = round(last_day['Low'], 2), round(last_day['High'], 2)
+                        min_oggi, max_oggi = round(float(last_day['Low']), 2), round(float(last_day['High']), 2)
                     else:
-                        min_oggi, max_oggi = "N/D", "N/D"
+                        min_oggi, max_oggi = round(float(df['Low'].iloc[-1]), 2), round(float(df['High'].iloc[-1]), 2)
+
+                    if is_ipo_recente:
+                        # Modalità IPO recente (2..59 sedute): niente segnali automatici né medie mobili lunghe
+                        fase = f"🆕 IPO Recente ({n_sedute} sedute)"
+                        figura_z = False
+                        trigger_by = False
+                        trigger_by_fabio = False
+                        motivo_by = f"Titolo neo-quotato ({n_sedute} sedute): medie mobili lunghe e filtri statistici attivi da 60 candele."
+                        motivo_by_fabio = ""
+                        _s50_tmp = df['Close'].rolling(window=50).mean().iloc[-1] if n_sedute >= 50 else np.nan
+                        sma50_usd = round(float(_s50_tmp), 2) if pd.notna(_s50_tmp) else 0.0
+                        sma200_usd = 0.0
+                        pre_golden_cross = False
+                        pre_death_cross = False
+                        segnale = f"🆕 IPO Recente ({n_sedute} sedute)"
+                        st.session_state.pattern_singola_attivo = None
+                        # Apre subito il grafico a candele per la consultazione della neo-quotata
+                        port_att_ipo = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or list()
+                        st.session_state.grafico_ticker = ticker_s
+                        st.session_state.grafico_prezzo_medio = next((p['Prezzo_Medio'] for p in port_att_ipo if p['Ticker'] == ticker_s), None)
+                    else:
+                        df['SMA_Short'] = df['Close'].rolling(window=50).mean()
+                        df['SMA_Long'] = df['Close'].rolling(window=200).mean()
+                        df['Vol_Media_20'] = df['Volume'].rolling(window=20).mean()
+                        fase = rileva_fase_weinstein(df)
+                        figura_z, _ = rileva_figura_z(df)
+                        trigger_by, motivo_by, _ = verifica_trigger_by_fortezza(df, 50, ticker_obj)
+                        trigger_by_fabio, motivo_by_fabio = verifica_by_fabio(df, 50, ticker_obj)
+                        _s50_raw = df['Close'].rolling(window=50).mean().iloc[-1]
+                        _s200_raw = df['Close'].rolling(window=200).mean().iloc[-1] if n_sedute >= 200 else np.nan
+                        sma50_usd = round(float(_s50_raw), 2) if pd.notna(_s50_raw) else 0.0
+                        sma200_usd = round(float(_s200_raw), 2) if pd.notna(_s200_raw) else 0.0
+                        distanza_medie_pct = abs(sma50_usd - sma200_usd) / sma200_usd * 100 if sma200_usd != 0 else 999.0
+                        pre_golden_cross = sma200_usd > 0 and distanza_medie_pct < 3.0 and sma50_usd < sma200_usd
+                        pre_death_cross = sma200_usd > 0 and distanza_medie_pct < 3.0 and sma50_usd > sma200_usd
+                        if trigger_by_fabio:
+                            segnale = "🟢 BY FABIO - Ingresso Matematico"
+                        elif trigger_by:
+                            segnale = "🟢 BY - Acquista"
+                        elif "FASE 4" in fase or s_score < 40:
+                            segnale = "🔴 SELL - Evita"
+                        elif s_score >= 60 and "FASE 2" in fase:
+                            segnale = "🟡 HOLD - Monitora"
+                        else:
+                            segnale = "🟡 HOLD - In attesa"
+                        # Calcola anche l'eventuale pattern attivo per il titolo analizzato in Analisi Singola
+                        try:
+                            _port_an = st.session_state.portafoglio or list()
+                            _pos_an = next((p for p in _port_an if str(p.get('Ticker', '')).upper() == ticker_s), None)
+                            _pnl_an = None
+                            if _pos_an is not None:
+                                _pmc_an = float(_pos_an.get('Prezzo_Medio', 0) or 0)
+                                if _pmc_an > 0 and prezzo_eur is not None:
+                                    _pnl_an = ((float(prezzo_eur) / _pmc_an) - 1.0) * 100.0
+                            _spy_reg_an = (semaforo_header.get('stato') if isinstance(semaforo_header, dict) else 'verde') or 'verde'
+                            _pat_an_list = pattern_engine.analizza_pattern_titolo(
+                                ticker=ticker_s,
+                                df=df,
+                                in_portafoglio=_pos_an is not None,
+                                pnl_pct=_pnl_an,
+                                eurusd_rate=eurusd_rate,
+                                currency=currency,
+                                earnings_giorni=earnings_giorni,
+                                spy_regime=_spy_reg_an,
+                                s_score=s_score,
+                            )
+                            if _pat_an_list:
+                                _pat_best_an = next((x for x in _pat_an_list if x.get('lato') == 'SELL'), _pat_an_list[0])
+                                st.session_state.pattern_singola_attivo = _pat_best_an
+                            else:
+                                st.session_state.pattern_singola_attivo = None
+                        except Exception:
+                            st.session_state.pattern_singola_attivo = None
+
                     st.session_state.analisi_risultati = {
                         'ticker': ticker_s, 'segnale': segnale, 'prezzo_eur': prezzo_eur, 'prezzo_usd': prezzo_usd,
                         's_score': s_score, 'fase': fase, 'vol_ratio': vol_ratio, 'figura_z': figura_z,
@@ -4027,41 +5093,17 @@ with tab_analisi:
                         'var_pct': var_pct, 'var_abs': var_abs, 'sma50_usd': sma50_usd, 'sma200_usd': sma200_usd,
                         'vol_oggi': vol_oggi, 'vol_medio': vol_medio, 'supporto': supporto, 'resistenza': resistenza,
                         'market_msg': market_msg, 'pre_golden_cross': pre_golden_cross, 'pre_death_cross': pre_death_cross,
-                        'min_oggi': min_oggi, 'max_oggi': max_oggi, 'rsi': rsi_oggi, 'trigger_by_fabio': trigger_by_fabio
+                        'min_oggi': min_oggi, 'max_oggi': max_oggi, 'rsi': rsi_oggi, 'trigger_by_fabio': trigger_by_fabio,
+                        'is_ipo_recente': is_ipo_recente, 'n_sedute': n_sedute
                     }
-                    # Calcola anche l'eventuale pattern attivo per il titolo analizzato in Analisi Singola
-                    try:
-                        _port_an = st.session_state.portafoglio or list()
-                        _pos_an = next((p for p in _port_an if str(p.get('Ticker', '')).upper() == ticker_s), None)
-                        _pnl_an = None
-                        if _pos_an is not None:
-                            _pmc_an = float(_pos_an.get('Prezzo_Medio', 0) or 0)
-                            if _pmc_an > 0 and prezzo_eur is not None:
-                                _pnl_an = ((float(prezzo_eur) / _pmc_an) - 1.0) * 100.0
-                        _spy_reg_an = (semaforo_header.get('stato') if isinstance(semaforo_header, dict) else 'verde') or 'verde'
-                        _pat_an_list = pattern_engine.analizza_pattern_titolo(
-                            ticker=ticker_s,
-                            df=df,
-                            in_portafoglio=_pos_an is not None,
-                            pnl_pct=_pnl_an,
-                            eurusd_rate=eurusd_rate,
-                            currency=currency,
-                            earnings_giorni=earnings_giorni,
-                            spy_regime=_spy_reg_an,
-                            s_score=s_score,
-                        )
-                        if _pat_an_list:
-                            _pat_best_an = next((x for x in _pat_an_list if x.get('lato') == 'SELL'), _pat_an_list[0])
-                            st.session_state.pattern_singola_attivo = _pat_best_an
-                        else:
-                            st.session_state.pattern_singola_attivo = None
-                    except Exception:
-                        st.session_state.pattern_singola_attivo = None
             except Exception as e:
                 st.error(f"Errore: {e}")
 
     if st.session_state.analisi_risultati:
         r = st.session_state.analisi_risultati
+        if r.get('is_ipo_recente'):
+            _n_sed_ipo = int(r.get('n_sedute') or 0)
+            st.warning(f"⚠️ Titolo neo-quotato (IPO recente — {_n_sed_ipo} sedute): medie mobili lunghe e filtri statistici saranno attivi al raggiungimento di 60 candele")
         render_scheda_titolo_pro(r, eurusd_rate)
         _b_ins_an = get_badge_insider_attivo(r['ticker'])
         if False:
@@ -4096,7 +5138,10 @@ with tab_analisi:
                 <p style="margin: 0.2rem 0;"><strong>⚖️ RAPPORTO RISCHIO/RENDIMENTO:</strong> Rischio <span style="color: #F23645;">{rischio_pct}%</span> vs Rendimento <span style="color: #089981;">+{targets_analisi['upside1']}%</span> → <strong>Rapporto 1:{rapporto_rr} ✅</strong></p>
             </div>
             """, unsafe_allow_html=True)
-        if r.get('trigger_by_fabio'):
+        if r.get('is_ipo_recente'):
+            # Per le IPO recenti l'avviso esplicativo è già mostrato in testa alla scheda
+            pass
+        elif r.get('trigger_by_fabio'):
             st.success(f"**🟢 BY FABIO**: {r['motivo_by']}")
         elif "BY" in r['segnale']:
             st.success(f"**Motivo**: {r['motivo_by']}")
@@ -4233,7 +5278,7 @@ with tab_analisi:
         st.markdown("---")
         st.markdown('<div class="signal-history-box"><div class="signal-history-title">📊 STORICO SEGNALI MATRIX</div></div>', unsafe_allow_html=True)
         ultimo_segnale_check = get_ultimo_segnale(r['ticker'])
-        if not ultimo_segnale_check:
+        if not ultimo_segnale_check and not r.get('is_ipo_recente'):
             with st.spinner(f"🔄 Ricostruzione segnali storici per {r['ticker']}..."):
                 try:
                     segnali_aggiunti = ricostruisci_segnali_retroattivi(r['ticker'], anni_indietro=1)
@@ -4662,7 +5707,7 @@ with tab_check_regole:
                 st.rerun()
     if st.session_state.get('_multi_check_list'):
         if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
-            import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole(st.session_state['_multi_check_list'], eurusd_rate, solo_fase2=filtro_fase, min_score=min_score, solo_pre_ign=solo_pre_ign)
+            import importlib; importlib.reload(regia_tracker); regia_tracker.render_check_3_regole(st.session_state['_multi_check_list'], eurusd_rate, solo_fase2=filtro_fase, min_score=min_score, solo_pre_ign=solo_pre_ign, rileva_fase_fn=rileva_fase_weinstein)
 with tab_insider:
     st.markdown("### 🕵️ Insider Tracker (SEC Form 4) & Stagionalità 10 Anni")
     st.caption("Individua acquisti reali dei dirigenti (Cluster Buying) su titoli sottovalutati vicini ai minimi con stagionalità favorevole.")
@@ -4741,7 +5786,7 @@ with tab_insider:
 
     ins_res = st.session_state.get('insider_results', [])
     if ins_res:
-        df_ins_view = pd.DataFrame(ins_res).drop(columns=['_buys', '_var_ins', '_last_buy_str'], errors='ignore')
+        df_ins_view = pd.DataFrame(ins_res).drop(columns=['_buys', '_var_ins', '_last_buy_str', '_sec_dettagli'], errors='ignore')
         if 'Scelta' in df_ins_view.columns:
             cols_order = ['Scelta'] + [c for c in df_ins_view.columns if c != 'Scelta']
             df_ins_view = df_ins_view[cols_order]
@@ -4758,12 +5803,26 @@ with tab_insider:
     if tk_stag:
         df_stag_chart, stag_summary = calcola_stagionalita_10y(tk_stag)
         det_singolo = analizza_insider_e_minimi(tk_stag)
+        _sec_tab_det = []
         if det_singolo:
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Insider Buys (90gg)", det_singolo['Insider (90gg)'])
+            _delta_ins = det_singolo.get('Valore Insider $', '$0') if det_singolo.get('_buys', 0) > 0 else det_singolo.get('Fonte', 'SEC Form 4')
+            m1.metric("Insider Buys (90gg)", det_singolo['Insider (90gg)'], _delta_ins)
             m2.metric("Sconto Fair Value", str(det_singolo["Sconto FV %"]))
             m3.metric("Distanza Min 52w", str(det_singolo["Dist. Min 52w %"]))
             m4.metric("Stagionalità 60gg", stag_summary or "N/D")
+            _sec_tab_det = det_singolo.get('_sec_dettagli') or []
+        else:
+            # Anche su titoli con meno di 60 candele interroga comunque i Form 4 ufficiali SEC
+            _sec_fb = get_sec_insider_buys_90gg(tk_stag)
+            if isinstance(_sec_fb, dict) and _sec_fb.get("buys", 0) > 0:
+                st.metric("Insider Buys (90gg — SEC Form 4)", f"{_sec_fb['buys']} acq ({_sec_fb['num_insider']} dir.)", f"${_sec_fb['valore_usd']:,.0f}")
+                _sec_tab_det = _sec_fb.get("dettagli") or []
+        if _sec_tab_det:
+            st.markdown(f"**🕵️ Dettaglio Acquisti Insider Ufficiali (SEC Form 4 / 90gg) — {tk_stag}:**")
+            st.dataframe(pd.DataFrame(_sec_tab_det), use_container_width=True, hide_index=True)
+        else:
+            st.caption(f"🕵️ SEC Form 4 (90gg): nessun acquisto sul mercato aperto (codice P) rilevato per {tk_stag}.")
         if df_stag_chart is not None and not df_stag_chart.empty:
             colors_s = ['#089981' if v >= 0 else '#F23645' for v in df_stag_chart['Rendimento_Medio']]
             fig_s = go.Figure(go.Bar(
