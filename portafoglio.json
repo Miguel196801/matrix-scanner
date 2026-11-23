@@ -2,19 +2,19 @@
     {
         "Ticker": "APLD",
         "Tipo": "PAC",
-        "Quantita": 59.456446,
-        "Prezzo_Medio": 19.74,
+        "Quantita": 89.456446,
+        "Prezzo_Medio": 16.63,
         "Prezzo_Attuale_EUR": 13.17,
         "Prezzo_Attuale_USD": 14.48,
-        "Valore_Attuale": 783.04,
-        "PnL_EUR": -390.63,
-        "PnL_%": -33.28,
+        "Valore_Attuale": 1178.14,
+        "PnL_EUR": -309.63,
+        "PnL_%": -20.81,
         "Trend": "🔴 Forte -",
         "Earnings": "⚪ Utili tra 50gg",
         "Variazione_Pct": -9.3,
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🔴 BY: 18/09/2026 (-48.5%)",
-        "Valore_Carico": 1173.67,
+        "Valore_Carico": 1487.77,
         "Variazione_Abs": 1.49
     },
     {
@@ -78,21 +78,21 @@
     {
         "Ticker": "VRT",
         "Tipo": "PAC",
-        "Quantita": 2.137755,
-        "Prezzo_Medio": 177.0,
+        "Quantita": 2.803977,
+        "Prezzo_Medio": 170.60,
         "PAC_Settimanale": 30.0,
         "Categoria": "Azione",
         "Prezzo_Attuale_EUR": 170.23,
-        "Valore_Attuale": 363.91,
-        "PnL_EUR": -14.47,
-        "PnL_%": -3.82,
+        "Valore_Attuale": 477.32,
+        "PnL_EUR": -1.03,
+        "PnL_%": -0.22,
         "Trend": "🟡 -",
         "Earnings": "⚪ Utili tra 85gg",
         "Variazione_Pct": -7.36,
         "Prezzo_Attuale_USD": 187.2,
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🔴 BY: 29/10/2026 (-23.9%)",
-        "Valore_Carico": 378.38,
+        "Valore_Carico": 478.35,
         "Variazione_Abs": 15.88
     },
     {
@@ -189,29 +189,5 @@
         "Ultimo_Segnale": "🟢 BY: 06/11/2026 (+2.5%)",
         "Valore_Carico": 40.0,
         "Variazione_Abs": 8.75
-    },
-    {
-        "Ticker": "VRT",
-        "Tipo": "Spot",
-        "Quantita": 0.666222,
-        "Prezzo_Medio": 150.06,
-        "Valore_Carico": 99.97,
-        "Prezzo_Attuale_EUR": 150.06,
-        "Valore_Attuale": 99.97,
-        "PnL_EUR": 0.0,
-        "PnL_%": 0.0,
-        "Data_Acquisto": "2026-11-23"
-    },
-    {
-        "Ticker": "APLD",
-        "Tipo": "Spot",
-        "Quantita": 30.0,
-        "Prezzo_Medio": 10.47,
-        "Valore_Carico": 314.1,
-        "Prezzo_Attuale_EUR": 10.47,
-        "Valore_Attuale": 314.1,
-        "PnL_EUR": 0.0,
-        "PnL_%": 0.0,
-        "Data_Acquisto": "2026-11-23"
     }
 ]
