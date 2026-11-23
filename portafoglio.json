@@ -201,5 +201,17 @@
         "PnL_EUR": 0.0,
         "PnL_%": 0.0,
         "Data_Acquisto": "2026-11-23"
+    },
+    {
+        "Ticker": "APLD",
+        "Tipo": "Spot",
+        "Quantita": 30.0,
+        "Prezzo_Medio": 10.47,
+        "Valore_Carico": 314.1,
+        "Prezzo_Attuale_EUR": 10.47,
+        "Valore_Attuale": 314.1,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-23"
     }
 ]
