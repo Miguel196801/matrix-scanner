@@ -102,9 +102,9 @@
         "Prezzo_Medio": 23.96,
         "Prezzo_Attuale_EUR": 22.74,
         "Prezzo_Attuale_USD": 25.01,
-        "Valore_Attuale": 272.88,
-        "PnL_EUR": -39.24,
-        "PnL_%": -12.57,
+        "Valore_Attuale": 409.32,
+        "PnL_EUR": -21.96,
+        "PnL_%": -5.09,
         "Trend": "🔴 Forte -",
         "Earnings": "⚪ Utili tra 77gg",
         "Variazione_Pct": -6.9,
@@ -189,5 +189,17 @@
         "Ultimo_Segnale": "🟢 BY: 06/11/2026 (+2.5%)",
         "Valore_Carico": 40.0,
         "Variazione_Abs": 8.75
+    },
+    {
+        "Ticker": "VRT",
+        "Tipo": "Spot",
+        "Quantita": 0.666222,
+        "Prezzo_Medio": 150.06,
+        "Valore_Carico": 99.97,
+        "Prezzo_Attuale_EUR": 150.06,
+        "Valore_Attuale": 99.97,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-23"
     }
 ]
