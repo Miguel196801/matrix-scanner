@@ -74,6 +74,20 @@ def calcola_sl_tp_tecnico(tk, info, eurusd_rate):
     p_usd = float(info.get('Prezzo') or info.get('Close') or 0)
     return round((p_usd * 0.92) / rate, 2), -8.0, round((p_usd * 1.20) / rate, 2)
 
+def _is_operazione_portafoglio_reale(rec):
+    """Determina in modo affidabile se un'operazione (aperta o chiusa) appartiene al Portafoglio Reale o al Metodo Sistema."""
+    if not isinstance(rec, dict):
+        return False
+    orig = str(rec.get('Origine') or '').strip().upper()
+    if orig in ('PORTAFOGLIO REALE', 'PORTAFOGLIO_REALE', 'REALE'):
+        return True
+    if orig in ('METODO SISTEMA', 'METODO_SISTEMA', 'SISTEMA'):
+        return False
+    fonti = str(rec.get('Fonti') or '').strip().upper()
+    segnale = str(rec.get('Segnale') or '').strip().upper()
+    return ('PORTAFOGLIO REALE' in fonti) or ('PORTAFOGLIO REALE' in segnale)
+
+
 def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
     rate = float(eurusd_rate or 1.12)
     fin_oggi = [x for x in (piano_ok or []) if x[-1] <= 0]
@@ -87,36 +101,55 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
 
     with st.expander('📊 Statistiche & Tracker Regia Reale (Gain Netto Tasse)', expanded=True):
         sh_list = _load_j(SHADOW_FILE, [])
-        # Allineamento automatico continuo con portafoglio reale (port_ok)
-        port_map = {str(p.get('Ticker', '')).upper(): p for p in (port_ok or []) if float(p.get('Quantita', 0) or 0) > 0}
+        # Separa posizioni Spot e PAC: il Trailing Stop / Stop Loss -10% si applica SOLO ai titoli Spot
+        port_map_all = {str(p.get('Ticker', '')).strip().upper(): p for p in (port_ok or []) if float(p.get('Quantita', 0) or 0) > 0}
+        pac_tickers = {tk for tk, pos in port_map_all.items() if str(pos.get('Tipo', 'Spot')).strip().upper() == 'PAC'}
+        port_map_spot = {tk: pos for tk, pos in port_map_all.items() if tk not in pac_tickers}
+
+        # Allineamento automatico continuo con le posizioni Spot del portafoglio reale
         sync_upd = False
-        for ix_p, r_p in enumerate(sh_list):
-            if r_p.get('Segnale') == '💼 PORTAFOGLIO REALE' and r_p.get('Stato') == 'Attivo':
-                tk_p = str(r_p.get('Ticker', '')).upper()
-                if tk_p not in port_map:
-                    sh_list[ix_p]['Stato'] = 'Chiuso (Venduto Reale)'
-                    sh_list[ix_p]['Esito_Reale'] = 'Venduto Reale'
-                    sh_list[ix_p]['Avviso_SL'] = ''
+        sh_pulita = []
+        for r_p in sh_list:
+            is_pr = _is_operazione_portafoglio_reale(r_p)
+            tk_p = str(r_p.get('Ticker', '')).strip().upper()
+            # Rimuove eventuali vecchi alert attivi o da gestire generati erroneamente su titoli PAC
+            if is_pr and tk_p in pac_tickers and (r_p.get('Stato') == 'Attivo' or str(r_p.get('Esito_Reale', '')) == 'Da Gestire'):
+                sync_upd = True
+                continue
+            if is_pr and r_p.get('Stato') == 'Attivo':
+                if tk_p not in port_map_spot:
+                    r_p['Stato'] = 'Chiuso (Venduto Reale)'
+                    r_p['Esito_Reale'] = 'Venduto Reale'
+                    r_p['Avviso_SL'] = ''
+                    r_p['Origine'] = 'Portafoglio Reale'
                     sync_upd = True
                 else:
-                    q_reale = float(port_map[tk_p].get('Quantita', 0) or 0)
-                    pmc_reale = round(float(port_map[tk_p].get('Prezzo_Medio', r_p.get('Entry', 0)) or 0), 2)
+                    q_reale = float(port_map_spot[tk_p].get('Quantita', 0) or 0)
+                    pmc_reale = round(float(port_map_spot[tk_p].get('Prezzo_Medio', r_p.get('Entry', 0)) or 0), 2)
                     taglia_reale = round(q_reale * pmc_reale, 2)
                     if pmc_reale > 0 and (abs(pmc_reale - float(r_p.get('Entry', 0))) > 0.01 or abs(taglia_reale - float(r_p.get('Taglia_EUR', 0))) > 1.0):
-                        sh_list[ix_p]['Entry'] = pmc_reale
-                        sh_list[ix_p]['Taglia_EUR'] = taglia_reale
+                        r_p['Entry'] = pmc_reale
+                        r_p['Taglia_EUR'] = taglia_reale
                         sync_upd = True
+                    if not r_p.get('Origine'):
+                        r_p['Origine'] = 'Portafoglio Reale'
+                        sync_upd = True
+            sh_pulita.append(r_p)
+        sh_list = sh_pulita
         if sync_upd:
             _save_j(SHADOW_FILE, sh_list)
 
         c1, c2, c3 = st.columns([1.8, 1.1, 1.1])
-        c1.caption('Traccia metodo puro e portafoglio reale con Trailing Stop e avvisi per Trade Republic.')
-        if c3.button('💼 Sync Portafoglio Reale', key='btn_sync_port_regia', use_container_width=True, disabled=not bool(port_map)):
+        c1.caption('Traccia metodo puro e posizioni Spot reali con Trailing Stop (i PAC sono esclusi dallo Stop Loss).')
+        if c3.button('💼 Sync Portafoglio Reale', key='btn_sync_port_regia', use_container_width=True, disabled=not bool(port_map_spot)):
             oggi_p = datetime.now().strftime('%Y-%m-%d')
-            att_port = {str(x.get('Ticker', '')).upper() for x in sh_list if x.get('Segnale') == '💼 PORTAFOGLIO REALE' and x.get('Stato') == 'Attivo'}
+            att_port = {str(x.get('Ticker', '')).strip().upper() for x in sh_list if _is_operazione_portafoglio_reale(x) and x.get('Stato') == 'Attivo'}
             agg_p = 0
-            for tk_m, pos_m in port_map.items():
+            # Importa esclusivamente posizioni di tipo Spot (esclude rigorosamente i PAC come CRWD)
+            for tk_m, pos_m in port_map_spot.items():
                 if tk_m in att_port:
+                    continue
+                if str(pos_m.get('Tipo', 'Spot')).strip().upper() == 'PAC':
                     continue
                 q_m = float(pos_m.get('Quantita', 0) or 0)
                 pmc_m = round(float(pos_m.get('Prezzo_Medio', 0) or 0), 2)
@@ -135,19 +168,21 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 t1_e = round(pmc_m * (1.0 + 1.5 * sl_pct_m), 2)
                 t2_e = round(pmc_m * (1.0 + 2.5 * sl_pct_m), 2)
                 sh_list.append({
-                    'Ticker': tk_m, 'Segnale': '💼 PORTAFOGLIO REALE', 'Taglia_EUR': round(q_m * pmc_m, 2),
+                    'Ticker': tk_m, 'Segnale': '💼 PORTAFOGLIO REALE', 'Origine': 'Portafoglio Reale',
+                    'Tipo_Posizione': 'Spot', 'Taglia_EUR': round(q_m * pmc_m, 2),
                     'Entry': pmc_m, 'Stop_Loss': sl_e, 'T1': t1_e, 'Target': t2_e,
                     'Max_Price': max(pmc_m, p_oggi_m), 'Step_Trailing': step_init, 'Avviso_SL': '',
                     'Data_Ingresso': str(pos_m.get('Data_Acquisto') or oggi_p)[:10],
                     'Fonti': 'Portafoglio Reale', 'Stato': 'Attivo', 'Esito_Reale': 'In Portafoglio'
                 })
                 agg_p += 1
+            nota_pac = f" (esclusi {len(pac_tickers)} titoli PAC)" if pac_tickers else ""
             if agg_p > 0:
                 _save_j(SHADOW_FILE, sh_list)
-                st.success(f'✅ Importati {agg_p} titoli del Portafoglio Reale nel Tracker!')
+                st.success(f'✅ Importati {agg_p} titoli Spot del Portafoglio Reale nel Tracker{nota_pac}!')
                 st.rerun()
             else:
-                st.info('ℹ️ Tutti i titoli del Portafoglio Reale sono già sincronizzati.')
+                st.info(f'ℹ️ Tutti i titoli Spot del Portafoglio Reale sono già sincronizzati{nota_pac}.')
         if c2.button('📥 Registra Piano di Oggi', key='btn_reg_shadow_regia', use_container_width=True, disabled=not bool(fin_oggi)):
             oggi_sh = datetime.now().strftime('%Y-%m-%d')
             att_sh = {(x.get('Ticker'), x.get('Data_Ingresso')) for x in sh_list}
@@ -165,7 +200,8 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                         t1_e = mp['t1_eur'] if mp else round(p_eur * 1.12, 2)
                         t2_e = mp['t2_eur'] if mp else round(p_eur * 1.20, 2)
                         sh_list.append({
-                            'Ticker': tk_s, 'Segnale': tp_s, 'Taglia_EUR': round(float(taglia_ok), 2),
+                            'Ticker': tk_s, 'Segnale': tp_s, 'Origine': 'Metodo Sistema',
+                            'Taglia_EUR': round(float(taglia_ok), 2),
                             'Entry': p_eur, 'Stop_Loss': sl_e, 'T1': t1_e, 'Target': t2_e,
                             'Max_Price': p_eur, 'Step_Trailing': 0, 'Avviso_SL': '',
                             'Data_Ingresso': oggi_sh, 'Fonti': ' + '.join([f.replace('**', '') for f in fn_s]),
@@ -180,15 +216,25 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 st.rerun()
 
         if sh_list:
+            # Conteggi esatti (aperte + chiuse) per ciascuna origine prima della selezione filtro
+            tot_all = len(sh_list)
+            tot_port = sum(1 for x in sh_list if _is_operazione_portafoglio_reale(x))
+            tot_sist = tot_all - tot_port
+            opzioni_filtro = [
+                '📊 Tutte le Operazioni',
+                '🤖 Solo Metodo Sistema',
+                '💼 Solo Portafoglio Reale',
+            ]
             filtro_vista = st.radio(
-                'Filtro Statistiche & Vista:',
-                ['📊 Tutte le Operazioni', '🤖 Solo Metodo Sistema', '💼 Solo Portafoglio Reale'],
+                f'Filtro Statistiche & Vista (Tutte: {tot_all} | Sistema: {tot_sist} | Portafoglio Reale: {tot_port}):',
+                opzioni_filtro,
                 horizontal=True,
                 key='radio_filtro_tracker_regia'
             )
             upd, pnls, netti, rows, da_gestire, avvisi_sl = False, [], [], [], [], []
             for idx_s, r in enumerate(sh_list):
-                tk_r, st_r = str(r.get('Ticker', '')).upper(), str(r.get('Stato', 'Attivo'))
+                tk_r, st_r = str(r.get('Ticker', '')).strip().upper(), str(r.get('Stato', 'Attivo'))
+                is_port_reale = _is_operazione_portafoglio_reale(r)
                 en_r = float(r.get('Entry', 0) or 0)
                 sl_r = float(r.get('Stop_Loss', 0) or 0)
                 t1_r = float(r.get('T1', 0) or round(en_r * 1.12, 2))
@@ -196,43 +242,46 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 mx_r = float(r.get('Max_Price', en_r) or en_r)
                 step_tr = int(r.get('Step_Trailing', 0) or 0)
                 tg_e, dt_r, p_cur = float(r.get('Taglia_EUR', 200.0) or 200.0), str(r.get('Data_Ingresso', ''))[:10], en_r
+
+                # Aggiornamento prezzi e Trailing Stop / SL (mai applicato ai PAC del portafoglio reale)
                 if st_r == 'Attivo' and tk_r and en_r > 0:
                     try:
                         hr = yf.Ticker(tk_r).history(period='6mo', interval='1d')
                         if not hr.empty:
                             p_cur = round(float(hr['Close'].dropna().iloc[-1]) / rate, 2)
-                            sr = hr[hr.index.strftime('%Y-%m-%d') >= dt_r] if dt_r else hr.tail(1)
-                            lo = float(sr['Low'].min()) / rate if not sr.empty else p_cur
-                            hi = float(sr['High'].max()) / rate if not sr.empty else p_cur
-                            if hi > mx_r:
-                                mx_r = round(hi, 2)
-                                sh_list[idx_s]['Max_Price'] = mx_r
-                                upd = True
-                            if step_tr < 1 and t1_r > 0 and hi >= t1_r and sl_r < en_r:
-                                sl_r = round(en_r, 2)
-                                sh_list[idx_s]['Stop_Loss'] = sl_r
-                                sh_list[idx_s]['Step_Trailing'] = 1
-                                sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: T1 (€ {t1_r:.2f}) raggiunto! Sposta SL a PAREGGIO (€ {sl_r:.2f}) su Trade Republic."
-                                upd = True
-                            if tg_r > 0 and hi >= tg_r:
-                                nuovo_sl = round(max(t1_r, mx_r * 0.94), 2)
-                                if nuovo_sl > sl_r:
-                                    sl_r = nuovo_sl
-                                    sh_list[idx_s]['Stop_Loss'] = sl_r
-                                    sh_list[idx_s]['Step_Trailing'] = 2
-                                    sh_list[idx_s]['Avviso_SL'] = f"🚀 {tk_r}: T2 superato (Max € {mx_r:.2f})! Alza Trailing SL a € {sl_r:.2f} su Trade Republic."
+                            if not (is_port_reale and tk_r in pac_tickers):
+                                sr = hr[hr.index.strftime('%Y-%m-%d') >= dt_r] if dt_r else hr.tail(1)
+                                lo = float(sr['Low'].min()) / rate if not sr.empty else p_cur
+                                hi = float(sr['High'].max()) / rate if not sr.empty else p_cur
+                                if hi > mx_r:
+                                    mx_r = round(hi, 2)
+                                    sh_list[idx_s]['Max_Price'] = mx_r
                                     upd = True
-                            if sl_r > 0 and lo <= sl_r:
-                                st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
-                                p_cur, upd = sl_r, True
-                                sh_list[idx_s]['Stato'], sh_list[idx_s]['Prezzo_Uscita'], sh_list[idx_s]['Esito_Reale'] = st_r, sl_r, 'Da Gestire'
-                                sh_list[idx_s]['Avviso_SL'] = ''
+                                if step_tr < 1 and t1_r > 0 and hi >= t1_r and sl_r < en_r:
+                                    sl_r = round(en_r, 2)
+                                    sh_list[idx_s]['Stop_Loss'] = sl_r
+                                    sh_list[idx_s]['Step_Trailing'] = 1
+                                    sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: T1 (€ {t1_r:.2f}) raggiunto! Sposta SL a PAREGGIO (€ {sl_r:.2f}) su Trade Republic."
+                                    upd = True
+                                if tg_r > 0 and hi >= tg_r:
+                                    nuovo_sl = round(max(t1_r, mx_r * 0.94), 2)
+                                    if nuovo_sl > sl_r:
+                                        sl_r = nuovo_sl
+                                        sh_list[idx_s]['Stop_Loss'] = sl_r
+                                        sh_list[idx_s]['Step_Trailing'] = 2
+                                        sh_list[idx_s]['Avviso_SL'] = f"🚀 {tk_r}: T2 superato (Max € {mx_r:.2f})! Alza Trailing SL a € {sl_r:.2f} su Trade Republic."
+                                        upd = True
+                                if sl_r > 0 and lo <= sl_r:
+                                    st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
+                                    p_cur, upd = sl_r, True
+                                    sh_list[idx_s]['Stato'], sh_list[idx_s]['Prezzo_Uscita'], sh_list[idx_s]['Esito_Reale'] = st_r, sl_r, 'Da Gestire'
+                                    sh_list[idx_s]['Avviso_SL'] = ''
                     except Exception:
                         pass
                 else:
                     p_cur = float(r.get('Prezzo_Uscita') or en_r)
 
-                is_port_reale = (str(r.get('Segnale', '')) == '💼 PORTAFOGLIO REALE')
+                # Filtra sia operazioni aperte sia chiuse in base all'origine effettiva (Origine / Fonti / Segnale)
                 if filtro_vista == '🤖 Solo Metodo Sistema' and is_port_reale:
                     continue
                 if filtro_vista == '💼 Solo Portafoglio Reale' and not is_port_reale:
@@ -247,7 +296,9 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 if st_r != 'Attivo' and str(r.get('Esito_Reale', 'Da Gestire')) == 'Da Gestire':
                     da_gestire.append((idx_s, tk_r, st_r, p_cur, pct, netto))
                 rows.append({
-                    'Data': dt_r, 'Ticker': tk_r, 'Segnale': r.get('Segnale', ''),
+                    'Data': dt_r, 'Ticker': tk_r,
+                    'Origine': '💼 Portafoglio Reale' if is_port_reale else '🤖 Metodo Sistema',
+                    'Segnale': r.get('Segnale', ''),
                     'Entry €': en_r, 'SL €': sl_r, 'T1 €': t1_r, 'T2 €': tg_r, 'Attuale €': p_cur,
                     'Stato': st_r, 'Reale': r.get('Esito_Reale', 'In Attesa'),
                     'P&L %': f'{pct:+.1f}%', 'Netto €': f'€ {netto:+.2f}'
@@ -272,7 +323,7 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                             sh_list[ix_g]['Esito_Reale'] = 'Replicata'; _save_j(SHADOW_FILE, sh_list); st.rerun()
                         if cg3.button('⏭️ Tengo/Ignora', key=f'btn_ign_{ix_g}_{tk_g}', use_container_width=True):
                             sh_list[ix_g]['Esito_Reale'] = 'Ignorata (Tengo)'
-                            if sh_list[ix_g].get('Segnale') == '💼 PORTAFOGLIO REALE':
+                            if _is_operazione_portafoglio_reale(sh_list[ix_g]) and tk_g not in pac_tickers:
                                 sh_list[ix_g]['Stato'] = 'Attivo'
                                 sh_list[ix_g]['Stop_Loss'] = round(pr_g * 0.90, 2)
                                 sh_list[ix_g]['Data_Ingresso'] = datetime.now().strftime('%Y-%m-%d')
@@ -280,12 +331,14 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                             _save_j(SHADOW_FILE, sh_list); st.rerun()
                 w = sum(1 for x in pnls if x > 0)
                 n_op = len(pnls)
+                n_att = sum(1 for x in rows if x['Stato'] == 'Attivo')
+                n_chi = len(rows) - n_att
                 k1, k2, k3, k4, k5 = st.columns(5)
                 k1.metric('🎯 Win Rate Metodo', f'{(w/n_op)*100:.0f}%', f'{w} su {n_op}')
                 k2.metric('📊 Rendimento Medio', f'{sum(pnls)/n_op:+.2f}%', 'Per trade')
                 k3.metric('📈 P&L Cumulato', f'{sum(pnls):+.1f}%', 'Somma %')
                 k4.metric('💶 Gain Netto (26%)', f'€ {sum(netti):+,.2f}', 'Netto tasse')
-                k5.metric('📁 Operazioni', f'{len(rows)}', f"{sum(1 for x in rows if x['Stato']=='Attivo')} attive")
+                k5.metric('📁 Operazioni', f'{len(rows)}', f"{n_att} attive • {n_chi} chiuse")
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
             else:
                 st.info('📭 Nessuna operazione presente per questo filtro.')
@@ -391,7 +444,31 @@ def render_barra_indici_usa():
 
 _NOMI_USA = {'AAPL': 'Apple', 'MSFT': 'Microsoft', 'NVDA': 'NVIDIA', 'GOOGL': 'Alphabet', 'GOOG': 'Alphabet', 'AMZN': 'Amazon', 'META': 'Meta Platforms', 'TSLA': 'Tesla', 'AVGO': 'Broadcom', 'ORCL': 'Oracle', 'CRM': 'Salesforce', 'AMD': 'AMD', 'NFLX': 'Netflix', 'ADBE': 'Adobe', 'QCOM': 'Qualcomm', 'INTC': 'Intel', 'MU': 'Micron', 'AMAT': 'Applied Materials', 'LRCX': 'Lam Research', 'KLAC': 'KLA Corp', 'PANW': 'Palo Alto Net', 'CRWD': 'CrowdStrike', 'FTNT': 'Fortinet', 'SNOW': 'Snowflake', 'PLTR': 'Palantir', 'SHOP': 'Shopify', 'UBER': 'Uber', 'ABNB': 'Airbnb', 'COIN': 'Coinbase', 'SQ': 'Block', 'PYPL': 'PayPal', 'SOFI': 'SoFi Tech', 'HOOD': 'Robinhood', 'AFRM': 'Affirm', 'UPST': 'Upstart', 'JPM': 'JPMorgan', 'BAC': 'Bank of America', 'WFC': 'Wells Fargo', 'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'V': 'Visa', 'MA': 'Mastercard', 'AXP': 'American Express', 'BLK': 'BlackRock', 'SCHW': 'Charles Schwab', 'UNH': 'UnitedHealth', 'LLY': 'Eli Lilly', 'JNJ': 'Johnson & Johnson', 'ABBV': 'AbbVie', 'MRK': 'Merck', 'PFE': 'Pfizer', 'TMO': 'Thermo Fisher', 'ABT': 'Abbott', 'AMGN': 'Amgen', 'GILD': 'Gilead', 'WMT': 'Walmart', 'COST': 'Costco', 'HD': 'Home Depot', 'LOW': "Lowe's", 'TGT': 'Target', 'NKE': 'Nike', 'SBUX': 'Starbucks', 'MCD': "McDonald's", 'KO': 'Coca-Cola', 'PEP': 'PepsiCo', 'PG': 'Procter & Gamble', 'DIS': 'Disney', 'CMCSA': 'Comcast', 'T': 'AT&T', 'VZ': 'Verizon', 'XOM': 'Exxon Mobil', 'CVX': 'Chevron', 'COP': 'ConocoPhillips', 'SLB': 'Schlumberger', 'OXY': 'Occidental', 'CAT': 'Caterpillar', 'DE': 'Deere & Co', 'BA': 'Boeing', 'GE': 'GE Aerospace', 'HON': 'Honeywell', 'LMT': 'Lockheed Martin', 'RTX': 'RTX Corp', 'NOC': 'Northrop Grumman', 'GD': 'General Dynamics', 'UPS': 'UPS', 'O': 'Realty Income', 'AMT': 'American Tower', 'PLD': 'Prologis', 'EQIX': 'Equinix', 'SPG': 'Simon Property', 'APP': 'AppLovin', 'TTWO': 'Take-Two', 'TTD': 'The Trade Desk', 'VRT': 'Vertiv', 'SMCI': 'Super Micro', 'APLD': 'Applied Digital', 'ONDS': 'Ondas Holdings', 'ARM': 'Arm Holdings', 'ASML': 'ASML', 'TSM': 'TSMC', 'DELL': 'Dell Tech', 'HPE': 'Hewlett Packard', 'IBM': 'IBM', 'CSCO': 'Cisco', 'ANET': 'Arista Networks'}
 
-def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_score=0, solo_pre_ign=False):
+def _rileva_fase_weinstein_ufficiale(df):
+    """Replica esattamente la regola ufficiale rileva_fase_weinstein(df) di scanner.py."""
+    if df is None or len(df) < 200:
+        return "Dati insufficienti"
+    prezzo = df['Close'].iloc[-1]
+    sma200_serie = df['Close'].rolling(window=200).mean()
+    sma200 = sma200_serie.iloc[-1]
+    sma200_prev = sma200_serie.iloc[-20]
+    sma50 = df['Close'].rolling(window=50).mean().iloc[-1]
+    slope_sma200 = (sma200 - sma200_prev) / sma200_prev if pd.notna(sma200_prev) and sma200_prev > 0 else 0
+    if prezzo < sma200 and slope_sma200 < -0.01:
+        distanza_sma200 = abs(prezzo - sma200) / sma200
+        if prezzo > sma50 and distanza_sma200 < 0.03:
+            return "FASE 1 (Accumulazione/Basing)"
+        return "FASE 4 (Declino Strutturale)"
+    if prezzo < sma50 and prezzo > sma200 and slope_sma200 > 0.005:
+        return "CORREZIONE in Trend (Pullback Fase 2)"
+    if prezzo > sma200 * 1.2 and slope_sma200 > 0.02:
+        return "FASE 3 (Distribuzione)"
+    if prezzo > sma200 and slope_sma200 > 0.005:
+        return "FASE 2 (Avanzamento)"
+    return "FASE 1 (Accumulazione/Basing)"
+
+
+def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_score=0, solo_pre_ign=False, rileva_fase_fn=None):
     tks = []
     for x in (tickers_list or []):
         t_c = str(x).strip().upper()
@@ -409,7 +486,9 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
             try:
                 t_obj = yf.Ticker(tk)
                 h = t_obj.history(period="1y", interval="1d")
-                if h.empty or len(h) < 50:
+                if h is not None and not h.empty:
+                    h = h.dropna(subset=["Open", "High", "Low", "Close"]).copy()
+                if h is None or h.empty or len(h) < 50:
                     if (solo_fase2 and solo_fase2 != 'Tutte le Fasi') or solo_pre_ign or min_score > 0:
                         continue
                     righe.append({"Titolo": _tk_full, "Motore": "Tutti", "Esito": "❌", "Dettaglio Criteri (✅ Passa | ❌ Manca)": "❌ Dati storici insufficienti (<50 barre)"})
@@ -424,17 +503,25 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
 
                 sma20 = float(c.tail(20).mean())
                 sma50 = float(c.tail(50).mean())
-                sma200 = float(c.tail(200).mean()) if len(c) >= 200 else sma50
-                sma200_prev = float(c.iloc[-21:-1].tail(200).mean()) if len(c) >= 200 else sma200
 
-                if p_cur > sma200 and sma200 >= sma200_prev:
+                # Usa la funzione ufficiale rileva_fase_weinstein passata da scanner.py (o la replica identica di fallback)
+                fase_ufficiale = rileva_fase_fn(h) if callable(rileva_fase_fn) else _rileva_fase_weinstein_ufficiale(h)
+                _fu_up = str(fase_ufficiale or "").upper()
+                if "FASE 2" in _fu_up or "PULLBACK FASE 2" in _fu_up or "2" in _fu_up:
                     fase = 2
-                elif p_cur < sma200 and sma200 <= sma200_prev:
+                    fase_disp = "FASE 2 (Pullback)" if "PULLBACK" in _fu_up else "FASE 2"
+                elif "FASE 4" in _fu_up:
                     fase = 4
-                elif p_cur > sma200:
+                    fase_disp = "FASE 4"
+                elif "FASE 3" in _fu_up:
                     fase = 3
-                else:
+                    fase_disp = "FASE 3"
+                elif "FASE 1" in _fu_up:
                     fase = 1
+                    fase_disp = "FASE 1"
+                else:
+                    fase = 0
+                    fase_disp = "N/D (<200g)"
 
                 delta = c.diff()
                 gain = delta.clip(lower=0).rolling(14).mean()
@@ -467,7 +554,7 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
                 ok_std = all([c_f2, c_sma20, c_rsi_std, c_pot])
 
                 det_ign = " | ".join([
-                    f"{'✅' if c_f2 else '❌'} Fase {fase} (req. F2)",
+                    f"{'✅' if c_f2 else '❌'} {fase_disp} (req. F2)",
                     f"{'✅' if c_verde else '❌'} Candela {'Verde' if c_verde else 'Rossa'}",
                     f"{'✅' if c_sma20 else '❌'} Prezzo > SMA20",
                     f"{'✅' if c_vpoc else '❌'} Prezzo > VPOC",
@@ -476,7 +563,7 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
                     f"{'✅' if c_pot else '❌'} Potenziale {pot:+.1f}% (≥10%)"
                 ])
                 det_fab = " | ".join([
-                    f"{'✅' if c_f2 else '❌'} Fase {fase} (req. F2)",
+                    f"{'✅' if c_f2 else '❌'} {fase_disp} (req. F2)",
                     f"{'✅' if c_verde else '❌'} Candela {'Verde' if c_verde else 'Rossa'}",
                     f"{'✅' if c_sma20 else '❌'} Prezzo > SMA20",
                     f"{'✅' if c_vpoc else '❌'} Prezzo > VPOC",
@@ -485,7 +572,7 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
                     f"{'✅' if c_pot else '❌'} Potenziale {pot:+.1f}% (≥10%)"
                 ])
                 det_std = " | ".join([
-                    f"{'✅' if c_f2 else '❌'} Fase {fase} (req. F2)",
+                    f"{'✅' if c_f2 else '❌'} {fase_disp} (req. F2)",
                     f"{'✅' if c_sma20 else '❌'} Prezzo > SMA20",
                     f"{'✅' if c_rsi_std else '❌'} RSI {rsi:.0f} (<70)",
                     f"{'✅' if c_pot else '❌'} Potenziale {pot:+.1f}% (≥10%)"

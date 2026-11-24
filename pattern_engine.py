@@ -1489,6 +1489,7 @@ def crea_contenitore_pattern_alerts(spy_regime="verde"):
         "buy_mediazione": [],
         "buy_nuovo": [],
         "buy_nuovo_raw": [],
+        "sorvegliati_speciali": [],
         "priorita_portafoglio": False,
         "per_ticker": {},
         "soglia_score": soglia,
@@ -1877,3 +1878,396 @@ def render_sezione_pattern_riepilogo(st, pattern_alerts):
                 _render_card_alert(st, al)
         else:
             st.caption(msg_vuoto_nuovi)
+
+    # 5) Riquadro richiudibile "Sorvegliati Speciali — Luce Arancione" (max 8 titoli: fino a 3 Figure Quasi Pronte + Top Insider SEC)
+    l_sorv = pattern_alerts.get("sorvegliati_speciali", []) or []
+    with st.expander(
+        f"🟠 Sorvegliati Speciali — Luce Arancione (In attesa di condizioni BUY) — {len(l_sorv)}",
+        expanded=False,
+    ):
+        if l_sorv:
+            st.caption(
+                "Include fino a 3 📐 Figure Quasi Pronte (R/R ≥ 1.8, non in Fase 4) insieme ai migliori "
+                "🏛️ Insider SEC Form 4 e 💪 Forza Alta (S-Score ≥ 75). I filtri severi BUY verdi restano invariati."
+            )
+            for sv in l_sorv:
+                _render_card_sorvegliato(st, sv)
+        else:
+            st.caption(
+                "Nessun Sorvegliato Speciale nella Watchlist attuale "
+                "(richiesta una Figura Quasi Pronta R/R ≥ 1.8, Insider SEC Form 4 ≥ 2 acq / ≥ $300.000 oppure S-Score ≥ 75 in Fase 1/2)."
+            )
+
+
+# ==============================================================================
+# SORVEGLIATI SPECIALI — LUCE ARANCIONE (FIGURE QUASI PRONTE + TOP INSIDER SEC)
+# ==============================================================================
+def _rileva_figura_quasi_pronta_sorvegliato(d, vol_ratio, s_val, fase_up, spy_regime):
+    """
+    Cerca una figura tecnica valida (Cup & Handle, Bull Flag, VCP o Triangolo Ascendente)
+    con R/R >= 1.8 fuori da Fase 4 che sia quasi pronta ma non ancora BUY verde per un solo dettaglio
+    (es. prezzo fino a -4% sotto Trigger Y, estensione temporanea +3.5%..+6% da EMA 20, o S-Score 70..soglia).
+    Non altera in alcun modo i filtri severi dei segnali BUY verdi.
+    """
+    if d is None or len(d) < 60 or "FASE 4" in fase_up:
+        return None
+
+    prezzo = float(d["Close"].iloc[-1])
+    ema20 = float(d["EMA_20"].iloc[-1]) if pd.notna(d["EMA_20"].iloc[-1]) else 0.0
+    dist_ema20 = ((prezzo - ema20) / ema20) * 100.0 if ema20 > 0 else 999.0
+    rsi = float(d["RSI"].iloc[-1]) if pd.notna(d["RSI"].iloc[-1]) else 50.0
+    if prezzo <= 0 or dist_ema20 > 6.0 or rsi > 75.0:
+        return None
+
+    pivot_highs, pivot_lows = trova_pivot(d, ordine=3, min_distanza=MIN_DISTANZA_PIVOT)
+    candidati = []
+    for fn in (
+        lambda: _rileva_cup_and_handle(d, pivot_highs, pivot_lows, vol_ratio),
+        lambda: _rileva_bull_flag(d, pivot_highs, pivot_lows, vol_ratio),
+        lambda: _rileva_vcp(d, pivot_highs, pivot_lows, vol_ratio),
+        lambda: _rileva_triangolo_ascendente(d, pivot_highs, pivot_lows, vol_ratio),
+    ):
+        try:
+            res = fn()
+            if res and float(res.get("rr", 0) or 0) >= MIN_RR:
+                candidati.append(res)
+        except Exception:
+            pass
+
+    if candidati:
+        return max(candidati, key=lambda x: (float(x.get("confidenza", 0)), float(x.get("rr", 0))))
+
+    # Controllo dedicato per fascia pre-breakout appena sotto il limite BUY (-4.0% .. -3.0% sotto Trigger Y)
+    try:
+        fin = d.tail(45)
+        if len(fin) >= 25:
+            trig_y = float(fin["High"].iloc[:-1].max())
+            dist_trig_pct = ((prezzo - trig_y) / trig_y) * 100.0 if trig_y > 0 else -99.0
+            if -4.0 <= dist_trig_pct < PRE_BREAKOUT_MIN_PCT:
+                low_rec = float(d["Low"].tail(12).min())
+                low_base = float(fin["Low"].min())
+                # Verifica struttura rialzista ordinata (minimi recenti più alti della base -> VCP / Triangolo / Flag)
+                if low_rec > low_base * 1.01 and low_rec < prezzo:
+                    stop_p = round(min(low_rec * 0.99, prezzo * 0.94), 2)
+                    rischio = trig_y - stop_p
+                    altezza = trig_y - low_base
+                    if rischio > 0 and altezza > 0:
+                        target_p = round(trig_y + max(altezza * 0.85, rischio * 2.0), 2)
+                        rr_val = round((target_p - trig_y) / rischio, 2)
+                        if rr_val >= MIN_RR:
+                            # Classifica la figura in base alla contrazione di volatilità o corsa precedente
+                            gain_impulso = ((trig_y - low_base) / low_base) * 100.0 if low_base > 0 else 0.0
+                            if gain_impulso >= 14.0:
+                                nome_fig = "Bull Flag"
+                            elif (float(d["High"].tail(10).max()) - low_rec) / max(low_rec, 1e-6) <= 0.07:
+                                nome_fig = "VCP (Contrazione Volatilità)"
+                            else:
+                                nome_fig = "Triangolo Ascendente"
+                            return {
+                                "figura": nome_fig,
+                                "trigger_y": round(trig_y, 2),
+                                "target_price": target_p,
+                                "stop_price": stop_p,
+                                "rr": rr_val,
+                                "confidenza": 74,
+                                "stato_trigger": "QUASI PRE-BREAKOUT",
+                            }
+    except Exception:
+        pass
+    return None
+
+
+def valuta_sorvegliato_speciale(
+    ticker,
+    df,
+    s_score,
+    fase_weinstein,
+    currency="USD",
+    eurusd_rate=1.12,
+    spy_regime="verde",
+    sec_insider=None,
+):
+    """
+    Valuta se un titolo Watchlist (NON ancora BUY) entra nei
+    '🟠 Sorvegliati Speciali — Luce Arancione' per uno o più motivi forti:
+      - Figura Grafica Quasi Pronta (Cup & Handle, Bull Flag, VCP, Triangolo con R/R >= 1.8, non Fase 4)
+      - Motivo A: Insider SEC Form 4 ultimi 90gg (>= 2 acquisti OPPURE >= $300.000, con data GG/MM/AAAA)
+      - Motivo B: Forza Alta (S-Score >= 75 in Fase 1 o Fase 2 Weinstein)
+    Non allenta in alcun modo i filtri BUY verdi.
+    """
+    try:
+        tk_up = str(ticker or "").strip().upper()
+        if not tk_up or df is None or len(df) < 60:
+            return None
+
+        # Verifica Motivo A (Insider SEC Form 4 ultimi 90gg con data ultimo acquisto GG/MM/AAAA)
+        sec_buys = int((sec_insider or {}).get("buys", 0) or 0)
+        sec_val = float((sec_insider or {}).get("valore_usd", 0.0) or 0.0)
+        sec_num_dir = int((sec_insider or {}).get("num_insider", 0) or 0)
+        sec_ult_raw = str((sec_insider or {}).get("ultimo_acquisto") or "").strip()[:10]
+        sec_ult_it = ""
+        if sec_ult_raw:
+            try:
+                sec_ult_it = datetime.strptime(sec_ult_raw, "%Y-%m-%d").strftime("%d/%m/%Y")
+            except Exception:
+                sec_ult_it = sec_ult_raw
+        _ult_tag = f" — ultimo: {sec_ult_it}" if sec_ult_it else ""
+        has_motivo_a = (sec_buys >= 2) or (sec_val >= 300000.0)
+
+        # Verifica Motivo B (Forza Alta S-Score >= 75 in Fase 1 o Fase 2)
+        s_val = int(round(float(s_score))) if s_score is not None else 0
+        fase_str = str(fase_weinstein or "N/D").strip()
+        fase_up = fase_str.upper()
+        in_fase_1_o_2 = ("FASE 1" in fase_up) or ("FASE 2" in fase_up) or ("PULLBACK FASE 2" in fase_up)
+        has_motivo_b = (s_val >= 75) and in_fase_1_o_2
+
+        d = _calcola_indicatori(df)
+        if d is None or d.empty:
+            return None
+
+        prezzo = float(d["Close"].iloc[-1])
+        if prezzo <= 0:
+            return None
+        vol_m = float(d["Vol_Media_20"].iloc[-1]) if pd.notna(d["Vol_Media_20"].iloc[-1]) else 0.0
+        vol_ratio = float(d["Volume"].iloc[-1]) / vol_m if vol_m > 0 else 1.0
+
+        # Verifica Figura Grafica Quasi Pronta (Cup & Handle, Bull Flag, VCP, Triangolo, R/R >= 1.8, non Fase 4)
+        fig_qp = _rileva_figura_quasi_pronta_sorvegliato(d, vol_ratio, s_val, fase_up, spy_regime)
+        has_figura_qp = fig_qp is not None
+
+        if not (has_figura_qp or has_motivo_a or has_motivo_b):
+            return None
+
+        simb = "$" if str(currency).upper() == "USD" else "€"
+        prezzo_eur = round(prezzo / eurusd_rate, 2) if (str(currency).upper() == "USD" and eurusd_rate > 0) else round(prezzo, 2)
+
+        ema20 = float(d["EMA_20"].iloc[-1]) if pd.notna(d["EMA_20"].iloc[-1]) else prezzo
+        sma50 = float(d["SMA_50"].iloc[-1]) if pd.notna(d["SMA_50"].iloc[-1]) else prezzo
+        sma50_prev = (
+            float(d["SMA_50"].iloc[-1 - LOOKBACK_PENDENZA_SMA50])
+            if len(d) > 50 + LOOKBACK_PENDENZA_SMA50 and pd.notna(d["SMA_50"].iloc[-1 - LOOKBACK_PENDENZA_SMA50])
+            else None
+        )
+        sma200 = float(d["SMA_200"].iloc[-1]) if pd.notna(d["SMA_200"].iloc[-1]) else 0.0
+        rsi = float(d["RSI"].iloc[-1]) if pd.notna(d["RSI"].iloc[-1]) else 50.0
+        dist_ema20_pct = ((prezzo - ema20) / ema20) * 100.0 if ema20 > 0 else 0.0
+        soglia_din = SOGLIA_SCORE_RIBASSISTA if str(spy_regime).lower() == "rosso" else SOGLIA_SCORE_NORMALE
+
+        if has_figura_qp:
+            trigger_y_ref = float(fig_qp.get("trigger_y") or prezzo)
+            fig_nome = str(fig_qp.get("figura", "Breakout"))
+            fig_short = "VCP" if "VCP" in fig_nome else ("Triangolo" if "Triangolo" in fig_nome else fig_nome)
+            fig_rr = float(fig_qp.get("rr", 0.0) or 0.0)
+            fig_conf = int(fig_qp.get("confidenza", 0) or 0)
+        else:
+            finestra_res = d["High"].iloc[-min(40, len(d)):]
+            trigger_y_ref = float(finestra_res.max()) if not finestra_res.empty else prezzo
+            fig_nome, fig_short, fig_rr, fig_conf = "", "", 0.0, 0
+
+        # Costruzione badge e riga "Perché è sorvegliato" (integrando Figura Quasi Pronta + Insider SEC + S-Score)
+        ins_label = f"🏛️ Insider SEC ({sec_buys} acq / ${sec_val:,.0f}{_ult_tag})"
+        if has_figura_qp and has_motivo_a:
+            priorita = 3
+            badge_motivo = f"📐 Figura Quasi Pronta ({fig_short}) + {ins_label}"
+            perche_txt = f"{fig_nome} con R/R 1:{fig_rr:.1f} (S-Score {s_val}) + {ins_label}"
+        elif has_motivo_a and has_motivo_b:
+            priorita = 3
+            badge_motivo = f"{ins_label} + 💪 S-Score {s_val}"
+            perche_txt = f"{ins_label} + 💪 Forza Alta (S-Score {s_val})"
+        elif has_figura_qp:
+            priorita = 2
+            badge_motivo = f"📐 Figura Quasi Pronta ({fig_short})"
+            perche_txt = f"{fig_nome} con R/R 1:{fig_rr:.1f} (S-Score {s_val})"
+        elif has_motivo_a:
+            priorita = 1
+            badge_motivo = ins_label
+            perche_txt = f"🏛️ Insider SEC ({sec_buys} acq / ${sec_val:,.0f}{_ult_tag} — {max(1, sec_num_dir)} dir. in 90gg)"
+        else:
+            priorita = 0
+            badge_motivo = f"💪 Forza Alta (S-Score {s_val})"
+            perche_txt = f"💪 Forza Alta (S-Score {s_val} in {fase_str})"
+
+        # Diagnostica esatta con numeri reali: "Cosa manca al BUY" (sempre con riferimento Trigger Y $)
+        blocchi = []
+        if has_figura_qp:
+            if trigger_y_ref > prezzo * 1.001:
+                pct_trig = ((trigger_y_ref - prezzo) / prezzo) * 100.0
+                blocchi.append(f"Prezzo ancora -{pct_trig:.1f}% sotto il Trigger Y ({simb}{trigger_y_ref:.2f})")
+            if dist_ema20_pct > MAX_DIST_EMA20_BUY_PCT:
+                blocchi.append(
+                    f"Estensione temporanea {dist_ema20_pct:+.1f}% sopra EMA 20 ({simb}{ema20:.2f}, max +{MAX_DIST_EMA20_BUY_PCT:.1f}%): attendere pausa verso Trigger Y ({simb}{trigger_y_ref:.2f})"
+                )
+            if sma200 > 0 and prezzo <= sma200 and trigger_y_ref <= sma200:
+                pct_200 = ((sma200 - prezzo) / prezzo) * 100.0
+                blocchi.append(f"Manca +{pct_200:.1f}% per superare SMA 200 ({simb}{sma200:.2f})")
+            elif sma50_prev is not None and sma50 <= sma50_prev:
+                blocchi.append(f"SMA 50 ({simb}{sma50:.2f}) non ancora inclinata al rialzo (Trigger Y {simb}{trigger_y_ref:.2f})")
+            if s_val < MIN_SSCORE_NUOVO_STD:
+                blocchi.append(f"S-Score {s_val}/100 (soglia BUY {MIN_SSCORE_NUOVO_STD}) — Trigger Y {simb}{trigger_y_ref:.2f}")
+            elif fig_conf < soglia_din:
+                blocchi.append(f"Confidenza {fig_conf}/100 (soglia SPY {str(spy_regime).upper()}: {soglia_din}) — Trigger Y {simb}{trigger_y_ref:.2f}")
+            if prezzo >= trigger_y_ref and vol_ratio < MIN_VOL_RATIO_BREAKOUT:
+                blocchi.append(f"Volumi {vol_ratio:.2f}x (servono ≥ {MIN_VOL_RATIO_BREAKOUT:.2f}x sul Trigger Y {simb}{trigger_y_ref:.2f})")
+        else:
+            if sma200 > 0 and prezzo <= sma200:
+                pct_200 = ((sma200 - prezzo) / prezzo) * 100.0
+                blocchi.append(f"Manca +{pct_200:.1f}% per superare SMA 200 ({simb}{sma200:.2f})")
+            elif sma50_prev is not None and sma50 <= sma50_prev:
+                blocchi.append(f"SMA 50 ({simb}{sma50:.2f}) non ancora in salita rispetto a 10 sedute fa ({simb}{sma50_prev:.2f})")
+
+            if dist_ema20_pct > MAX_DIST_EMA20_BUY_PCT:
+                blocchi.append(
+                    f"Troppo esteso ({dist_ema20_pct:+.1f}% sopra EMA 20 {simb}{ema20:.2f}, max +{MAX_DIST_EMA20_BUY_PCT:.1f}%): attendere pausa"
+                )
+
+            if len(d) >= 31:
+                p_30g_fa = float(d["Close"].iloc[-31])
+                if p_30g_fa > 0:
+                    gain_30g = ((prezzo - p_30g_fa) / p_30g_fa) * 100.0
+                    if gain_30g > MAX_GAIN_30G_SENZA_BASE_PCT and not _ha_fascia_stretta_5_chiusure_in_10gg(d):
+                        blocchi.append(
+                            f"Corsa {gain_30g:+.1f}% in 30gg senza pausa stretta (<4% per 5 chiusure): attendere consolidamento"
+                        )
+
+            if rsi > MAX_RSI_BUY:
+                blocchi.append(f"RSI ipercomprato ({rsi:.1f}, max {MAX_RSI_BUY:.0f}): attendere scarico")
+
+            if trigger_y_ref > prezzo * 1.002:
+                pct_trig = ((trigger_y_ref - prezzo) / prezzo) * 100.0
+                blocchi.append(f"Manca +{pct_trig:.1f}% al Trigger Y ({simb}{trigger_y_ref:.2f})")
+            elif vol_ratio < MIN_VOL_RATIO_BREAKOUT:
+                blocchi.append(f"Volumi ancora bassi ({vol_ratio:.2f}x, servono ≥ {MIN_VOL_RATIO_BREAKOUT:.2f}x sul breakout)")
+
+            if str(spy_regime).lower() != "verde":
+                blocchi.append(f"Regime SPY {str(spy_regime).upper()} (non verde — soglia confidenza {soglia_din})")
+
+            if s_val < MIN_SSCORE_NUOVO_STD:
+                blocchi.append(f"S-Score {s_val}/100 (< {MIN_SSCORE_NUOVO_STD} richiesto per BUY Nuovo)")
+
+        if not blocchi:
+            blocchi.append(f"In attesa di conferma finale sul Trigger Y ({simb}{trigger_y_ref:.2f})")
+
+        # Mostra i 2 blocchi principali più immediati e leggibili
+        cosa_manca_txt = " • ".join(blocchi[:2])
+
+        return {
+            "ticker": tk_up,
+            "prezzo": round(prezzo, 2),
+            "prezzo_eur": prezzo_eur,
+            "simbolo": simb,
+            "fase": fase_str,
+            "s_score": s_val,
+            "priorita": priorita,
+            "is_figura_qp": has_figura_qp,
+            "has_insider": has_motivo_a,
+            "fig_rr": round(fig_rr, 2),
+            "fig_conf": fig_conf,
+            "trigger_y": round(trigger_y_ref, 2),
+            "badge_motivo": badge_motivo,
+            "perche_sorvegliato": perche_txt,
+            "cosa_manca": cosa_manca_txt,
+            "sec_buys": sec_buys,
+            "sec_val_usd": round(sec_val, 2),
+            "sec_ultimo_acquisto": sec_ult_it,
+            "dist_ema20_pct": round(dist_ema20_pct, 1),
+            "rsi": round(rsi, 1),
+        }
+    except Exception:
+        return None
+
+
+def ordina_sorvegliati_speciali(lista_candidati, buy_tickers_set=None, max_items=8, max_grafici=3):
+    """
+    Esclude i titoli già BUY verdi, deduplica per ticker e compone la lista unificata
+    (max 6-8 titoli totali): fino ai migliori 3 candidati grafici quasi pronti +
+    migliori Top Insider SEC e Forza Alta, dando priorità massima ai titoli con doppio catalizzatore.
+    """
+    esclusi = {str(t).strip().upper() for t in (buy_tickers_set or set()) if t}
+    visti = {}
+    for item in (lista_candidati or []):
+        if not isinstance(item, dict):
+            continue
+        tk = str(item.get("ticker", "")).strip().upper()
+        if not tk or tk in esclusi:
+            continue
+        prev = visti.get(tk)
+        if prev is None or (item.get("priorita", 0), item.get("fig_rr", 0), item.get("sec_val_usd", 0), item.get("s_score", 0)) > (
+            prev.get("priorita", 0), prev.get("fig_rr", 0), prev.get("sec_val_usd", 0), prev.get("s_score", 0)
+        ):
+            visti[tk] = item
+
+    tutti = list(visti.values())
+    # Seleziona fino ai migliori `max_grafici` (3) candidati con Figura Quasi Pronta
+    grafici = sorted(
+        [x for x in tutti if x.get("is_figura_qp")],
+        key=lambda x: (
+            int(bool(x.get("has_insider"))),
+            float(x.get("fig_rr", 0.0)),
+            int(x.get("fig_conf", 0)),
+            int(x.get("s_score", 0)),
+        ),
+        reverse=True,
+    )[: int(max_grafici)]
+    scelti_tk = {x["ticker"] for x in grafici}
+
+    # Completa la lista con i migliori Top Insider SEC e Forza Alta senza duplicati
+    altri = sorted(
+        [x for x in tutti if x["ticker"] not in scelti_tk],
+        key=lambda x: (
+            int(x.get("priorita", 0)),
+            float(x.get("sec_val_usd", 0.0)),
+            int(x.get("s_score", 0)),
+            -abs(float(x.get("dist_ema20_pct", 0.0))),
+        ),
+        reverse=True,
+    )
+
+    unificati = grafici + altri
+    unificati.sort(
+        key=lambda x: (
+            int(x.get("priorita", 0)),
+            int(bool(x.get("is_figura_qp"))),
+            float(x.get("sec_val_usd", 0.0)),
+            float(x.get("fig_rr", 0.0)),
+            int(x.get("s_score", 0)),
+        ),
+        reverse=True,
+    )
+    return unificati[: int(max_items)]
+
+
+def _render_card_sorvegliato(st, sv):
+    """
+    Renderizza una card ad alto contrasto (astigmatismo-friendly) con cornice sinistra arancione (#F59E0B)
+    e testi rigorosamente bianco puro (#F8FAFC) e grigio molto chiaro (#E2E8F0) su sfondo scuro.
+    """
+    simb = sv.get("simbolo", "$")
+    p_val = float(sv.get("prezzo", 0) or 0)
+    p_eur = float(sv.get("prezzo_eur", 0) or 0)
+    prezzo_disp = f"{simb}{p_val:.2f} (€{p_eur:.2f})" if simb == "$" else f"€{p_val:.2f}"
+    st.markdown(
+        f"""
+        <div style="background:#131722; border:1px solid #334155; border-left:4px solid #F59E0B;
+                    border-radius:8px; padding:0.78rem 0.98rem; margin-bottom:0.55rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:0.40rem;">
+                <div>
+                    <span style="background:#1E293B; color:#F8FAFC; border:1px solid #F59E0B;
+                                 font-size:0.74rem; font-weight:700; padding:3px 9px; border-radius:4px;">{sv.get('badge_motivo')}</span>
+                    <span style="font-size:1.10rem; font-weight:800; color:#F8FAFC; margin-left:8px;">{sv.get('ticker')}</span>
+                    <span style="font-family:'JetBrains Mono', monospace; color:#F8FAFC; font-size:0.90rem; font-weight:700; margin-left:8px;">{prezzo_disp}</span>
+                </div>
+                <span style="background:#0B0E11; border:1px solid #334155; color:#E2E8F0;
+                             font-size:0.78rem; font-weight:700; padding:2px 8px; border-radius:5px;">
+                    {sv.get('fase')} &nbsp;|&nbsp; RSI {sv.get('rsi', 0):.1f}
+                </span>
+            </div>
+            <div style="font-size:0.84rem; color:#E2E8F0; margin-bottom:0.28rem; line-height:1.45;">
+                📌 <b style="color:#F8FAFC;">Perché è sorvegliato:</b> {sv.get('perche_sorvegliato')}
+            </div>
+            <div style="font-size:0.84rem; color:#E2E8F0; line-height:1.45;">
+                ⏳ <b style="color:#F8FAFC;">Cosa manca al BUY:</b> <span style="color:#F8FAFC; font-weight:600;">{sv.get('cosa_manca')}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
