@@ -3014,8 +3014,9 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     var_pct_oggi = ((prezzo_attuale - prezzo_prec) / prezzo_prec) * 100 if prezzo_prec > 0 else 0.0
     colore_titolo = "#10B981" if var_pct_oggi >= 0 else "#EF4444"
 
-    # Polarità candele per colorazione coerente dei volumi
-    is_up = df['Close'] >= df['Open']
+    # Polarità seduta stile StockCharts (Close vs Chiusura precedente) per candele Hollow e volumi coerenti
+    prev_close = df['Close'].shift(1).fillna(df['Open'])
+    is_up = df['Close'] >= prev_close
 
     vpoc_level, whale_badge = calcola_livello_balene(df)
     rsi_now = float(df['RSI'].iloc[-1]) if 'RSI' in df.columns and pd.notna(df['RSI'].iloc[-1]) else 50.0
@@ -3045,21 +3046,46 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Inf'), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#00BCD4', width=1.3), name='SMA 20'), row=1, col=1)
 
-    # Candele nitide ad alto contrasto con bordi sottili su tutti i timeframe (Daily, Weekly, Monthly)
+    # Candele Hollow stile StockCharts: colore su Close vs Chiusura prec., riempimento (vuota/piena) su Close vs Open
+    # Sedute positive (Close >= Chiusura prec.): Verde vuota se Close >= Open, Verde piena se Close < Open (es. Gap Up)
     fig.add_trace(
         go.Candlestick(
             x=df.index,
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
+            open=df['Open'].where(is_up),
+            high=df['High'].where(is_up),
+            low=df['Low'].where(is_up),
+            close=df['Close'].where(is_up),
             name='Prezzo',
+            legendgroup='prezzo',
+            showlegend=True,
             increasing_line_color="#10B981",
-            increasing_fillcolor="#10B981",
-            increasing_line_width=1,
+            increasing_fillcolor="#0B0E11",
+            increasing_line_width=1.3,
+            decreasing_line_color="#10B981",
+            decreasing_fillcolor="#10B981",
+            decreasing_line_width=1.1,
+            whiskerwidth=0.4,
+        ),
+        row=1,
+        col=1,
+    )
+    # Sedute negative (Close < Chiusura prec.): Rossa vuota se Close >= Open (es. Gap Down con rimbalzo), Rossa piena se Close < Open
+    fig.add_trace(
+        go.Candlestick(
+            x=df.index,
+            open=df['Open'].where(~is_up),
+            high=df['High'].where(~is_up),
+            low=df['Low'].where(~is_up),
+            close=df['Close'].where(~is_up),
+            name='Prezzo',
+            legendgroup='prezzo',
+            showlegend=False,
+            increasing_line_color="#EF4444",
+            increasing_fillcolor="#0B0E11",
+            increasing_line_width=1.3,
             decreasing_line_color="#EF4444",
             decreasing_fillcolor="#EF4444",
-            decreasing_line_width=1,
+            decreasing_line_width=1.1,
             whiskerwidth=0.4,
         ),
         row=1,
