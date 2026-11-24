@@ -1,0 +1,50 @@
+[
+    {
+        "Ticker": "AMC",
+        "Tipo": "Spot",
+        "Quantita": 25.0,
+        "Prezzo_Medio": 2.89,
+        "Valore_Carico": 72.25,
+        "Prezzo_Attuale_EUR": 2.89,
+        "Valore_Attuale": 72.25,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-22"
+    },
+    {
+        "Ticker": "NKE",
+        "Tipo": "Spot",
+        "Quantita": 1.172388,
+        "Prezzo_Medio": 35.3,
+        "Valore_Carico": 41.39,
+        "Prezzo_Attuale_EUR": 35.3,
+        "Valore_Attuale": 41.39,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-22"
+    },
+    {
+        "Ticker": "RZLV",
+        "Tipo": "Spot",
+        "Quantita": 34.90012,
+        "Prezzo_Medio": 3.53,
+        "Valore_Carico": 123.2,
+        "Prezzo_Attuale_EUR": 3.53,
+        "Valore_Attuale": 123.2,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-22"
+    },
+    {
+        "Ticker": "NIO",
+        "Tipo": "Spot",
+        "Quantita": 10.8548,
+        "Prezzo_Medio": 3.85,
+        "Valore_Carico": 41.79,
+        "Prezzo_Attuale_EUR": 3.85,
+        "Valore_Attuale": 41.79,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-22"
+    }
+]

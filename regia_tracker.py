@@ -7,18 +7,68 @@ import yfinance as yf
 SHADOW_FILE = 'shadow_regia.json'
 SKIP_FILE = 'skip_regia.json'
 
+def _risolvi_file_utente(path):
+    """Risolve dinamicamente il file JSON in base all'utente autenticato in st.session_state."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    bname = os.path.basename(str(path))
+    target_name = bname
+    try:
+        if bname == SHADOW_FILE:
+            target_name = st.session_state.get('_regia_tracker_file') or SHADOW_FILE
+        elif bname == SKIP_FILE:
+            target_name = st.session_state.get('_skip_regia_file') or SKIP_FILE
+        elif bname == 'impostazioni.json':
+            target_name = st.session_state.get('_impostazioni_file') or 'impostazioni.json'
+    except Exception:
+        target_name = bname
+    return os.path.join(base_dir, target_name), target_name
+
 def _load_j(path, default):
-    if os.path.exists(path):
+    abs_fp, fname = _risolvi_file_utente(path)
+    is_locale_pc = (os.name == 'nt')
+    esiste_loc = os.path.exists(abs_fp)
+    # Su Streamlit Cloud (o se manca su disco) prova a scaricare da GitHub il file dell'utente attivo
+    try:
+        sync_fn = st.session_state.get('_sync_github_file_fn')
+        k_pull = f'_gh_pulled_{fname}'
+        if callable(sync_fn) and ((not is_locale_pc) or (not esiste_loc)) and k_pull not in st.session_state:
+            st.session_state[k_pull] = True
+            rem_txt = sync_fn(fname, '', mode='pull')
+            if rem_txt:
+                try:
+                    with open(abs_fp, 'w', encoding='utf-8') as fw:
+                        fw.write(rem_txt)
+                    esiste_loc = True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # Retrocompatibilità per Fabio: se regia_tracker.json non esiste ancora ma esiste shadow_regia.json, legge da quest'ultimo
+    if not esiste_loc and fname == 'regia_tracker.json':
+        legacy_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), SHADOW_FILE)
+        if os.path.exists(legacy_fp):
+            abs_fp = legacy_fp
+            esiste_loc = True
+    if esiste_loc and os.path.exists(abs_fp):
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(abs_fp, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             return default
     return default
 
 def _save_j(path, data):
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    abs_fp, fname = _risolvi_file_utente(path)
+    content_str = json.dumps(data, indent=4, ensure_ascii=False)
+    with open(abs_fp, 'w', encoding='utf-8') as f:
+        f.write(content_str)
+    # Sincronizza automaticamente su GitHub se la funzione di sync è disponibile
+    try:
+        sync_fn = st.session_state.get('_sync_github_file_fn')
+        if callable(sync_fn):
+            sync_fn(fname, content_str, mode='push')
+    except Exception:
+        pass
 
 def get_ticker_saltati_5gg():
     sk = _load_j(SKIP_FILE, {})

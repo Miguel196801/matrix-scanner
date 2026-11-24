@@ -29,6 +29,99 @@ UTENTI_AUTH_FILE = "utenti_auth.json"
 UTENTE_PREDEFINITO_AUTH = "Fabio"
 PASSWORD_INIZIALE_AUTH = "matrix2026"
 
+# Mappa completa dei profili Multi-Utente (file, saluto e capitale versato predefinito)
+PROFILI_UTENTE_MATRIX = {
+    "fabio": {
+        "nome": "Fabio",
+        "portafoglio": "portafoglio.json",
+        "impostazioni": "impostazioni.json",
+        "segnali_attivi": "segnali_attivi.json",
+        "regia_tracker": "regia_tracker.json",
+        "skip_regia": "skip_regia.json",
+        "registro_vendite": "registro_vendite.json",
+        "registro_acquisti": "registro_acquisti.json",
+        "minusvalenze": "minusvalenze.json",
+        "saluto": "👋 Ciao Fabio, buon trading!",
+        "capitale_versato_default": 29.10,
+        "usa_portafoglio_iniziale": True,
+    },
+    "lisi": {
+        "nome": "Lisi",
+        "portafoglio": "portafoglio_lisi.json",
+        "impostazioni": "impostazioni_lisi.json",
+        "segnali_attivi": "segnali_attivi_lisi.json",
+        "regia_tracker": "regia_tracker_lisi.json",
+        "skip_regia": "skip_regia_lisi.json",
+        "registro_vendite": "registro_vendite_lisi.json",
+        "registro_acquisti": "registro_acquisti_lisi.json",
+        "minusvalenze": "minusvalenze_lisi.json",
+        "saluto": "👋 Benvenuta Lisi nel tuo MATRIX PRO!",
+        "capitale_versato_default": 310.00,
+        "usa_portafoglio_iniziale": False,
+    },
+    "alessia": {
+        "nome": "Alessia",
+        "portafoglio": "portafoglio_alessia.json",
+        "impostazioni": "impostazioni_alessia.json",
+        "segnali_attivi": "segnali_attivi_alessia.json",
+        "regia_tracker": "regia_tracker_alessia.json",
+        "skip_regia": "skip_regia_alessia.json",
+        "registro_vendite": "registro_vendite_alessia.json",
+        "registro_acquisti": "registro_acquisti_alessia.json",
+        "minusvalenze": "minusvalenze_alessia.json",
+        "saluto": "👋 Ciao Alessia, benvenuta nel tuo MATRIX PRO!",
+        "capitale_versato_default": 0.00,
+        "usa_portafoglio_iniziale": False,
+    },
+}
+
+def _get_profilo_utente_corrente():
+    """Restituisce il profilo attivo in base a st.session_state['utente_corrente'] (case-insensitive)."""
+    u_raw = str(
+        st.session_state.get("utente_corrente")
+        or st.session_state.get("utente_autenticato")
+        or UTENTE_PREDEFINITO_AUTH
+    ).strip()
+    u_key = u_raw.lower()
+    if u_key in PROFILI_UTENTE_MATRIX:
+        return dict(PROFILI_UTENTE_MATRIX[u_key], chiave=u_key)
+    # Fallback dinamico per eventuali altri utenti aggiunti in st.secrets["users"]
+    safe_key = re.sub(r"[^a-z0-9_]", "_", u_key) or "ospite"
+    return {
+        "chiave": safe_key,
+        "nome": u_raw or "Utente",
+        "portafoglio": f"portafoglio_{safe_key}.json",
+        "impostazioni": f"impostazioni_{safe_key}.json",
+        "segnali_attivi": f"segnali_attivi_{safe_key}.json",
+        "regia_tracker": f"regia_tracker_{safe_key}.json",
+        "skip_regia": f"skip_regia_{safe_key}.json",
+        "registro_vendite": f"registro_vendite_{safe_key}.json",
+        "registro_acquisti": f"registro_acquisti_{safe_key}.json",
+        "minusvalenze": f"minusvalenze_{safe_key}.json",
+        "saluto": f"👋 Benvenuto {u_raw or 'Utente'} nel tuo MATRIX PRO!",
+        "capitale_versato_default": 0.00,
+        "usa_portafoglio_iniziale": False,
+    }
+
+def _reset_sessione_utente():
+    """Pulisce tutti i dati di sessione dipendenti dall'utente al Login, Cambio Utente o Logout."""
+    chiavi_reset = [
+        "portafoglio", "tickers_input", "_pending_tickers_input", "sb_quick_ticker",
+        "sb_ticker_radio", "port_selected_chart", "sel_chart_port_side",
+        "txt_analisi_singola_tk", "df_fortezza", "df_cavalli", "df_monitor",
+        "df_palantir", "scansione_completata", "analisi_risultati", "dashboard_stats",
+        "last_update", "pyramiding_alerts", "take_profit_alerts",
+        "zona_interesse_alerts", "piano_ribilanciamento", "risultato_simulazione",
+        "risultato_podc", "piano_allocazione", "breakout_tickers",
+        "liquidita_totale_alloc", "pattern_alerts", "pattern_singola_attivo",
+        "_msg_reload_disk", "_gh_last_msg", "_utente_sessione_caricato",
+    ]
+    for k in chiavi_reset:
+        st.session_state.pop(k, None)
+    # Rimuove anche tutti i flag di pull GitHub così il nuovo utente ricarica i propri file da zero
+    for k in [k for k in list(st.session_state.keys()) if str(k).startswith("_gh_pulled_")]:
+        st.session_state.pop(k, None)
+
 def _hash_password_sha256(password_chiaro):
     """Restituisce l'hash SHA-256 esadecimale della password."""
     return hashlib.sha256(str(password_chiaro).encode("utf-8")).hexdigest()
@@ -55,7 +148,7 @@ def _salva_utenti_auth_locale(mappa_raw):
         return False
 
 def _assicura_file_utenti_auth():
-    """Carica utenti_auth.json locale; se manca lo crea al primo avvio con l'utente predefinito."""
+    """Carica utenti_auth.json locale; se manca lo crea al primo avvio con Fabio, Lisi e Alessia."""
     fp = _get_auth_file_path()
     dati = {}
     if os.path.exists(fp):
@@ -66,14 +159,19 @@ def _assicura_file_utenti_auth():
                 dati = caricato
         except Exception:
             dati = {}
-    if not dati:
-        dati = {
-            UTENTE_PREDEFINITO_AUTH: {
-                "username": UTENTE_PREDEFINITO_AUTH,
-                "password_hash": _hash_password_sha256(PASSWORD_INIZIALE_AUTH),
-                "aggiornato_il": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    aggiornato = False
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    h_def = _hash_password_sha256(PASSWORD_INIZIALE_AUTH)
+    for prof in PROFILI_UTENTE_MATRIX.values():
+        nome_u = prof["nome"]
+        if not any(str(k).strip().lower() == nome_u.lower() for k in dati.keys()):
+            dati[nome_u] = {
+                "username": nome_u,
+                "password_hash": h_def,
+                "aggiornato_il": now_str,
             }
-        }
+            aggiornato = True
+    if aggiornato or not os.path.exists(fp):
         _salva_utenti_auth_locale(dati)
     return dati
 
@@ -283,7 +381,9 @@ def richiedi_login_matrix():
             if accedi_btn:
                 ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
                 if ok_auth:
+                    _reset_sessione_utente()
                     st.session_state["autenticato"] = True
+                    st.session_state["utente_corrente"] = nome_valido
                     st.session_state["utente_autenticato"] = nome_valido
                     st.rerun()
                 else:
@@ -299,7 +399,7 @@ def richiedi_login_matrix():
 def render_box_account_sidebar():
     """Mostra nella sidebar l'utente autenticato, il cambio password locale e il tasto Esci."""
     st.sidebar.markdown("---")
-    utente_corrente = st.session_state.get("utente_autenticato") or UTENTE_PREDEFINITO_AUTH
+    utente_corrente = st.session_state.get("utente_corrente") or st.session_state.get("utente_autenticato") or UTENTE_PREDEFINITO_AUTH
     st.sidebar.markdown(
         f"<div style='background:#0B0E11; border:1px solid #2A2E39; border-left:3px solid #10B981; "
         f"border-radius:6px; padding:0.55rem 0.75rem; margin-bottom:0.5rem; font-size:0.84rem; color:#F8FAFC;'>"
@@ -323,11 +423,22 @@ def render_box_account_sidebar():
                         st.error(f"❌ {msg_c}")
     if st.sidebar.button("🚪 Esci", use_container_width=True, key="btn_logout_matrix"):
         st.session_state["autenticato"] = False
+        st.session_state.pop("utente_corrente", None)
         st.session_state.pop("utente_autenticato", None)
+        _reset_sessione_utente()
         st.rerun()
 
 # Esegue subito il controllo di accesso prima di caricare portafoglio, dati o sidebar
 richiedi_login_matrix()
+
+# Carica il profilo dinamico dell'utente autenticato e aggiorna i riferimenti per regia_tracker
+PROFILO_ATTIVO = _get_profilo_utente_corrente()
+if st.session_state.get("_utente_sessione_caricato") != PROFILO_ATTIVO["chiave"]:
+    _reset_sessione_utente()
+    st.session_state["_utente_sessione_caricato"] = PROFILO_ATTIVO["chiave"]
+st.session_state["_regia_tracker_file"] = PROFILO_ATTIVO["regia_tracker"]
+st.session_state["_skip_regia_file"] = PROFILO_ATTIVO["skip_regia"]
+st.session_state["_impostazioni_file"] = PROFILO_ATTIVO["impostazioni"]
 
 # ==============================================================================
 # CSS STILE TERMINALE TRADER PROFESSIONALE (TRADINGVIEW DARK)
@@ -574,22 +685,51 @@ div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] button {
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# GESTIONE FILE & LOG PROPOSTE
+# GESTIONE FILE & LOG PROPOSTE (DINAMICI PER UTENTE AUTENTICATO)
 # ==============================================================================
-PORTAFOGLIO_FILE = "portafoglio.json"
+PORTAFOGLIO_FILE = PROFILO_ATTIVO["portafoglio"]
 WATCHLIST_FILE = "watchlist.json"
 PAPER_TRADING_FILE = "paper_trading.json"
 SEGNALI_STORICI_FILE = "segnali_storici.json"
-REGISTRO_VENDITE_FILE = "registro_vendite.json"
-REGISTRO_ACQUISTI_FILE = "registro_acquisti.json"
-MINUSVALENZE_FILE = "minusvalenze.json"
-IMPOSTAZIONI_FILE = "impostazioni.json"
+REGISTRO_VENDITE_FILE = PROFILO_ATTIVO["registro_vendite"]
+REGISTRO_ACQUISTI_FILE = PROFILO_ATTIVO["registro_acquisti"]
+MINUSVALENZE_FILE = PROFILO_ATTIVO["minusvalenze"]
+IMPOSTAZIONI_FILE = PROFILO_ATTIVO["impostazioni"]
+SEGNALI_ATTIVI_FILE = PROFILO_ATTIVO["segnali_attivi"]
+REGIA_TRACKER_FILE = PROFILO_ATTIVO["regia_tracker"]
+SALUTO_UTENTE_CORRENTE = PROFILO_ATTIVO["saluto"]
+CAPITALE_VERSATO_DEFAULT = float(PROFILO_ATTIVO["capitale_versato_default"])
+USA_PORTAFOGLIO_INIZIALE = bool(PROFILO_ATTIVO.get("usa_portafoglio_iniziale", False))
 LOG_PROPOSTE_FILE = "log_proposte.json"
+
+def _is_file_sincronizzabile_github(fname):
+    """Consente il sync GitHub per i file operativi multi-utente, bloccando SEMPRE file auth/segreti."""
+    fn = str(fname or "").strip()
+    fl = fn.lower()
+    if not fn or not fl.endswith(".json"):
+        return False
+    if fl == UTENTI_AUTH_FILE.lower() or "auth" in fl or "secret" in fl:
+        return False
+    prefissi_ammessi = (
+        "portafoglio",
+        "impostazioni",
+        "segnali_attivi",
+        "regia_tracker",
+        "registro_vendite",
+        "registro_acquisti",
+        "minusvalenze",
+    )
+    if fn == "insider_promossi.json":
+        return True
+    for pref in prefissi_ammessi:
+        if fl == f"{pref}.json" or fl.startswith(f"{pref}_"):
+            return True
+    return False
 
 def _sync_github_file(file_path, content_str, mode="push"):
     try:
         fname = os.path.basename(file_path)
-        if fname not in ("portafoglio.json", "impostazioni.json", "registro_vendite.json", "insider_promossi.json"):
+        if not _is_file_sincronizzabile_github(fname):
             return None
         token = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
         repo = "Miguel196801/matrix-scanner"
@@ -638,13 +778,14 @@ def _sync_github_file(file_path, content_str, mode="push"):
             pass
     return None
 
+# Espone la funzione di sincronizzazione GitHub anche al modulo regia_tracker
+st.session_state["_sync_github_file_fn"] = _sync_github_file
+
 def registra_acquisto_storico(ticker, tipo, qta, prezzo_eur, nota="Acquisto"):
     try:
-        fn = "registro_acquisti.json"
-        storico = []
-        if os.path.exists(fn):
-            with open(fn, "r", encoding="utf-8") as f_r:
-                storico = json.load(f_r)
+        storico = carica_json(REGISTRO_ACQUISTI_FILE, default=[])
+        if not isinstance(storico, list):
+            storico = []
         storico.insert(0, {
             "Data": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "Ticker": str(ticker).upper(),
@@ -654,8 +795,7 @@ def registra_acquisto_storico(ticker, tipo, qta, prezzo_eur, nota="Acquisto"):
             "Prezzo_EUR": round(float(prezzo_eur), 4),
             "Totale_EUR": round(float(qta) * float(prezzo_eur), 2)
         })
-        with open(fn, "w", encoding="utf-8") as f_w:
-            json.dump(storico, f_w, indent=4, ensure_ascii=False)
+        salva_json(REGISTRO_ACQUISTI_FILE, storico)
     except Exception:
         pass
 
@@ -882,52 +1022,42 @@ def salva_json(file_path, data):
         pass
 
 def ricarica_portafoglio_da_disco(push_github=True):
-    """Rilegge portafoglio.json direttamente dal disco locale, aggiorna la sessione e opzionalmente carica su GitHub."""
+    """Rilegge il file portafoglio dell'utente attivo dal disco locale, aggiorna la sessione e sincronizza su GitHub."""
     _fp_disk = os.path.join(os.path.dirname(os.path.abspath(__file__)), PORTAFOGLIO_FILE)
     if not os.path.exists(_fp_disk):
-        return False, "File portafoglio.json non trovato su disco."
+        return False, f"File {PORTAFOGLIO_FILE} non trovato su disco."
     try:
         with open(_fp_disk, "r", encoding="utf-8") as _f_disk:
             _dati_disk = json.load(_f_disk)
         if not isinstance(_dati_disk, list):
-            return False, "Formato portafoglio.json non valido (attesa una lista)."
+            return False, f"Formato {PORTAFOGLIO_FILE} non valido (attesa una lista)."
         st.session_state["portafoglio"] = _dati_disk
         if push_github and "_sync_github_file" in globals():
             _sync_github_file(PORTAFOGLIO_FILE, json.dumps(_dati_disk, indent=4, ensure_ascii=False), mode="push")
-            return True, f"Ricaricati {len(_dati_disk)} titoli da portafoglio.json locale e sincronizzati su GitHub."
-        return True, f"Ricaricati {len(_dati_disk)} titoli da portafoglio.json locale."
+            return True, f"Ricaricati {len(_dati_disk)} titoli da {PORTAFOGLIO_FILE} locale e sincronizzati su GitHub."
+        return True, f"Ricaricati {len(_dati_disk)} titoli da {PORTAFOGLIO_FILE} locale."
     except Exception as _e_disk:
-        return False, f"Errore lettura portafoglio.json: {_e_disk}"
-
-SEGNALI_ATTIVI_FILE = "segnali_attivi.json"
+        return False, f"Errore lettura {PORTAFOGLIO_FILE}: {_e_disk}"
 
 def _get_segnali_attivi_path():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), SEGNALI_ATTIVI_FILE)
 
 def _carica_segnali_attivi():
-    """Carica la bacheca persistente dei segnali attivi e dello storico chiusi da segnali_attivi.json."""
-    fp = _get_segnali_attivi_path()
-    if os.path.exists(fp):
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                dati = json.load(f)
-            if isinstance(dati, dict):
-                dati.setdefault("aperti", [])
-                dati.setdefault("chiusi", [])
-                return dati
-        except Exception:
-            pass
+    """Carica la bacheca persistente dei segnali attivi dell'utente loggato (con pull GitHub su Cloud)."""
+    dati = carica_json(SEGNALI_ATTIVI_FILE, default={"aperti": [], "chiusi": []})
+    if isinstance(dati, dict):
+        dati.setdefault("aperti", [])
+        dati.setdefault("chiusi", [])
+        return dati
     return {"aperti": [], "chiusi": []}
 
 def _salva_segnali_attivi(dati):
-    """Salva su disco locale segnali_attivi.json mantenendo al massimo gli ultimi 10 segnali chiusi."""
+    """Salva la bacheca segnali attivi dell'utente loggato mantenendo max 10 chiusi (con sync GitHub)."""
     if not isinstance(dati, dict):
         dati = {"aperti": [], "chiusi": []}
     dati["aperti"] = list(dati.get("aperti") or [])
     dati["chiusi"] = list(dati.get("chiusi") or [])[:10]
-    fp = _get_segnali_attivi_path()
-    with open(fp, "w", encoding="utf-8") as f:
-        json.dump(dati, f, indent=4, ensure_ascii=False)
+    salva_json(SEGNALI_ATTIVI_FILE, dati)
 
 def _calcola_livello_rischio_segnale(stop_pct, s_score=None):
     """Restituisce il livello di rischio visivo con peperoncini in base allo stop e all'S-Score."""
@@ -2190,22 +2320,65 @@ def calcola_riepilogo_fiscale(anno=None):
     return {'gain_totale': round(gain_totale, 2), 'loss_totale': round(loss_totale, 2), 'tasse_totali': round(tasse_totali, 2), 'netto_reale': round(netto_reale, 2), 'pool_minusvalenze': round(pool_disponibile, 2), 'num_operazioni': len(registro)}
 
 def calcola_liquidita_totale():
-    registro = carica_json(REGISTRO_VENDITE_FILE)
-    liquidita_totale = 29.10  # Rettifica allineamento saldo reale Trade Republic a 150.00 EUR
+    registro = carica_json(REGISTRO_VENDITE_FILE, default=[])
+    reg_acq = carica_json(REGISTRO_ACQUISTI_FILE, default=[])
+    chiave_u = PROFILO_ATTIVO.get("chiave", "fabio")
+
+    # Per Fabio mantiene il calcolo storico esatto (rettifica Trade Republic + movimenti)
+    if chiave_u == "fabio":
+        liquidita_totale = CAPITALE_VERSATO_DEFAULT  # Rettifica allineamento saldo reale Trade Republic
+        for v in registro:
+            qta = v.get('Qta_Venduta', 0)
+            prezzo_vendita = v.get('Prezzo_Vendita', 0)
+            tasse = v.get('Tasse', 0)
+            comm_tr = 1.0 if str(v.get('Data', ''))[:10] >= '2026-11-15' else 0.0
+            incasso = (prezzo_vendita * qta) - tasse - comm_tr
+            liquidita_totale += incasso
+        for a in reg_acq:
+            dt_a = str(a.get('Data', ''))[:10]
+            if dt_a >= '2026-11-15':
+                spesa = float(a.get('Totale_EUR') or a.get('Importo_Totale') or (float(a.get('Quantita', 0)) * float(a.get('Prezzo_EUR', 0))))
+                liquidita_totale -= spesa
+        return round(liquidita_totale, 2)
+
+    # Per Lisi, Alessia e altri profili: usa il capitale versato del profilo (o da impostazioni_<utente>.json)
+    imp_u = carica_json(IMPOSTAZIONI_FILE, default={})
+    if isinstance(imp_u, dict) and imp_u.get("capitale_versato") is not None:
+        base_versata = float(imp_u.get("capitale_versato") or 0.0)
+    else:
+        base_versata = CAPITALE_VERSATO_DEFAULT
+
+    incassi_vendite = 0.0
     for v in registro:
         qta = v.get('Qta_Venduta', 0)
         prezzo_vendita = v.get('Prezzo_Vendita', 0)
         tasse = v.get('Tasse', 0)
         comm_tr = 1.0 if str(v.get('Data', ''))[:10] >= '2026-11-15' else 0.0
-        incasso = (prezzo_vendita * qta) - tasse - comm_tr
-        liquidita_totale += incasso
-    reg_acq = carica_json(REGISTRO_ACQUISTI_FILE)
+        incassi_vendite += (prezzo_vendita * qta) - tasse - comm_tr
+
+    spese_reg_acq = 0.0
+    ha_mov_acq = False
     for a in reg_acq:
         dt_a = str(a.get('Data', ''))[:10]
         if dt_a >= '2026-11-15':
-            spesa = float(a.get('Totale_EUR') or a.get('Importo_Totale') or (float(a.get('Quantita', 0)) * float(a.get('Prezzo_EUR', 0))))
-            liquidita_totale -= spesa
-    return round(liquidita_totale, 2)
+            ha_mov_acq = True
+            spese_reg_acq += float(a.get('Totale_EUR') or a.get('Importo_Totale') or (float(a.get('Quantita', 0)) * float(a.get('Prezzo_EUR', 0))))
+
+    if ha_mov_acq:
+        # Se esiste uno storico acquisti dedicato all'utente, usa eventuale liquidita_totale da impostazioni
+        base_liq = float(imp_u.get("liquidita_totale")) if (isinstance(imp_u, dict) and imp_u.get("liquidita_totale") is not None) else base_versata
+        return round(base_liq + incassi_vendite - spese_reg_acq, 2)
+
+    # Senza registro acquisti locale (es. Streamlit Cloud / sincronizzazione Multi-Utente):
+    # sottrae dal capitale versato il valore di carico delle posizioni attualmente in portafoglio
+    port_u = st.session_state.get("portafoglio") or []
+    cap_inv_u = sum(
+        float(p.get("Valore_Carico") or (float(p.get("Quantita", 0) or 0) * float(p.get("Prezzo_Medio", 0) or 0)))
+        for p in port_u
+    )
+    if base_versata == 0.0 and cap_inv_u == 0.0:
+        return round(incassi_vendite, 2)
+    return round(base_versata - cap_inv_u + incassi_vendite, 2)
 
 def elimina_operazione_vendita(id_op):
     try:
@@ -2301,17 +2474,22 @@ PORTAFOGLIO_INIZIALE = [
     {"Ticker": "SOFI", "Tipo": "PAC", "Quantita": 53.607426, "Prezzo_Medio": 14.31, "PAC_Settimanale": 15.0},
     {"Ticker": "VRT", "Tipo": "PAC", "Quantita": 0.335985, "Prezzo_Medio": 178.58, "PAC_Settimanale": 30.0},
     {"Ticker": "CRWD", "Tipo": "PAC", "Quantita": 0.092269, "Prezzo_Medio": 216.76, "PAC_Settimanale": 10.0},
-]
+] if USA_PORTAFOGLIO_INIZIALE else []
 BIG_TECH_GROWTH_LIST = "GOOGL, AMZN, PLTR, META, MSFT, AAPL, TSLA, AVGO, CRM, ADBE, NOW, PANW, FTNT, CRDO, SMCI, ARMR, MRVL, QCOM, MU, INTU"
 
 for key in ['df_fortezza', 'df_cavalli', 'df_monitor', 'df_palantir', 'scansione_completata', 'analisi_risultati', 'grafico_ticker', 'grafico_prezzo_medio', 'spy_data', 'dashboard_stats', 'portafoglio', 'last_update', 'pyramiding_alerts', 'take_profit_alerts', 'zona_interesse_alerts', 'semaforo_mercato', 'piano_ribilanciamento', 'risultato_simulazione', 'risultato_podc', 'piano_allocazione', 'breakout_tickers', 'liquidita_totale_alloc', 'pattern_alerts', 'pattern_singola_attivo']:
     if key not in st.session_state:
         st.session_state[key] = None if key not in ['pyramiding_alerts', 'take_profit_alerts', 'zona_interesse_alerts', 'breakout_tickers'] else list()
 
-if st.session_state.portafoglio is None or not st.session_state.portafoglio:
-    st.session_state.portafoglio = carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
-    if not os.path.exists(PORTAFOGLIO_FILE):
-        salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
+if st.session_state.portafoglio is None:
+    _pf_caricato = carica_json(PORTAFOGLIO_FILE, default=None)
+    if isinstance(_pf_caricato, list) and (len(_pf_caricato) > 0 or not USA_PORTAFOGLIO_INIZIALE):
+        st.session_state.portafoglio = _pf_caricato
+    else:
+        st.session_state.portafoglio = list(PORTAFOGLIO_INIZIALE)
+        _fp_pf_abs = os.path.join(os.path.dirname(os.path.abspath(__file__)), PORTAFOGLIO_FILE)
+        if not os.path.exists(_fp_pf_abs):
+            salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
 
 # ==============================================================================
 # FUNZIONI CORE
@@ -3757,7 +3935,7 @@ st.markdown(f'''
 <div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
     <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
-        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">👋 Ciao Fabio, buon trading!</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {_agg_prezzi_display}</span>
+        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">{SALUTO_UTENTE_CORRENTE}</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {_agg_prezzi_display}</span>
     </div>
     <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
         {sem_display}
@@ -3768,9 +3946,9 @@ if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_
     regia_tracker.render_barra_indici_usa()
 
 _fp_impostazioni = _get_impostazioni_path()
-if os.path.exists(_fp_impostazioni):
-    with open(_fp_impostazioni, 'r', encoding='utf-8') as f:
-        impostazioni = json.load(f)
+_imp_caricate = carica_json(IMPOSTAZIONI_FILE, default={})
+if isinstance(_imp_caricate, dict) and _imp_caricate:
+    impostazioni = _imp_caricate
 else:
     impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, PLTR, ZETA, NKE, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC, SOFI, NBIS, VRT, ANET", "catalizzatori": "", "esclusioni": ""}
 
@@ -5989,7 +6167,7 @@ with tab_paper:
 def _leggi_tutti_ticker_wl():
     _tks = []
     _base = os.path.dirname(os.path.abspath(__file__))
-    _fp_imp = os.path.join(_base, 'impostazioni.json')
+    _fp_imp = os.path.join(_base, IMPOSTAZIONI_FILE)
     if os.path.exists(_fp_imp):
         try:
             with open(_fp_imp, 'r', encoding='utf-8') as _f:
@@ -6064,7 +6242,7 @@ with tab_insider:
         # Usa sempre la Watchlist reale dello Scanner e legge 'Ticker' (maiuscolo) dal portafoglio
         _wl_raw_ins = st.session_state.get('tickers_input') or (tickers_input if 'tickers_input' in locals() else '') or impostazioni.get('lista_ticker_default', '')
         wl_attuale = [t.strip().upper() for t in str(_wl_raw_ins).replace('\n', ',').split(',') if t.strip()]
-        _port_data = st.session_state.get('portafoglio') or (carica_json('portafoglio.json') if 'carica_json' in globals() else [])
+        _port_data = st.session_state.get('portafoglio') or (carica_json(PORTAFOGLIO_FILE) if 'carica_json' in globals() else [])
         _port_tks = [str(p.get('Ticker') or p.get('ticker') or '').strip().upper() for p in _port_data if isinstance(p, dict) and (p.get('Ticker') or p.get('ticker'))] if isinstance(_port_data, list) else []
         lista_tot = sorted(list(set(wl_attuale) | set(_port_tks) | set(PANIER_INSIDER_MID_LARGE)))
         risultati_ins = []
@@ -6095,17 +6273,14 @@ with tab_insider:
                             'dettagli': f"{res_i.get('Insider (90gg)', '')} | {res_i.get('Valore Insider $', '')}"
                         }
                         if 'salva_json' in globals(): salva_json(_promossi_file, _promossi)
-                    _imp = (carica_json('impostazioni.json') or {}) if 'carica_json' in globals() else {}
+                    _imp = (carica_json(IMPOSTAZIONI_FILE) or {}) if 'carica_json' in globals() else {}
                     if not isinstance(_imp, dict): _imp = {}
                     _wl_str = _imp.get('lista_ticker_default', '')
                     _wl_list = [x.strip().upper() for x in _wl_str.split(',') if x.strip()]
                     if _t_code not in _wl_list:
                         _wl_list.append(_t_code)
                         _imp['lista_ticker_default'] = ', '.join(_wl_list)
-                        if 'salva_json' in globals(): salva_json('impostazioni.json', _imp)
-                        if os.path.exists('impostazioni.json'):
-                            with open('impostazioni.json', 'r', encoding='utf-8') as _fr_gh:
-                                _sync_github_file('impostazioni.json', _fr_gh.read(), mode='push')
+                        if 'salva_json' in globals(): salva_json(IMPOSTAZIONI_FILE, _imp)
                     st.session_state.setdefault('insider_promossi_oggi', []).append(_t_code)
                     continue
                 if float(str(res_i['Dist. Min 52w %']).replace('+','').replace('%','').replace('nan','0')) <= max_dist_min or res_i['_buys'] >= 2:

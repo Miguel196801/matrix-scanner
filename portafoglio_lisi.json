@@ -1,0 +1,50 @@
+[
+    {
+        "Ticker": "GOOGL",
+        "Tipo": "Spot",
+        "Quantita": 0.255955,
+        "Prezzo_Medio": 257.91,
+        "Valore_Carico": 66.01,
+        "Prezzo_Attuale_EUR": 257.91,
+        "Valore_Attuale": 66.01,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-18"
+    },
+    {
+        "Ticker": "NBIS",
+        "Tipo": "Spot",
+        "Quantita": 1.332787,
+        "Prezzo_Medio": 87.76,
+        "Valore_Carico": 66.0,
+        "Prezzo_Attuale_EUR": 98.14,
+        "Valore_Attuale": 66.0,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-18"
+    },
+    {
+        "Ticker": "MU",
+        "Tipo": "Spot",
+        "Quantita": 0.192366,
+        "Prezzo_Medio": 608.39,
+        "Valore_Carico": 66.03,
+        "Prezzo_Attuale_EUR": 658.47,
+        "Valore_Attuale": 66.03,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-18"
+    },
+    {
+        "Ticker": "NKE",
+        "Tipo": "Spot",
+        "Quantita": 0.306254,
+        "Prezzo_Medio": 32.62,
+        "Valore_Carico": 9.99,
+        "Prezzo_Attuale_EUR": 32.62,
+        "Valore_Attuale": 9.99,
+        "PnL_EUR": 0.0,
+        "PnL_%": 0.0,
+        "Data_Acquisto": "2026-11-18"
+    }
+]
