@@ -115,6 +115,7 @@ def _reset_sessione_utente():
         "risultato_podc", "piano_allocazione", "breakout_tickers",
         "liquidita_totale_alloc", "pattern_alerts", "pattern_singola_attivo",
         "_msg_reload_disk", "_gh_last_msg", "_utente_sessione_caricato",
+        "vista_attiva", "home_cascata_eseguita", "home_salute_portafoglio",
     ]
     for k in chiavi_reset:
         st.session_state.pop(k, None)
@@ -3915,115 +3916,144 @@ def avvia_podc(portafoglio, eurusd_rate, catalizzatori_input, stato_mercato="N/D
     return {'suggestions': suggestions, 'gain_analyzed': gain_analyzed, 'loss_rejected': loss_rejected, 'loss_candidates': loss_candidates, 'total_capital_freed': total_capital_freed}
 
 # ==============================================================================
-# INTERFACCIA PRINCIPALE - TOP BAR TERMINALE
+# MOTORE SCANSIONE UNIFICATO & HOME PAGE — PILOTA AUTOMATICO
 # ==============================================================================
-semaforo_header = calcola_semaforo_mercato()
-if semaforo_header['stato'] == 'verde':
-    sem_color, sem_icon, sem_msg = "#089981", "🟢", "MERCATO RIALZISTA"
-elif semaforo_header['stato'] == 'rosso':
-    sem_color, sem_icon, sem_msg = "#F23645", "🔴", "MERCATO RIBASSISTA"
-else:
-    sem_color, sem_icon, sem_msg = "#F59E0B", "🟡", "MERCATO LATERALE"
+def _calcola_winrate_storico_60gg(df):
+    """Calcola la probabilità statistica storica (WinRate %) su finestre rolling di 60 sedute."""
+    try:
+        if df is None or df.empty or "Close" not in df.columns:
+            return None
+        closes = df["Close"].dropna()
+        if len(closes) >= 90:
+            ret_60 = (closes.shift(-60) / closes - 1.0).dropna()
+            if len(ret_60) > 0:
+                return round(float((ret_60 > 0).mean() * 100.0), 1)
+        elif len(closes) >= 25:
+            win = max(10, len(closes) // 3)
+            ret_w = (closes.shift(-win) / closes - 1.0).dropna()
+            if len(ret_w) > 0:
+                return round(float((ret_w > 0).mean() * 100.0), 1)
+    except Exception:
+        pass
+    return None
 
-if semaforo_header['spy_prezzo'] is None or semaforo_header['vix'] is None:
-    sem_display = "🟡 DATI MERCATO N/D"
-else:
-    sem_display = f"{sem_icon} {sem_msg}  |  SPY: ${semaforo_header['spy_prezzo']}  |  VIX: {semaforo_header['vix']}"
+def _valuta_salute_portafoglio_home(portafoglio, eurusd_rate, cache_salute=None):
+    """
+    Valuta salute e probabilità statistica di ciascun titolo in portafoglio:
+    S-Score fondamentale, posizione rispetto a SMA 200, Fase Weinstein e WinRate storico a 60gg.
+    """
+    salute = dict(cache_salute or {})
+    for pos in (portafoglio or []):
+        tk = str(pos.get("Ticker", "")).strip().upper()
+        if not tk:
+            continue
+        qta = float(pos.get("Quantita", 0) or 0)
+        pmc = float(pos.get("Prezzo_Medio", 0) or 0)
+        p_eur = float(pos.get("Prezzo_Attuale_EUR") or 0)
+        val_car = round(qta * pmc, 2)
+        val_att = round(qta * p_eur, 2) if p_eur > 0 else val_car
+        pnl_eur = round(val_att - val_car, 2)
+        pnl_pct = round(((p_eur / pmc) - 1.0) * 100.0, 2) if (p_eur > 0 and pmc > 0) else float(pos.get("PnL_%", 0) or 0)
 
-_agg_prezzi_display = leggi_ultimo_agg_prezzi()
-st.markdown(f'''
-<div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
-    <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
-        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">{SALUTO_UTENTE_CORRENTE}</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {_agg_prezzi_display}</span>
-    </div>
-    <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
-        {sem_display}
-    </div>
-</div>
-''', unsafe_allow_html=True)
-if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_usa'):
-    regia_tracker.render_barra_indici_usa()
+        esistente = salute.get(tk)
+        if isinstance(esistente, dict) and esistente.get("s_score") is not None and esistente.get("fase"):
+            esistente.update({
+                "pnl_pct": pnl_pct,
+                "pnl_eur": pnl_eur,
+                "val_car": val_car,
+                "val_att": val_att,
+                "tipo": str(pos.get("Tipo", "Spot")),
+            })
+            salute[tk] = esistente
+            continue
 
-_fp_impostazioni = _get_impostazioni_path()
-_imp_caricate = carica_json(IMPOSTAZIONI_FILE, default={})
-if isinstance(_imp_caricate, dict) and _imp_caricate:
-    impostazioni = _imp_caricate
-else:
-    impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, PLTR, ZETA, NKE, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC, SOFI, NBIS, VRT, ANET", "catalizzatori": "", "esclusioni": ""}
-
-avvia_scansione_btn = st.sidebar.button("🚀 AVVIA SCANSIONE", type="primary", use_container_width=True, key="btn_avvia_scansione_top")
-st.sidebar.markdown("---")
-st.sidebar.markdown("**💼 Selezione Rapida Portafoglio**")
-_sb_list = list(dict.fromkeys([p['Ticker'] for p in (st.session_state.portafoglio or list()) if p.get('Ticker')])) or ["Portafoglio vuoto"]
-if "sb_quick_ticker" not in st.session_state or st.session_state["sb_quick_ticker"] not in _sb_list:
-    st.session_state["sb_quick_ticker"] = next(iter(_sb_list))
-if "sb_ticker_radio" not in st.session_state or st.session_state["sb_ticker_radio"] not in _sb_list:
-    st.session_state["sb_ticker_radio"] = st.session_state["sb_quick_ticker"]
-
-def _on_sb_ticker_change():
-    val = st.session_state.get("sb_ticker_radio")
-    if val and val != "Portafoglio vuoto":
-        st.session_state["sb_quick_ticker"] = val
-        st.session_state["port_selected_chart"] = val
-        st.session_state["sel_chart_port_side"] = val
-        st.session_state["txt_analisi_singola_tk"] = val
-
-_sb_sel = st.sidebar.radio("Selezione Rapida", _sb_list, label_visibility="collapsed", key="sb_ticker_radio", on_change=_on_sb_ticker_change)
-st.sidebar.markdown("---")
-st.sidebar.subheader("📌 Titoli da Acquistare (Priorità)")
-titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input")
-st.sidebar.subheader("💵 Liquidità Aggiuntiva")
-liq_aggiuntiva_sim = st.sidebar.number_input("Disponibilità extra (€):", min_value=0.0, value=0.0, step=50.0, key="liq_aggiuntiva_sim")
-st.sidebar.subheader("📅 Catalizzatori Eventi")
-catalizzatori_input = st.sidebar.text_area("Formato: TICKER: Desc - GG/MM/AA", value=impostazioni.get("catalizzatori", ""), height=75)
-st.sidebar.subheader("🚫 Esclusioni Ribilanciamento")
-esclusioni_input = st.sidebar.text_area("Titoli da escludere (virgola):", value=impostazioni.get("esclusioni", ""), height=65)
-
-with st.sidebar.expander("⚙️ Impostazioni Avanzate & Watchlist", expanded=False):
-    # Applica eventuale aggiornamento Watchlist arrivato dalla stellina in regia_tracker prima di creare il widget
-    if "_pending_tickers_input" in st.session_state:
-        st.session_state["tickers_input"] = st.session_state.pop("_pending_tickers_input")
-    if "tickers_input" not in st.session_state:
-        st.session_state["tickers_input"] = impostazioni.get("lista_ticker_default", "")
-    tickers_input = st.text_area("Watchlist Scanner (virgola):", height=95, key="tickers_input")
-    period = st.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
-    sma_short = st.slider("SMA Breve:", 10, 100, 50)
-    sma_long = st.slider("SMA Lunga:", 50, 200, 200)
-    eurusd_rate = st.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=get_live_eurusd(), step=0.001, format="%.4f")
-    ignore_fase_4 = st.checkbox("Blocca Fase 4", True)
-    if st.button("🔍 Verifica Segnali Storici", key="btn_dbg_storici"):
-        segnali = carica_json(SEGNALI_STORICI_FILE)
-        st.info(f"Totale segnali: {len(segnali)}")
-    if st.button("🔄 Ricostruisci Segnali (1 anno)", key="btn_dbg_ricostr"):
-        tks_ric = list(set([t.strip().upper() for t in tickers_input.split(",") if t.strip()] + [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",")]))
-        pb = st.progress(0)
-        tot = sum(ricostruisci_segnali_retroattivi(tk, 1) for i, tk in enumerate(tks_ric) if not pb.progress((i + 1) / len(tks_ric)))
-        pb.empty()
-        st.success(f"✅ Aggiunti {tot} segnali storici.")
-        st.rerun()
-
-# Box Account nella sidebar: utente connesso, cambio password e tasto Esci
-render_box_account_sidebar()
-
-tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
-if avvia_scansione_btn:
-    impostazioni["lista_ticker_default"] = tickers_input
-    impostazioni["catalizzatori"] = catalizzatori_input
-    impostazioni["esclusioni"] = esclusioni_input
-    with open(_fp_impostazioni, 'w', encoding='utf-8') as f:
-        json.dump(impostazioni, f, indent=4, ensure_ascii=False)
+        s_score = 50
+        fase = "N/D"
+        sma200_val = None
+        sopra_sma200 = None
+        winrate_60g = None
         try:
-            _sync_github_file(IMPOSTAZIONI_FILE, json.dumps(impostazioni, indent=4, ensure_ascii=False), mode='push')
+            t_obj = yf.Ticker(tk)
+            df_h = t_obj.history(period="2y")
+            info_h = t_obj.info if isinstance(t_obj.info, dict) else {}
+            s_score = calcola_s_score(info_h)
+            if df_h is not None and not df_h.empty:
+                df_h = df_h.dropna(subset=["Close"])
+                if len(df_h) >= 50:
+                    fase = rileva_fase_weinstein(df_h)
+                winrate_60g = _calcola_winrate_storico_60gg(df_h)
+                if len(df_h) >= 200:
+                    sma200_val = float(df_h["Close"].rolling(window=200).mean().iloc[-1])
+                    p_now_nat = float(df_h["Close"].iloc[-1])
+                    if pd.notna(sma200_val) and sma200_val > 0:
+                        sopra_sma200 = bool(p_now_nat >= sma200_val)
         except Exception:
             pass
-    progress_bar = st.progress(0)
+
+        salute[tk] = {
+            "ticker": tk,
+            "s_score": int(s_score or 50),
+            "fase": str(fase or "N/D"),
+            "sma200": round(sma200_val, 2) if sma200_val is not None else None,
+            "sopra_sma200": sopra_sma200,
+            "winrate_60g": winrate_60g,
+            "pnl_pct": pnl_pct,
+            "pnl_eur": pnl_eur,
+            "val_car": val_car,
+            "val_att": val_att,
+            "tipo": str(pos.get("Tipo", "Spot")),
+        }
+    return salute
+
+def esegui_scansione_completa_motore(
+    impostazioni,
+    tickers_input,
+    catalizzatori_input,
+    esclusioni_input,
+    period,
+    sma_short,
+    sma_long,
+    eurusd_rate,
+    ignore_fase_4,
+    semaforo_header,
+    salva_impostazioni=True,
+    progress_bar=None,
+    mostra_info_avvio=True,
+):
+    """
+    Esegue la scansione completa del motore (pattern_engine.py + Insider SEC Form 4 +
+    aggiornamento Bacheca Segnali Attivi) senza modificare alcun filtro e salva tutti i risultati
+    in st.session_state (pronti sia per la Home Pilota Automatico sia per il Terminale Completo).
+    """
+    _fp_imp = _get_impostazioni_path()
+    if salva_impostazioni:
+        impostazioni["lista_ticker_default"] = tickers_input
+        impostazioni["catalizzatori"] = catalizzatori_input
+        impostazioni["esclusioni"] = esclusioni_input
+        with open(_fp_imp, 'w', encoding='utf-8') as f:
+            json.dump(impostazioni, f, indent=4, ensure_ascii=False)
+            try:
+                _sync_github_file(IMPOSTAZIONI_FILE, json.dumps(impostazioni, indent=4, ensure_ascii=False), mode='push')
+            except Exception:
+                pass
+
+    pbar_locale = progress_bar is None
+    if pbar_locale:
+        progress_bar = st.progress(0)
+
     if st.session_state.spy_data is None:
         try:
             st.session_state.spy_data = yf.Ticker("SPY").history(period=period)
-        except:
+        except Exception:
             st.session_state.spy_data = None
-    stats = {'by_count': 0, 'hold_count': 0, 'sell_count': 0, 'by_tickers': list(), 'hold_tickers': list(), 'sell_tickers': list(), 'earnings_warnings': list(), 'error_tickers': list(), 'by_fabio_tickers': list(), 'smci_tickers': list(), 'ignition_oggi': list(), 'metriche_scan': dict()}
+
+    stats = {
+        'by_count': 0, 'hold_count': 0, 'sell_count': 0,
+        'by_tickers': list(), 'hold_tickers': list(), 'sell_tickers': list(),
+        'earnings_warnings': list(), 'error_tickers': list(),
+        'by_fabio_tickers': list(), 'smci_tickers': list(),
+        'ignition_oggi': list(), 'metriche_scan': dict()
+    }
     pyramiding_alerts, take_profit_alerts, zona_interesse_alerts, extended_hours_alerts = list(), list(), list(), list()
     lista_fortezza, lista_cavalli, lista_monitor, lista_palantir = list(), list(), list(), list()
     # Inizializza il contenitore degli alert del motore figure grafiche secondo il regime SPY
@@ -4032,14 +4062,23 @@ if avvia_scansione_btn:
     sorvegliati_candidati_scan = list()
     cluster_insider_bacheca_scan = list()
     scan_price_map_bacheca = dict()
-    watchlist_only_set = {str(t).strip().upper() for t in tickers if str(t).strip()}
-    portafoglio_attuale = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
-    ticker_in_portafoglio = {p['Ticker']: p for p in portafoglio_attuale}
-    tickers = list(set(tickers + list(ticker_in_portafoglio.keys())))
-    tickers.sort()
-    st.info(f"🔄 Scansione avviata per {len(tickers)} titoli.")
-    for i, ticker in enumerate(tickers):
-        progress_bar.progress((i + 1) / len(tickers))
+    salute_portafoglio_scan = dict()
+
+    tickers_base = [t.strip().upper() for t in str(tickers_input or "").split(",") if t.strip()]
+    watchlist_only_set = {str(t).strip().upper() for t in tickers_base if str(t).strip()}
+    portafoglio_attuale = st.session_state.portafoglio if isinstance(st.session_state.portafoglio, list) else (carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE)
+    ticker_in_portafoglio = {str(p['Ticker']).strip().upper(): p for p in portafoglio_attuale if p.get('Ticker')}
+    tickers_scan = sorted(list(set(tickers_base + list(ticker_in_portafoglio.keys()))))
+
+    if mostra_info_avvio:
+        st.info(f"🔄 Scansione avviata per {len(tickers_scan)} titoli.")
+
+    tot_tk = max(1, len(tickers_scan))
+    for i, ticker in enumerate(tickers_scan):
+        try:
+            progress_bar.progress((i + 1) / tot_tk)
+        except Exception:
+            pass
         try:
             ticker_obj = yf.Ticker(ticker)
             periodo_analisi = '1y' if period in ['3mo', '6mo'] else period
@@ -4075,7 +4114,30 @@ if avvia_scansione_btn:
             sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
             sma50 = df['Close'].rolling(window=50).mean().iloc[-1]
             prezzo_attuale = df['Close'].dropna().iloc[-1]
-            distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if sma200 > 0 else 999
+            distanza_sma200_pct = abs(prezzo_attuale - sma200) / sma200 * 100 if (pd.notna(sma200) and sma200 > 0) else 999
+
+            # Salva la salute dettagliata per i titoli del portafoglio (incluso WinRate storico a 60gg)
+            if ticker in ticker_in_portafoglio:
+                pos_s = ticker_in_portafoglio[ticker]
+                pmc_s = float(pos_s.get('Prezzo_Medio', 0) or 0)
+                qta_s = float(pos_s.get('Quantita', 0) or 0)
+                pnl_p_s = round(((prezzo_eur / pmc_s) - 1.0) * 100.0, 2) if pmc_s > 0 else 0.0
+                val_car_s = round(qta_s * pmc_s, 2)
+                val_att_s = round(qta_s * prezzo_eur, 2)
+                salute_portafoglio_scan[ticker] = {
+                    "ticker": ticker,
+                    "s_score": int(s_score or 50),
+                    "fase": str(fase or "N/D"),
+                    "sma200": round(float(sma200), 2) if pd.notna(sma200) else None,
+                    "sopra_sma200": bool(prezzo_attuale >= sma200) if (pd.notna(sma200) and sma200 > 0) else None,
+                    "winrate_60g": _calcola_winrate_storico_60gg(df),
+                    "pnl_pct": pnl_p_s,
+                    "pnl_eur": round(val_att_s - val_car_s, 2),
+                    "val_car": val_car_s,
+                    "val_att": val_att_s,
+                    "tipo": str(pos_s.get('Tipo', 'Spot')),
+                }
+
             if s_score >= 75 and "FASE 1" in fase and prezzo_attuale < sma50 and 35 <= rsi_oggi <= 50:
                 stats.setdefault('smci_tickers', list()).append(ticker)
                 registra_proposta("SCANSIONE", "TIPOLOGIA_SMCI", ticker, f"Pattern SMCI: S-Score {s_score}, FASE 1, RSI {rsi_oggi:.0f}", stato="N/D")
@@ -4250,7 +4312,8 @@ if avvia_scansione_btn:
             stats.setdefault('error_tickers', list()).append(f"{ticker}: {error_msg}")
 
     registra_proposta("SCANSIONE", "RIEPILOGO_SCANSIONE", "SISTEMA", f"BY: {stats['by_count']}, HOLD: {stats['hold_count']}, SELL: {stats['sell_count']}, BY_FABIO: {len(stats.get('by_fabio_tickers', list()))}, SMCI: {len(stats.get('smci_tickers', list()))}", stato="N/D")
-    progress_bar.empty()
+    if pbar_locale:
+        progress_bar.empty()
     st.session_state.dashboard_stats = stats
     try:
         if st.session_state.get('portafoglio'):
@@ -4293,7 +4356,475 @@ if avvia_scansione_btn:
         st.session_state.df_fortezza = pd.DataFrame(lista_fortezza) if lista_fortezza else None
         st.session_state.df_cavalli = pd.DataFrame(lista_cavalli) if lista_cavalli else None
         st.session_state.df_monitor = pd.DataFrame(lista_monitor) if lista_monitor else None
+    # Completa eventuali titoli in portafoglio con storico < 200 candele nella mappa salute Home
+    st.session_state["home_salute_portafoglio"] = _valuta_salute_portafoglio_home(
+        st.session_state.get("portafoglio") or [],
+        eurusd_rate,
+        cache_salute=salute_portafoglio_scan,
+    )
     st.session_state.scansione_completata = True
+    st.session_state["home_cascata_eseguita"] = True
+
+def render_home_pilota_automatico(impostazioni, semaforo_header):
+    """
+    Renderizza la '🏠 Home Page — Pilota Automatico' super-semplificata ad alto contrasto:
+    esegue automaticamente in cascata aggiornamento quotazioni, salute portafoglio e scansione
+    completa del motore, poi mostra solo le 2 metriche chiave e il riquadro '🧭 COSA DEVO FARE OGGI'.
+    """
+    nome_u = PROFILO_ATTIVO.get("nome") or st.session_state.get("utente_corrente") or "Utente"
+    eurusd_live = get_live_eurusd()
+
+    # 1) Flusso automatico in cascata subito dopo il Login (o su click manuale '🔄 Aggiorna Analisi')
+    if not st.session_state.get("home_cascata_eseguita", False):
+        st.markdown(
+            f"""
+            <div style="background:#131722; border:1px solid #334155; border-left:5px solid #10B981;
+                        border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1rem;">
+                <div style="font-size:1.35rem; font-weight:800; color:#F8FAFC;">
+                    👋 Ciao {nome_u}, analisi in corso...
+                </div>
+                <div style="font-size:0.90rem; color:#E2E8F0; margin-top:6px;">
+                    Sto aggiornando le quotazioni live, verificando la salute del portafoglio e scansionando il mercato.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        pbar_home = st.progress(0.05, text="1/3 • Aggiornamento quotazioni live portafoglio...")
+        try:
+            if st.session_state.get("portafoglio"):
+                st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_live)
+                salva_ultimo_agg_prezzi()
+        except Exception:
+            pass
+        pbar_home.progress(0.20, text="2/3 • Valutazione salute titoli (S-Score, SMA 200, Fase, WinRate 60gg)...")
+        try:
+            st.session_state["home_salute_portafoglio"] = _valuta_salute_portafoglio_home(
+                st.session_state.get("portafoglio") or [],
+                eurusd_live,
+            )
+        except Exception:
+            st.session_state["home_salute_portafoglio"] = {}
+        pbar_home.progress(0.32, text="3/3 • Scansione completa motore (Pattern Engine + Insider SEC + Bacheca)...")
+        wl_home = str(impostazioni.get("lista_ticker_default") or "")
+        cat_home = str(impostazioni.get("catalizzatori") or "")
+        esc_home = str(impostazioni.get("esclusioni") or "")
+        esegui_scansione_completa_motore(
+            impostazioni=impostazioni,
+            tickers_input=wl_home,
+            catalizzatori_input=cat_home,
+            esclusioni_input=esc_home,
+            period="1y",
+            sma_short=50,
+            sma_long=200,
+            eurusd_rate=eurusd_live,
+            ignore_fase_4=True,
+            semaforo_header=semaforo_header,
+            salva_impostazioni=False,
+            progress_bar=pbar_home,
+            mostra_info_avvio=False,
+        )
+        pbar_home.empty()
+        st.rerun()
+
+    # 2) Intestazione pulita della Home Page + pulsante '🔄 Aggiorna Analisi'
+    _agg_ora_h = leggi_ultimo_agg_prezzi()
+    c_hdr_l, c_hdr_r = st.columns([3.2, 1.0])
+    with c_hdr_l:
+        st.markdown(
+            f"""
+            <div style="background:#131722; border:1px solid #334155; border-left:5px solid #10B981;
+                        border-radius:12px; padding:1.05rem 1.35rem; margin-bottom:0.85rem;">
+                <div style="font-size:1.35rem; font-weight:800; color:#F8FAFC; line-height:1.25;">
+                    🏠 Home Page — Pilota Automatico
+                </div>
+                <div style="font-size:0.92rem; color:#E2E8F0; margin-top:4px;">
+                    {SALUTO_UTENTE_CORRENTE} &nbsp;•&nbsp; <span style="color:#CBD5E1; font-size:0.82rem;">🕒 Aggiornato: {_agg_ora_h}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c_hdr_r:
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Aggiorna Analisi", type="primary", use_container_width=True, key="btn_home_aggiorna_cascata"):
+            st.session_state["home_cascata_eseguita"] = False
+            st.rerun()
+
+    # Calcolo delle 2 sole metriche essenziali del portafoglio
+    port_h = st.session_state.get("portafoglio") or []
+    val_pos_h = 0.0
+    cap_inv_h = 0.0
+    for p in port_h:
+        q_p = float(p.get("Quantita", 0) or 0)
+        pmc_p = float(p.get("Prezzo_Medio", 0) or 0)
+        att_p = p.get("Prezzo_Attuale_EUR")
+        cap_inv_h += q_p * pmc_p
+        if att_p is not None and float(att_p or 0) > 0:
+            val_pos_h += q_p * float(att_p)
+        else:
+            val_pos_h += q_p * pmc_p
+    pnl_eur_h = val_pos_h - cap_inv_h
+    pnl_pct_h = ((val_pos_h / cap_inv_h) - 1.0) * 100.0 if cap_inv_h > 0 else 0.0
+    col_pnl_h = "#4ADE80" if pnl_eur_h >= 0 else "#F87171"
+    liq_libera_h = calcola_liquidita_totale()
+
+    # 2 Metriche grandi ad alto contrasto (testi bianchi su card scure)
+    m_c1, m_c2 = st.columns(2)
+    with m_c1:
+        st.markdown(
+            f"""
+            <div style="background:#131722; border:1px solid #334155; border-top:4px solid #38BDF8;
+                        border-radius:12px; padding:1.25rem 1.4rem; margin-bottom:1rem;">
+                <div style="font-size:0.92rem; font-weight:700; color:#E2E8F0; letter-spacing:0.02em;">
+                    💼 Valore Totale Portafoglio
+                </div>
+                <div style="font-family:'JetBrains Mono', monospace; font-size:2.05rem; font-weight:800;
+                            color:#F8FAFC; margin-top:6px;">
+                    € {val_pos_h:,.2f}
+                </div>
+                <div style="font-size:0.82rem; color:#CBD5E1; margin-top:4px;">
+                    Capitale investito: € {cap_inv_h:,.2f} &nbsp;|&nbsp; Liquidità libera: € {liq_libera_h:,.2f}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with m_c2:
+        st.markdown(
+            f"""
+            <div style="background:#131722; border:1px solid #334155; border-top:4px solid {col_pnl_h};
+                        border-radius:12px; padding:1.25rem 1.4rem; margin-bottom:1rem;">
+                <div style="font-size:0.92rem; font-weight:700; color:#E2E8F0; letter-spacing:0.02em;">
+                    📈 Guadagno / Perdita Netta
+                </div>
+                <div style="font-family:'JetBrains Mono', monospace; font-size:2.05rem; font-weight:800;
+                            color:{col_pnl_h}; margin-top:6px;">
+                    € {pnl_eur_h:+,.2f} <span style="font-size:1.30rem;">({pnl_pct_h:+.2f}%)</span>
+                </div>
+                <div style="font-size:0.82rem; color:#CBD5E1; margin-top:4px;">
+                    Posizioni attive: {len(port_h)} titoli monitorati automaticamente
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # 3) Riquadro unico "🧭 COSA DEVO FARE OGGI"
+    salute_map = st.session_state.get("home_salute_portafoglio") or {}
+    vendite_azioni = []
+    avvisi_speculativi = []
+    tickers_port_nomi = []
+
+    for pos in port_h:
+        tk = str(pos.get("Ticker", "")).strip().upper()
+        if not tk:
+            continue
+        tickers_port_nomi.append(tk)
+        info_s = salute_map.get(tk) or {}
+        s_sc = int(info_s.get("s_score", 65) or 65)
+        fase_s = str(info_s.get("fase", "N/D")).upper()
+        sopra_200 = info_s.get("sopra_sma200")
+        q_p = float(pos.get("Quantita", 0) or 0)
+        pmc_p = float(pos.get("Prezzo_Medio", 0) or 0)
+        att_p = float(pos.get("Prezzo_Attuale_EUR") or 0)
+        pnl_p = ((att_p / pmc_p) - 1.0) * 100.0 if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_pct", 0) or 0)
+        pnl_e = (att_p - pmc_p) * q_p if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_eur", 0) or 0)
+
+        # Criterio 1: Target di profitto vero (>= +20%)
+        if pnl_p >= 20.0:
+            vendite_azioni.append(
+                f"🔴 <b>AZIONE: VENDI {tk}</b> — Target di profitto raggiunto (<b>{pnl_p:+.1f}%</b> / <b>€ {pnl_e:+,.2f}</b>): "
+                f"consolida il guadagno e libera nuova liquidità."
+            )
+            continue
+
+        # Regola ferrea anti-panico: NON suggerire mai di vendere aziende sane (S-Score >= 65 o sopra SMA 200)
+        azienda_sana = (s_sc >= 65) or (sopra_200 is True)
+        if azienda_sana:
+            continue
+
+        # Criterio 2: Deterioramento strutturale grave (Fase 4 confermata sotto SMA 200 con S-Score debole < 65)
+        if ("FASE 4" in fase_s) and (sopra_200 is False) and (s_sc < 65):
+            # Distingue vecchie posizioni speculative in forte perdita (da liquidare solo vicino al pareggio)
+            if s_sc < 55 and pnl_p < -8.0:
+                avvisi_speculativi.append(
+                    f"🟠 <b>POSIZIONE SPECULATIVA ({tk})</b> — Sotto SMA 200 in Fase 4 (S-Score {s_sc}/100, P&amp;L {pnl_p:+.1f}%): "
+                    f"non svendere nel panico, pianifica l'uscita quando risale vicino al pareggio."
+                )
+            else:
+                vendite_azioni.append(
+                    f"🔴 <b>AZIONE: VENDI {tk}</b> — Deterioramento strutturale grave (<b>Fase 4 confermata</b> sotto SMA 200, "
+                    f"S-Score debole <b>{s_sc}/100</b>, P&amp;L {pnl_p:+.1f}%)."
+                )
+
+    # Costruisce blocco HTML "SUL PORTAFOGLIO ATTUALE"
+    if not port_h:
+        blocco_port_html = (
+            "<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
+            "🟢 <b>PORTAFOGLIO VUOTO</b> — Non hai posizioni aperte al momento.</div>"
+        )
+    elif vendite_azioni:
+        righe_v = "".join(
+            f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55; margin-bottom:6px;'>{r}</div>"
+            for r in vendite_azioni
+        )
+        righe_sp = "".join(
+            f"<div style='color:#E2E8F0; font-size:0.88rem; line-height:1.5; margin-top:4px;'>{r}</div>"
+            for r in avvisi_speculativi
+        )
+        blocco_port_html = righe_v + righe_sp
+    else:
+        lista_tk_str = ", ".join(tickers_port_nomi)
+        blocco_port_html = (
+            f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
+            f"🟢 <b>NESSUNA VENDITA</b> — I tuoi titoli (<b>{lista_tk_str}</b>) sono aziende solide: "
+            f"resta fermo e lascia lavorare il portafoglio (o valuta eventuale DCA solo se hai liquidità dedicata).</div>"
+        )
+        if avvisi_speculativi:
+            blocco_port_html += "".join(
+                f"<div style='color:#E2E8F0; font-size:0.88rem; line-height:1.5; margin-top:8px; "
+                f"padding-top:6px; border-top:1px solid #1E293B;'>{r}</div>"
+                for r in avvisi_speculativi
+            )
+
+    # Costruisce blocco HTML "SUI NUOVI ACQUISTI" (ESCLUSIVAMENTE BUY NUOVO TOP 3 di pattern_engine.py)
+    pat_alerts_h = st.session_state.get("pattern_alerts") or {}
+    buy_nuovo_top3 = (pat_alerts_h.get("buy_nuovo") or [])[:3]
+
+    if liq_libera_h < 30.0:
+        blocco_acq_html = (
+            "<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
+            "🟢 <b>NESSUN ACQUISTO</b> — Non devi fare nulla finché uno dei tuoi titoli non arriverà a target liberando nuova liquidità.</div>"
+        )
+    else:
+        # Filtra esclusivamente i BUY NUOVO Top 3 che hanno già superato Trigger Y entro +3.5% (NO Pre-Breakout)
+        ordini_pronti = []
+        for al in buy_nuovo_top3:
+            if not isinstance(al, dict):
+                continue
+            stato_tr = str(al.get("stato_trigger", "")).upper()
+            dist_y = float(al.get("dist_y_pct", -999.0) or -999.0)
+            if "PRE-BREAKOUT" in stato_tr:
+                continue
+            if 0.0 <= dist_y <= 3.5:
+                ordini_pronti.append(al)
+
+        if ordini_pronti:
+            righe_ord = []
+            # Calcola importo per ordine in base alla liquidità disponibile (cap 500 € per singola posizione)
+            imp_per_ord = round(min(liq_libera_h / len(ordini_pronti), 500.0), 2)
+            if imp_per_ord < 30.0:
+                ordini_pronti = ordini_pronti[:1]
+                imp_per_ord = round(min(liq_libera_h, 500.0), 2)
+            for al in ordini_pronti:
+                tk_o = str(al.get("ticker", "")).strip().upper()
+                trig_y = float(al.get("trigger_y") or 0.0)
+                max_entry = trig_y * 1.035
+                stop_p = float(al.get("stop_price") or 0.0)
+                targ_p = float(al.get("target_price") or 0.0)
+                simb_o = "$" if str(al.get("currency", "USD")).upper() == "USD" else "€"
+                fig_o = str(al.get("figura", "Breakout"))
+                durata_o = "2-4 Mesi" if fig_o in ("Cup & Handle", "Flat Base", "Doppio Minimo (W)") else "3-8 Settimane"
+                righe_ord.append(
+                    f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.6; margin-bottom:8px; "
+                    f"padding:0.75rem 0.9rem; background:#0B0E11; border:1px solid #10B981; border-radius:8px;'>"
+                    f"🚀 <b>ORDINE PRONTO:</b> Acquista <b>€ {imp_per_ord:,.2f}</b> di <b>{tk_o}</b> a mercato "
+                    f"(dopo le 15:45 italiane per avere lo spread migliore), verificando che il prezzo non superi "
+                    f"<b>{simb_o}{max_entry:.2f}</b> — Stop Loss a <b>{simb_o}{stop_p:.2f}</b> — "
+                    f"Target a <b>{simb_o}{targ_p:.2f}</b> (Orizzonte: <b>{durata_o}</b>).</div>"
+                )
+            blocco_acq_html = "".join(righe_ord)
+        else:
+            blocco_acq_html = (
+                "<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
+                "⏳ <b>NESSUN ACQUISTO OGGI</b> — Attendi: nessun titolo ha ancora confermato la rottura del livello d'ingresso.</div>"
+            )
+
+    bordo_box_oggi = "#EF4444" if vendite_azioni else "#10B981"
+    st.markdown(
+        f"""
+        <div style="background:#131722; border:1px solid #334155; border-left:5px solid {bordo_box_oggi};
+                    border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1.1rem;">
+            <div style="font-size:1.22rem; font-weight:800; color:#F8FAFC; margin-bottom:0.95rem; letter-spacing:0.01em;">
+                🧭 COSA DEVO FARE OGGI
+            </div>
+            <div style="font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;
+                        letter-spacing:0.05em; margin-bottom:0.40rem;">
+                📌 Sul Portafoglio Attuale
+            </div>
+            {blocco_port_html}
+            <div style="height:1px; background:#2A2E39; margin:1.05rem 0;"></div>
+            <div style="font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;
+                        letter-spacing:0.05em; margin-bottom:0.40rem;">
+                🎯 Sui Nuovi Acquisti
+            </div>
+            {blocco_acq_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Dettaglio salute titoli richiudibile (chiuso di default per mantenere la Home ultra-pulita)
+    if port_h and salute_map:
+        with st.expander("📊 Dettaglio Salute Portafoglio (S-Score • SMA 200 • Fase • WinRate 60gg)", expanded=False):
+            righe_sal = []
+            for pos in port_h:
+                tk = str(pos.get("Ticker", "")).strip().upper()
+                inf = salute_map.get(tk) or {}
+                s200 = inf.get("sopra_sma200")
+                s200_lbl = "🟢 Sopra SMA 200" if s200 is True else ("🔴 Sotto SMA 200" if s200 is False else "⚪ N/D")
+                wr = inf.get("winrate_60g")
+                wr_lbl = f"{wr:.1f}%" if wr is not None else "N/D"
+                righe_sal.append({
+                    "Ticker": tk,
+                    "Tipo": inf.get("tipo", pos.get("Tipo", "Spot")),
+                    "P&L %": f"{float(inf.get('pnl_pct', 0) or 0):+.2f}%",
+                    "S-Score": f"{int(inf.get('s_score', 50) or 50)}/100",
+                    "SMA 200": s200_lbl,
+                    "Fase Weinstein": inf.get("fase", "N/D"),
+                    "WinRate 60gg": wr_lbl,
+                })
+            st.dataframe(pd.DataFrame(righe_sal), use_container_width=True, hide_index=True)
+
+    # 4) Pulsante ben visibile in fondo alla Home Page per passare al Terminale Completo
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    if st.button(
+        "🔬 Passa al Terminale Completo (Analisi Tecnica, Grafici, Portafoglio & Simulatore)",
+        type="secondary",
+        use_container_width=True,
+        key="btn_vai_terminale_completo_bottom",
+    ):
+        st.session_state["vista_attiva"] = "terminale"
+        st.rerun()
+
+# ==============================================================================
+# INTERFACCIA PRINCIPALE - ROUTING HOME PILOTA AUTOMATICO VS TERMINALE COMPLETO
+# ==============================================================================
+semaforo_header = calcola_semaforo_mercato()
+_fp_impostazioni = _get_impostazioni_path()
+_imp_caricate = carica_json(IMPOSTAZIONI_FILE, default={})
+if isinstance(_imp_caricate, dict) and _imp_caricate:
+    impostazioni = _imp_caricate
+else:
+    impostazioni = {"lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, PLTR, ZETA, NKE, AMD, CRWD, NU, NVDA, TSLA, MCD, DIS, SBUX, PEP, INTC, SOFI, NBIS, VRT, ANET", "catalizzatori": "", "esclusioni": ""}
+
+if "vista_attiva" not in st.session_state:
+    st.session_state["vista_attiva"] = "home"
+
+if st.session_state.get("vista_attiva", "home") == "home":
+    # Sidebar essenziale in modalità Home Semplificata
+    if st.sidebar.button("🔬 Passa al Terminale Completo", type="primary", use_container_width=True, key="btn_vai_terminale_sidebar"):
+        st.session_state["vista_attiva"] = "terminale"
+        st.rerun()
+    render_box_account_sidebar()
+    render_home_pilota_automatico(impostazioni, semaforo_header)
+    st.stop()
+
+# ==============================================================================
+# INTERFACCIA PRINCIPALE - TOP BAR TERMINALE COMPLETO
+# ==============================================================================
+if semaforo_header['stato'] == 'verde':
+    sem_color, sem_icon, sem_msg = "#089981", "🟢", "MERCATO RIALZISTA"
+elif semaforo_header['stato'] == 'rosso':
+    sem_color, sem_icon, sem_msg = "#F23645", "🔴", "MERCATO RIBASSISTA"
+else:
+    sem_color, sem_icon, sem_msg = "#F59E0B", "🟡", "MERCATO LATERALE"
+
+if semaforo_header['spy_prezzo'] is None or semaforo_header['vix'] is None:
+    sem_display = "🟡 DATI MERCATO N/D"
+else:
+    sem_display = f"{sem_icon} {sem_msg}  |  SPY: ${semaforo_header['spy_prezzo']}  |  VIX: {semaforo_header['vix']}"
+
+_agg_prezzi_display = leggi_ultimo_agg_prezzi()
+st.markdown(f'''
+<div class="header-box" style="padding: 0.65rem 1.2rem; margin-bottom: 0.75rem;">
+    <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.3rem; font-weight:800; color:#FFFFFF; letter-spacing:-0.02em;">MATRIX DVMS</span>
+        <span style="background-color:#1E222D; color:#94A3B8; border:1px solid #2A2E39; padding:2px 7px; border-radius:4px; font-size:0.75rem; font-weight:700;">V6.1.3 PRO</span><span style="margin-left:14px; color:#e2e8f0; font-size:0.95rem; font-weight:600;">{SALUTO_UTENTE_CORRENTE}</span><span style="margin-left:14px; color:#94a3b8; font-size:0.78rem; background:rgba(15,23,42,0.65); padding:3px 9px; border-radius:6px; border:1px solid rgba(148,163,184,0.2);">🕒 Agg. Prezzi: {_agg_prezzi_display}</span>
+    </div>
+    <div style="background-color:#0B0E11; border:1px solid #2A2E39; padding:6px 14px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700; color: {sem_color};">
+        {sem_display}
+    </div>
+</div>
+''', unsafe_allow_html=True)
+if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_usa'):
+    regia_tracker.render_barra_indici_usa()
+
+if st.sidebar.button("🏠 Torna alla Home Semplificata", use_container_width=True, key="btn_torna_home_sidebar"):
+    st.session_state["vista_attiva"] = "home"
+    st.rerun()
+avvia_scansione_btn = st.sidebar.button("🚀 AVVIA SCANSIONE", type="primary", use_container_width=True, key="btn_avvia_scansione_top")
+st.sidebar.markdown("---")
+st.sidebar.markdown("**💼 Selezione Rapida Portafoglio**")
+_sb_list = list(dict.fromkeys([p['Ticker'] for p in (st.session_state.portafoglio or list()) if p.get('Ticker')])) or ["Portafoglio vuoto"]
+if "sb_quick_ticker" not in st.session_state or st.session_state["sb_quick_ticker"] not in _sb_list:
+    st.session_state["sb_quick_ticker"] = next(iter(_sb_list))
+if "sb_ticker_radio" not in st.session_state or st.session_state["sb_ticker_radio"] not in _sb_list:
+    st.session_state["sb_ticker_radio"] = st.session_state["sb_quick_ticker"]
+
+def _on_sb_ticker_change():
+    val = st.session_state.get("sb_ticker_radio")
+    if val and val != "Portafoglio vuoto":
+        st.session_state["sb_quick_ticker"] = val
+        st.session_state["port_selected_chart"] = val
+        st.session_state["sel_chart_port_side"] = val
+        st.session_state["txt_analisi_singola_tk"] = val
+
+_sb_sel = st.sidebar.radio("Selezione Rapida", _sb_list, label_visibility="collapsed", key="sb_ticker_radio", on_change=_on_sb_ticker_change)
+st.sidebar.markdown("---")
+st.sidebar.subheader("📌 Titoli da Acquistare (Priorità)")
+titoli_priorita_input = st.sidebar.text_input("In ordine di priorità (es. PLTR, RKLB):", value="", key="titoli_priorita_input")
+st.sidebar.subheader("💵 Liquidità Aggiuntiva")
+liq_aggiuntiva_sim = st.sidebar.number_input("Disponibilità extra (€):", min_value=0.0, value=0.0, step=50.0, key="liq_aggiuntiva_sim")
+st.sidebar.subheader("📅 Catalizzatori Eventi")
+catalizzatori_input = st.sidebar.text_area("Formato: TICKER: Desc - GG/MM/AA", value=impostazioni.get("catalizzatori", ""), height=75)
+st.sidebar.subheader("🚫 Esclusioni Ribilanciamento")
+esclusioni_input = st.sidebar.text_area("Titoli da escludere (virgola):", value=impostazioni.get("esclusioni", ""), height=65)
+
+with st.sidebar.expander("⚙️ Impostazioni Avanzate & Watchlist", expanded=False):
+    # Applica eventuale aggiornamento Watchlist arrivato dalla stellina in regia_tracker prima di creare il widget
+    if "_pending_tickers_input" in st.session_state:
+        st.session_state["tickers_input"] = st.session_state.pop("_pending_tickers_input")
+    if "tickers_input" not in st.session_state:
+        st.session_state["tickers_input"] = impostazioni.get("lista_ticker_default", "")
+    tickers_input = st.text_area("Watchlist Scanner (virgola):", height=95, key="tickers_input")
+    period = st.selectbox("Periodo:", ["3mo", "6mo", "1y", "2y"], index=2)
+    sma_short = st.slider("SMA Breve:", 10, 100, 50)
+    sma_long = st.slider("SMA Lunga:", 50, 200, 200)
+    eurusd_rate = st.number_input("EUR/USD:", min_value=0.8, max_value=1.5, value=get_live_eurusd(), step=0.001, format="%.4f")
+    ignore_fase_4 = st.checkbox("Blocca Fase 4", True)
+    if st.button("🔍 Verifica Segnali Storici", key="btn_dbg_storici"):
+        segnali = carica_json(SEGNALI_STORICI_FILE)
+        st.info(f"Totale segnali: {len(segnali)}")
+    if st.button("🔄 Ricostruisci Segnali (1 anno)", key="btn_dbg_ricostr"):
+        tks_ric = list(set([t.strip().upper() for t in tickers_input.split(",") if t.strip()] + [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",")]))
+        pb = st.progress(0)
+        tot = sum(ricostruisci_segnali_retroattivi(tk, 1) for i, tk in enumerate(tks_ric) if not pb.progress((i + 1) / len(tks_ric)))
+        pb.empty()
+        st.success(f"✅ Aggiunti {tot} segnali storici.")
+        st.rerun()
+
+# Box Account nella sidebar: utente connesso, cambio password e tasto Esci
+render_box_account_sidebar()
+
+tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+if avvia_scansione_btn:
+    esegui_scansione_completa_motore(
+        impostazioni=impostazioni,
+        tickers_input=tickers_input,
+        catalizzatori_input=catalizzatori_input,
+        esclusioni_input=esclusioni_input,
+        period=period,
+        sma_short=sma_short,
+        sma_long=sma_long,
+        eurusd_rate=eurusd_rate,
+        ignore_fase_4=ignore_fase_4,
+        semaforo_header=semaforo_header,
+        salva_impostazioni=True,
+        progress_bar=None,
+        mostra_info_avvio=True,
+    )
     st.rerun()
 
 # ==============================================================================
