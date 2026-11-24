@@ -15,10 +15,293 @@ import warnings
 import json
 import os
 import re
+import hashlib
+import hmac
 from datetime import datetime, timedelta
 
 warnings.filterwarnings('ignore')
 st.set_page_config(page_title="MATRIX DVMS V6.1.3 PRO", layout="wide", page_icon="🛡️")
+
+# ==============================================================================
+# AUTENTICAZIONE & SCHERMATA DI LOGIN (STILE EV ROADBOOK ITALIA — MOBILE-FIRST)
+# ==============================================================================
+UTENTI_AUTH_FILE = "utenti_auth.json"
+UTENTE_PREDEFINITO_AUTH = "Fabio"
+PASSWORD_INIZIALE_AUTH = "matrix2026"
+
+def _hash_password_sha256(password_chiaro):
+    """Restituisce l'hash SHA-256 esadecimale della password."""
+    return hashlib.sha256(str(password_chiaro).encode("utf-8")).hexdigest()
+
+def _normalizza_hash_auth(valore):
+    """Accetta sia un hash SHA-256 (64 char hex) sia una password testuale da st.secrets."""
+    s = str(valore or "").strip()
+    if len(s) == 64 and all(c in "0123456789abcdefABCDEF" for c in s):
+        return s.lower()
+    return _hash_password_sha256(s)
+
+def _get_auth_file_path():
+    """Percorso locale assoluto di utenti_auth.json (mai sincronizzato su GitHub)."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), UTENTI_AUTH_FILE)
+
+def _salva_utenti_auth_locale(mappa_raw):
+    """Salva su disco locale il file utenti_auth.json con gli hash SHA-256."""
+    fp = _get_auth_file_path()
+    try:
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(mappa_raw, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+def _assicura_file_utenti_auth():
+    """Carica utenti_auth.json locale; se manca lo crea al primo avvio con l'utente predefinito."""
+    fp = _get_auth_file_path()
+    dati = {}
+    if os.path.exists(fp):
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                caricato = json.load(f)
+            if isinstance(caricato, dict) and caricato:
+                dati = caricato
+        except Exception:
+            dati = {}
+    if not dati:
+        dati = {
+            UTENTE_PREDEFINITO_AUTH: {
+                "username": UTENTE_PREDEFINITO_AUTH,
+                "password_hash": _hash_password_sha256(PASSWORD_INIZIALE_AUTH),
+                "aggiornato_il": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        }
+        _salva_utenti_auth_locale(dati)
+    return dati
+
+def _carica_mappa_credenziali():
+    """
+    Restituisce una mappa case-insensitive:
+    {utente_lower: {"username": str, "hashes": [sha256, ...], "locale": bool}}
+    combinando utenti_auth.json locale ed eventuale st.secrets['users'] (Streamlit Cloud).
+    """
+    mappa = {}
+    dati_loc = _assicura_file_utenti_auth()
+    for k, v in dati_loc.items():
+        if isinstance(v, dict):
+            uname = str(v.get("username") or k).strip()
+            phash = str(v.get("password_hash") or v.get("hash") or "").strip().lower()
+        else:
+            uname = str(k).strip()
+            phash = _normalizza_hash_auth(v)
+        if uname and phash:
+            mappa[uname.lower()] = {"username": uname, "hashes": [phash], "locale": True}
+
+    # Supporto opzionale Streamlit Cloud via st.secrets["users"]
+    try:
+        if "users" in st.secrets:
+            sec_users = st.secrets["users"]
+            for k in sec_users:
+                uname = str(k).strip()
+                phash = _normalizza_hash_auth(sec_users[k])
+                if not uname or not phash:
+                    continue
+                kl = uname.lower()
+                if kl in mappa:
+                    if phash not in mappa[kl]["hashes"]:
+                        mappa[kl]["hashes"].append(phash)
+                else:
+                    mappa[kl] = {"username": uname, "hashes": [phash], "locale": False}
+    except Exception:
+        pass
+    return mappa
+
+def _verifica_credenziali_matrix(username, password):
+    """Verifica utente (case-insensitive) e password tramite confronto hash SHA-256 sicuro."""
+    u_clean = str(username or "").strip().lower()
+    if not u_clean or not password:
+        return False, ""
+    mappa = _carica_mappa_credenziali()
+    info = mappa.get(u_clean)
+    if not info:
+        return False, ""
+    h_in = _hash_password_sha256(password)
+    for h_ok in info.get("hashes", []):
+        if hmac.compare_digest(h_in, str(h_ok).lower()):
+            return True, info["username"]
+    return False, ""
+
+def _cambia_password_utente_locale(username, vecchia_pwd, nuova_pwd):
+    """Aggiorna la password (hash SHA-256) in utenti_auth.json locale dopo verifica della vecchia."""
+    ok_old, nome_canonico = _verifica_credenziali_matrix(username, vecchia_pwd)
+    if not ok_old:
+        return False, "La password attuale non è corretta."
+    if len(str(nuova_pwd or "")) < 4:
+        return False, "La nuova password deve contenere almeno 4 caratteri."
+    dati_loc = _assicura_file_utenti_auth()
+    chiave_esistente = next((k for k in dati_loc.keys() if str(k).strip().lower() == nome_canonico.lower()), nome_canonico)
+    dati_loc[chiave_esistente] = {
+        "username": nome_canonico,
+        "password_hash": _hash_password_sha256(nuova_pwd),
+        "aggiornato_il": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    if _salva_utenti_auth_locale(dati_loc):
+        return True, "Password aggiornata e salvata in utenti_auth.json."
+    return False, "Impossibile scrivere utenti_auth.json (ambiente in sola lettura)."
+
+def richiedi_login_matrix():
+    """
+    Blocca l'accesso all'intera app finché st.session_state['autenticato'] non è True.
+    Mostra esclusivamente la schermata di login mobile-first stile EV Roadbook Italia.
+    """
+    if "autenticato" not in st.session_state:
+        st.session_state["autenticato"] = False
+    if st.session_state["autenticato"]:
+        return
+
+    # Assicura che utenti_auth.json venga inizializzato già al primo avvio
+    _assicura_file_utenti_auth()
+
+    st.markdown(
+        """
+        <style>
+        html, body, [data-testid="stAppViewContainer"], .stApp, .main {
+            background-color: #0F172A !important;
+            color: #F8FAFC !important;
+        }
+        section[data-testid="stSidebar"],
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapsedControl"] {
+            display: none !important;
+        }
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+        }
+        .main .block-container {
+            max-width: 460px !important;
+            padding-top: 8vh !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-bottom: 2rem !important;
+        }
+        div[data-testid="stForm"] {
+            background-color: #1E293B !important;
+            border: 1px solid #334155 !important;
+            border-left: 5px solid #10B981 !important;
+            border-radius: 12px !important;
+            padding: 1.75rem 1.55rem 1.45rem 1.55rem !important;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.50) !important;
+        }
+        div[data-testid="stForm"] label,
+        div[data-testid="stForm"] label p {
+            color: #F8FAFC !important;
+            font-weight: 600 !important;
+            font-size: 0.92rem !important;
+        }
+        div[data-testid="stForm"] input {
+            background-color: #0F172A !important;
+            color: #F8FAFC !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
+        }
+        div[data-testid="stForm"] input:focus {
+            border-color: #10B981 !important;
+            box-shadow: 0 0 0 1px #10B981 !important;
+        }
+        div[data-testid="stFormSubmitButton"] button {
+            background-color: #10B981 !important;
+            border: 1px solid #10B981 !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            font-size: 1rem !important;
+            min-height: 46px !important;
+            border-radius: 8px !important;
+            margin-top: 0.45rem !important;
+            transition: background-color 0.15s ease !important;
+        }
+        div[data-testid="stFormSubmitButton"] button:hover {
+            background-color: #059669 !important;
+            border-color: #059669 !important;
+        }
+        @media (max-width: 768px) {
+            .main .block-container {
+                padding-top: 4vh !important;
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+            div[data-testid="stForm"] {
+                padding: 1.35rem 1.15rem 1.2rem 1.15rem !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("matrix_login_form", clear_on_submit=False):
+        st.markdown(
+            """
+            <div style="margin-bottom:1.15rem;">
+                <div style="font-size:1.32rem; font-weight:800; color:#F8FAFC; letter-spacing:-0.01em;">
+                    📈 MATRIX PRO — Accesso riservato
+                </div>
+                <div style="font-size:0.84rem; color:#CBD5E1; margin-top:4px;">
+                    Inserisci le tue credenziali per accedere al terminale e al portafoglio.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        utente_in = st.text_input("👤 Utente", placeholder="Nome utente...", key="matrix_login_user")
+        pwd_in = st.text_input("🔑 Password", type="password", placeholder="Password...", key="matrix_login_pwd")
+        accedi_btn = st.form_submit_button("🔑 Accedi", type="primary", use_container_width=True)
+
+        if accedi_btn:
+            ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
+            if ok_auth:
+                st.session_state["autenticato"] = True
+                st.session_state["utente_autenticato"] = nome_valido
+                st.rerun()
+            else:
+                st.error("❌ Utente o password non validi. Riprova.")
+
+    st.markdown(
+        "<div style='text-align:center; color:#94A3B8; font-size:0.76rem; margin-top:0.85rem;'>"
+        "🔒 Accesso protetto con crittografia SHA-256</div>",
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+def render_box_account_sidebar():
+    """Mostra nella sidebar l'utente autenticato, il cambio password locale e il tasto Esci."""
+    st.sidebar.markdown("---")
+    utente_corrente = st.session_state.get("utente_autenticato") or UTENTE_PREDEFINITO_AUTH
+    st.sidebar.markdown(
+        f"<div style='background:#0B0E11; border:1px solid #2A2E39; border-left:3px solid #10B981; "
+        f"border-radius:6px; padding:0.55rem 0.75rem; margin-bottom:0.5rem; font-size:0.84rem; color:#F8FAFC;'>"
+        f"👤 Connesso come <b>{utente_corrente}</b></div>",
+        unsafe_allow_html=True,
+    )
+    with st.sidebar.expander("🔐 Cambia Password", expanded=False):
+        with st.form("matrix_change_pwd_form", clear_on_submit=True):
+            pwd_att = st.text_input("Password attuale", type="password", key="chg_pwd_old")
+            pwd_new = st.text_input("Nuova password", type="password", key="chg_pwd_new")
+            pwd_cnf = st.text_input("Conferma nuova password", type="password", key="chg_pwd_cnf")
+            salva_pwd_btn = st.form_submit_button("💾 Aggiorna Password", use_container_width=True)
+            if salva_pwd_btn:
+                if pwd_new != pwd_cnf:
+                    st.error("❌ Le nuove password non coincidono.")
+                else:
+                    ok_c, msg_c = _cambia_password_utente_locale(utente_corrente, pwd_att, pwd_new)
+                    if ok_c:
+                        st.success(f"✅ {msg_c}")
+                    else:
+                        st.error(f"❌ {msg_c}")
+    if st.sidebar.button("🚪 Esci", use_container_width=True, key="btn_logout_matrix"):
+        st.session_state["autenticato"] = False
+        st.session_state.pop("utente_autenticato", None)
+        st.rerun()
+
+# Esegue subito il controllo di accesso prima di caricare portafoglio, dati o sidebar
+richiedi_login_matrix()
 
 # ==============================================================================
 # CSS STILE TERMINALE TRADER PROFESSIONALE (TRADINGVIEW DARK)
@@ -3515,6 +3798,9 @@ with st.sidebar.expander("⚙️ Impostazioni Avanzate & Watchlist", expanded=Fa
         pb.empty()
         st.success(f"✅ Aggiunti {tot} segnali storici.")
         st.rerun()
+
+# Box Account nella sidebar: utente connesso, cambio password e tasto Esci
+render_box_account_sidebar()
 
 tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 if avvia_scansione_btn:
