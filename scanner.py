@@ -175,19 +175,33 @@ def richiedi_login_matrix():
         header[data-testid="stHeader"] {
             background: transparent !important;
         }
+        [data-testid="stMainBlockContainer"],
         .main .block-container {
-            max-width: 460px !important;
-            padding-top: 8vh !important;
+            padding-top: 7vh !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
             padding-bottom: 2rem !important;
+            max-width: 1280px !important;
+            margin: 0 auto !important;
+        }
+        .matrix-login-header-card {
+            background-color: #1E293B;
+            border: 1px solid #334155;
+            border-left: 5px solid #10B981;
+            border-radius: 12px;
+            padding: 1.30rem 1.45rem;
+            margin: 0 auto 0.95rem auto;
+            max-width: 480px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
         }
         div[data-testid="stForm"] {
             background-color: #1E293B !important;
             border: 1px solid #334155 !important;
             border-left: 5px solid #10B981 !important;
             border-radius: 12px !important;
-            padding: 1.75rem 1.55rem 1.45rem 1.55rem !important;
+            padding: 1.55rem 1.45rem 1.35rem 1.45rem !important;
+            max-width: 480px !important;
+            margin: 0 auto !important;
             box-shadow: 0 16px 40px rgba(0, 0, 0, 0.50) !important;
         }
         div[data-testid="stForm"] label,
@@ -222,13 +236,17 @@ def richiedi_login_matrix():
             border-color: #059669 !important;
         }
         @media (max-width: 768px) {
+            [data-testid="stMainBlockContainer"],
             .main .block-container {
                 padding-top: 4vh !important;
                 padding-left: 0.75rem !important;
                 padding-right: 0.75rem !important;
             }
+            .matrix-login-header-card {
+                padding: 1.15rem 1.15rem;
+            }
             div[data-testid="stForm"] {
-                padding: 1.35rem 1.15rem 1.2rem 1.15rem !important;
+                padding: 1.25rem 1.15rem 1.15rem 1.15rem !important;
             }
         }
         </style>
@@ -236,38 +254,46 @@ def richiedi_login_matrix():
         unsafe_allow_html=True,
     )
 
-    with st.form("matrix_login_form", clear_on_submit=False):
+    # Colonna centrale centrata e ristretta stile EV Roadbook Italia (responsive su desktop e mobile)
+    _, col_login, _ = st.columns([1.2, 1.5, 1.2])
+    with col_login:
+        # Card di intestazione scura con bordo sinistro verde smeraldo sopra al form di login
         st.markdown(
             """
-            <div style="margin-bottom:1.15rem;">
-                <div style="font-size:1.32rem; font-weight:800; color:#F8FAFC; letter-spacing:-0.01em;">
-                    📈 MATRIX PRO — Accesso riservato
+            <div class="matrix-login-header-card">
+                <div style="font-size:1.55rem; font-weight:800; color:#F8FAFC; letter-spacing:-0.01em; line-height:1.2;">
+                    📈 MATRIX PRO
                 </div>
-                <div style="font-size:0.84rem; color:#CBD5E1; margin-top:4px;">
-                    Inserisci le tue credenziali per accedere al terminale e al portafoglio.
+                <div style="font-size:0.96rem; font-weight:700; color:#10B981; margin-top:4px;">
+                    by Fabio Tod
+                </div>
+                <div style="font-size:0.84rem; color:#CBD5E1; margin-top:6px;">
+                    Accesso riservato • Terminale Quantitativo &amp; Portafoglio
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        utente_in = st.text_input("👤 Utente", placeholder="Nome utente...", key="matrix_login_user")
-        pwd_in = st.text_input("🔑 Password", type="password", placeholder="Password...", key="matrix_login_pwd")
-        accedi_btn = st.form_submit_button("🔑 Accedi", type="primary", use_container_width=True)
 
-        if accedi_btn:
-            ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
-            if ok_auth:
-                st.session_state["autenticato"] = True
-                st.session_state["utente_autenticato"] = nome_valido
-                st.rerun()
-            else:
-                st.error("❌ Utente o password non validi. Riprova.")
+        with st.form("matrix_login_form", clear_on_submit=False):
+            utente_in = st.text_input("👤 Utente", placeholder="Nome utente...", key="matrix_login_user")
+            pwd_in = st.text_input("🔑 Password", type="password", placeholder="Password...", key="matrix_login_pwd")
+            accedi_btn = st.form_submit_button("🔑 Accedi", type="primary", use_container_width=True)
 
-    st.markdown(
-        "<div style='text-align:center; color:#94A3B8; font-size:0.76rem; margin-top:0.85rem;'>"
-        "🔒 Accesso protetto con crittografia SHA-256</div>",
-        unsafe_allow_html=True,
-    )
+            if accedi_btn:
+                ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
+                if ok_auth:
+                    st.session_state["autenticato"] = True
+                    st.session_state["utente_autenticato"] = nome_valido
+                    st.rerun()
+                else:
+                    st.error("❌ Utente o password non validi. Riprova.")
+
+        st.markdown(
+            "<div style='text-align:center; color:#94A3B8; font-size:0.76rem; margin-top:0.85rem;'>"
+            "🔒 Accesso protetto con crittografia SHA-256</div>",
+            unsafe_allow_html=True,
+        )
     st.stop()
 
 def render_box_account_sidebar():
