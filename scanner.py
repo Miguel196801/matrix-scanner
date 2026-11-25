@@ -5346,6 +5346,16 @@ def _calcola_dca_doppio_binario(portafoglio, salute_map, pattern_alerts, liq_lib
         # Binario 2 (Supporto su ritracciamento): -12% .. -35% + stabilizzazione (RSI 30-50 e chiusura positiva)
         if binario is None and (-35.0 <= pnl_p <= -12.0):
             if (30.0 <= rsi_v <= 50.0) and chiusura_pos:
+                # Filtro qualità istituzionale sul Binario 2 sotto SMA 200:
+                # ammette solo titoli con Market Cap >= $5 Miliardi oppure >= 1 acquisto SEC Form 4 (90gg)
+                if sopra_200 is not True:
+                    mcap_usd = 0.0
+                    try:
+                        mcap_usd = float((_get_info_cached(tk) or {}).get("marketCap") or 0.0)
+                    except Exception:
+                        mcap_usd = 0.0
+                    if (mcap_usd < 5_000_000_000.0) and (sec_b < 1):
+                        continue
                 binario = 2
                 motivo_dca = f"Binario 2 — Stabilizzazione su supporto (RSI {rsi_v:.0f} + chiusura positiva)"
 
@@ -5358,6 +5368,13 @@ def _calcola_dca_doppio_binario(portafoglio, salute_map, pattern_alerts, liq_lib
         pmc_new = (cap_old + imp_dca) / (q_old + q_add)
         rimb_prima = ((pmc_old / p_att) - 1.0) * 100.0
         rimb_dopo = ((pmc_new / p_att) - 1.0) * 100.0
+        riduzione_rimb = rimb_prima - rimb_dopo
+
+        # Filtro efficacia reale del DCA: scarta proposte marginali (< 6.0 punti % di riduzione)
+        # a meno che il nuovo rimbalzo necessario non scenda già sotto +12.0%
+        if riduzione_rimb < 6.0 and rimb_dopo >= 12.0:
+            continue
+
         candidati_dca.append({
             "binario": binario,
             "ticker": tk,
@@ -5371,6 +5388,7 @@ def _calcola_dca_doppio_binario(portafoglio, salute_map, pattern_alerts, liq_lib
             "pmc_new": round(pmc_new, 2),
             "rimb_prima": round(rimb_prima, 1),
             "rimb_dopo": round(rimb_dopo, 1),
+            "riduzione_rimb": round(riduzione_rimb, 1),
         })
 
     if not candidati_dca:
