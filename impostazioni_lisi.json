@@ -1,10 +1,12 @@
 {
-    "lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, APP, TXN, AAPL, NBIS, NU, MCD, DIS, SBUX, PEP, INTC, LLY, AVGO, IREN, WDC, LRCX, GLW, COHR, SOFI, APLD, CRDO, MELI, UA, SHAK, LAES, ORCL, HIMS, NVDA, PFE, GOOGL, AMZN, META, SMCI, NOW, WYNN, NFLX, MU, STVN, AMTX, UCTT, LULU, VRTX, AVGO, COST, BSX, ANET, MGM, SIRI, CAVA, CELH, TTMI, GME,MRVL,BKR,AMRC,GM,SNDK,SPCX,ONDS",
+    "lista_ticker_default": "ADBE, RKLB, SOUN, IONQ, ASTS, BBAI, PLTR, ZETA, NKE, CRDO, AMD, CRWD, APP, TXN, AAPL, NBIS, NU, MCD, DIS, SBUX, PEP, INTC, LLY, AVGO, IREN, WDC, LRCX, GLW, COHR, SOFI, APLD, MELI, UA, SHAK, LAES, ORCL, HIMS, NVDA, PFE, GOOGL, AMZN, META, SMCI, NOW, WYNN, NFLX, MU, STVN, AMTX, UCTT, LULU, VRTX, COST, BSX, ANET, MGM, SIRI, CAVA, CELH, TTMI, GME, MRVL, BKR, AMRC, GM, SNDK, SPCX, ONDS, MP, MTDR, ARM, TSM, ASML",
     "catalizzatori": "",
     "esclusioni": "",
     "insider_tickers": "BSX,",
     "tickers": "MT, ONDS, TTMI",
     "watchlist": "MT, ONDS, TTMI",
+    "capitale_versato": 310.0,
     "liquidita_totale": 210.0,
+    "liquidita_aggiuntiva": 0.0,
     "ultimo_agg_prezzi": "24/11/2026 00:59"
 }
