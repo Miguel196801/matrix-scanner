@@ -428,55 +428,60 @@ def richiedi_login_matrix():
         unsafe_allow_html=True,
     )
 
-    # Colonna centrale centrata e ristretta stile EV Roadbook Italia (responsive su desktop e mobile)
-    _, col_login, _ = st.columns([1.2, 1.5, 1.2])
-    with col_login:
-        # Card di intestazione scura con bordo sinistro verde smeraldo sopra al form di login
-        st.markdown(
-            """
-            <div class="matrix-login-header-card">
-                <div style="font-size:1.55rem; font-weight:800; color:#F8FAFC; letter-spacing:-0.01em; line-height:1.2;">
-                    📈 MATRIX PRO
+    # Racchiude la UI di Login in uno slot svuotabile così al click su Accedi scompare subito senza residui DOM
+    login_slot = st.empty()
+    with login_slot.container():
+        # Colonna centrale centrata e ristretta stile EV Roadbook Italia (responsive su desktop e mobile)
+        _, col_login, _ = st.columns([1.2, 1.5, 1.2])
+        with col_login:
+            # Card di intestazione scura con bordo sinistro verde smeraldo sopra al form di login
+            st.markdown(
+                """
+                <div class="matrix-login-header-card">
+                    <div style="font-size:1.55rem; font-weight:800; color:#F8FAFC; letter-spacing:-0.01em; line-height:1.2;">
+                        📈 MATRIX PRO
+                    </div>
+                    <div style="font-size:0.96rem; font-weight:700; color:#10B981; margin-top:4px;">
+                        by Fabio Tod
+                    </div>
+                    <div style="font-size:0.84rem; color:#CBD5E1; margin-top:6px;">
+                        Accesso riservato • Terminale Quantitativo &amp; Portafoglio
+                    </div>
                 </div>
-                <div style="font-size:0.96rem; font-weight:700; color:#10B981; margin-top:4px;">
-                    by Fabio Tod
-                </div>
-                <div style="font-size:0.84rem; color:#CBD5E1; margin-top:6px;">
-                    Accesso riservato • Terminale Quantitativo &amp; Portafoglio
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
 
-        with st.form("matrix_login_form", clear_on_submit=False):
-            utente_in = st.text_input("👤 Utente", placeholder="Nome utente...", key="matrix_login_user")
-            pwd_in = st.text_input("🔑 Password", type="password", placeholder="Password...", key="matrix_login_pwd")
-            accedi_btn = st.form_submit_button("🔑 Accedi", type="primary", use_container_width=True)
+            with st.form("matrix_login_form", clear_on_submit=False):
+                utente_in = st.text_input("👤 Utente", placeholder="Nome utente...", key="matrix_login_user")
+                pwd_in = st.text_input("🔑 Password", type="password", placeholder="Password...", key="matrix_login_pwd")
+                accedi_btn = st.form_submit_button("🔑 Accedi", type="primary", use_container_width=True)
 
-            if accedi_btn:
-                ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
-                if ok_auth:
-                    _reset_sessione_utente()
-                    st.session_state["autenticato"] = True
-                    st.session_state["utente_corrente"] = nome_valido
-                    st.session_state["utente_autenticato"] = nome_valido
-                    # Salva il token firmato giornaliero nei parametri URL per sessione persistente su Mobile
-                    try:
-                        tok_nuovo = _genera_token_auth_url(nome_valido)
-                        if tok_nuovo:
-                            st.query_params["auth"] = tok_nuovo
-                    except Exception:
-                        pass
-                    st.rerun()
-                else:
-                    st.error("❌ Utente o password non validi. Riprova.")
+                if accedi_btn:
+                    ok_auth, nome_valido = _verifica_credenziali_matrix(utente_in, pwd_in)
+                    if ok_auth:
+                        _reset_sessione_utente()
+                        st.session_state["autenticato"] = True
+                        st.session_state["utente_corrente"] = nome_valido
+                        st.session_state["utente_autenticato"] = nome_valido
+                        # Salva il token firmato giornaliero nei parametri URL per sessione persistente su Mobile
+                        try:
+                            tok_nuovo = _genera_token_auth_url(nome_valido)
+                            if tok_nuovo:
+                                st.query_params["auth"] = tok_nuovo
+                        except Exception:
+                            pass
+                        # Rimuove subito dal DOM la card di Login prima del rerun (evita sovrapposizioni fantasma)
+                        login_slot.empty()
+                        st.rerun()
+                    else:
+                        st.error("❌ Utente o password non validi. Riprova.")
 
-        st.markdown(
-            "<div style='text-align:center; color:#94A3B8; font-size:0.76rem; margin-top:0.85rem;'>"
-            "🔒 Accesso protetto con crittografia SHA-256</div>",
-            unsafe_allow_html=True,
-        )
+            st.markdown(
+                "<div style='text-align:center; color:#94A3B8; font-size:0.76rem; margin-top:0.85rem;'>"
+                "🔒 Accesso protetto con crittografia SHA-256</div>",
+                unsafe_allow_html=True,
+            )
     st.stop()
 
 def render_box_account_sidebar():
@@ -5975,15 +5980,32 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     force_cnt = int(force_store.get(chiave_u, 0))
 
     if (not st.session_state.get("home_cascata_eseguita", False)) or (st.session_state.get("_home_hash_caricato") != hash_pf):
-        with st.spinner(f"👋 Ciao {nome_u}, analisi Pilota Automatico in corso..."):
-            snapshot = _esegui_cascata_home_cached(
-                chiave_u,
-                hash_pf,
-                force_cnt,
-                port_corrente_raw,
-                impostazioni,
-                semaforo_header,
+        loading_slot = st.empty()
+        with loading_slot.container():
+            st.markdown(
+                f"""
+                <div style="background:#131722; border:1px solid #334155; border-left:5px solid #10B981;
+                            border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1rem;">
+                    <div style="font-size:1.32rem; font-weight:800; color:#F8FAFC;">
+                        👋 Ciao {nome_u}, analisi Pilota Automatico in corso...
+                    </div>
+                    <div style="font-size:0.88rem; color:#E2E8F0; margin-top:6px;">
+                        Sto aggiornando quotazioni, salute portafoglio e segnali dei motori (alla riapertura entro 20 min sarà istantaneo).
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
+            with st.spinner("Elaborazione in corso..."):
+                snapshot = _esegui_cascata_home_cached(
+                    chiave_u,
+                    hash_pf,
+                    force_cnt,
+                    port_corrente_raw,
+                    impostazioni,
+                    semaforo_header,
+                )
+        loading_slot.empty()
         _applica_snapshot_home_a_session_state(snapshot)
         st.session_state["_home_hash_caricato"] = hash_pf
 
