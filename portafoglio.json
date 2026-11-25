@@ -173,21 +173,21 @@
     {
         "Ticker": "CRWD",
         "Tipo": "PAC",
-        "Quantita": 0.289957,
-        "Prezzo_Medio": 206.93,
+        "Quantita": 1.29,
+        "Prezzo_Medio": 193.79,
         "PAC_Settimanale": 10.0,
         "Categoria": "Azione",
         "Prezzo_Attuale_EUR": 202.46,
-        "Valore_Attuale": 37.96,
-        "PnL_EUR": -2.04,
-        "PnL_%": -5.1,
+        "Valore_Attuale": 261.17,
+        "PnL_EUR": 11.18,
+        "PnL_%": 4.47,
         "Trend": "🔴 Forte -",
         "Earnings": "🟡 Utili tra 14gg",
         "Variazione_Pct": -1.75,
         "Prezzo_Attuale_USD": 222.65,
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🟢 BY: 06/11/2026 (+2.5%)",
-        "Valore_Carico": 40.0,
+        "Valore_Carico": 249.99,
         "Variazione_Abs": 8.75
     }
 ]

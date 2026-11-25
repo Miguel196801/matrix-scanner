@@ -1,5 +1,14 @@
 [
     {
+        "Data": "2026-11-25 20:51",
+        "Ticker": "CRWD",
+        "Operazione": "Mediazione / Incremento",
+        "Tipo": "PAC",
+        "Quantita": 1.0,
+        "Prezzo_EUR": 189.98,
+        "Totale_EUR": 189.98
+    },
+    {
         "Data": "2026-11-16 22:03",
         "Ticker": "ONDS",
         "Operazione": "Aggiunta Quote",
