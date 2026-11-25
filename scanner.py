@@ -2378,8 +2378,8 @@ def calcola_liquidita_totale():
         for p in port_u
     )
     if base_versata == 0.0 and cap_inv_u == 0.0:
-        return round(incassi_vendite, 2)
-    return round(base_versata - cap_inv_u + incassi_vendite, 2)
+        return round(max(0.0, incassi_vendite), 2)
+    return round(max(0.0, base_versata - cap_inv_u + incassi_vendite), 2)
 
 def elimina_operazione_vendita(id_op):
     try:
@@ -4365,14 +4365,46 @@ def esegui_scansione_completa_motore(
     st.session_state.scansione_completata = True
     st.session_state["home_cascata_eseguita"] = True
 
+@st.cache_data(ttl=900, show_spinner=False)
+def _verifica_qqq_regime_verde():
+    """Verifica se il Nasdaq 100 (QQQ) è in pieno regime VERDE sopra SMA 50 e SMA 200."""
+    try:
+        df_q = yf.Ticker("QQQ").history(period="1y", interval="1d")
+        if df_q is None or df_q.empty or len(df_q) < 200:
+            return False, "QQQ N/D"
+        closes = df_q["Close"].dropna()
+        if len(closes) < 200:
+            return False, "QQQ N/D"
+        p_q = float(closes.iloc[-1])
+        sma50_q = float(closes.rolling(50).mean().iloc[-1])
+        sma200_q = float(closes.rolling(200).mean().iloc[-1])
+        if p_q >= sma50_q and p_q >= sma200_q:
+            return True, f"QQQ verde (${p_q:.2f} sopra SMA50/SMA200)"
+        if p_q < sma200_q:
+            return False, f"QQQ sotto SMA200 (${p_q:.2f} < ${sma200_q:.2f})"
+        return False, f"QQQ in correzione sotto SMA50 (${p_q:.2f} < ${sma50_q:.2f})"
+    except Exception:
+        return False, "QQQ N/D"
+
 def render_home_pilota_automatico(impostazioni, semaforo_header):
     """
     Renderizza la '🏠 Home Page — Pilota Automatico' super-semplificata ad alto contrasto:
     esegue automaticamente in cascata aggiornamento quotazioni, salute portafoglio e scansione
-    completa del motore, poi mostra solo le 2 metriche chiave e il riquadro '🧭 COSA DEVO FARE OGGI'.
+    completa del motore, poi mostra solo le 2 metriche chiave, privacy occhiolino e
+    il riquadro '🧭 COSA DEVO FARE OGGI' con logica anti-panico settoriale (SPY/QQQ + SEC Form 4).
     """
     nome_u = PROFILO_ATTIVO.get("nome") or st.session_state.get("utente_corrente") or "Utente"
+    chiave_u = PROFILO_ATTIVO.get("chiave", "fabio")
     eurusd_live = get_live_eurusd()
+
+    # Sincronizza lo stato privacy 'nascondi_saldi' con il Terminale Completo (privacy_saldi.json)
+    _p_file_home = "privacy_saldi.json"
+    if "nascondi_saldi" not in st.session_state:
+        try:
+            with open(_p_file_home, "r", encoding="utf-8") as _fh:
+                st.session_state.nascondi_saldi = bool(json.load(_fh).get("nascondi", False))
+        except Exception:
+            st.session_state.nascondi_saldi = False
 
     # 1) Flusso automatico in cascata subito dopo il Login (o su click manuale '🔄 Aggiorna Analisi')
     if not st.session_state.get("home_cascata_eseguita", False):
@@ -4427,9 +4459,9 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         pbar_home.empty()
         st.rerun()
 
-    # 2) Intestazione pulita della Home Page + pulsante '🔄 Aggiorna Analisi'
+    # 2) Intestazione pulita della Home Page + pulsanti '👁️ Nascondi importi' e '🔄 Aggiorna Analisi'
     _agg_ora_h = leggi_ultimo_agg_prezzi()
-    c_hdr_l, c_hdr_r = st.columns([3.2, 1.0])
+    c_hdr_l, c_hdr_priv, c_hdr_r = st.columns([2.8, 0.95, 1.05])
     with c_hdr_l:
         st.markdown(
             f"""
@@ -4445,13 +4477,24 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             """,
             unsafe_allow_html=True,
         )
+    with c_hdr_priv:
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        lbl_priv = "👁️ Mostra importi" if st.session_state.nascondi_saldi else "👁️ Nascondi importi"
+        if st.button(lbl_priv, use_container_width=True, key="btn_home_privacy_importi"):
+            st.session_state.nascondi_saldi = not st.session_state.nascondi_saldi
+            try:
+                with open(_p_file_home, "w", encoding="utf-8") as _fh_w:
+                    json.dump({"nascondi": st.session_state.nascondi_saldi}, _fh_w)
+            except Exception:
+                pass
+            st.rerun()
     with c_hdr_r:
         st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
         if st.button("🔄 Aggiorna Analisi", type="primary", use_container_width=True, key="btn_home_aggiorna_cascata"):
             st.session_state["home_cascata_eseguita"] = False
             st.rerun()
 
-    # Calcolo delle 2 sole metriche essenziali del portafoglio
+    # Calcolo esatto di Valore Azioni, Totale Investito, Liquidità Libera Reale e Valore Totale Portafoglio
     port_h = st.session_state.get("portafoglio") or []
     val_pos_h = 0.0
     cap_inv_h = 0.0
@@ -4464,10 +4507,30 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             val_pos_h += q_p * float(att_p)
         else:
             val_pos_h += q_p * pmc_p
+
+    # Liquidità Libera ESCLUSIVAMENTE reale (senza mai sommare liquidita_aggiuntiva):
+    # - Per Fabio: saldo reale Trade Republic da calcola_liquidita_totale()
+    # - Per Lisi (310.00 €) e Alessia (0.00 €): max(0.0, Capitale_Versato_Utente - Totale_Investito_Attuale)
+    if chiave_u == "fabio":
+        liq_libera_h = round(max(0.0, float(calcola_liquidita_totale() or 0.0)), 2)
+    else:
+        if isinstance(impostazioni, dict) and impostazioni.get("capitale_versato") is not None:
+            cap_versato_u = float(impostazioni.get("capitale_versato") or 0.0)
+        else:
+            cap_versato_u = CAPITALE_VERSATO_DEFAULT
+        liq_libera_h = round(max(0.0, cap_versato_u - cap_inv_h), 2)
+
+    # Valore Totale Portafoglio = Valore_Attuale_Azioni + Liquidità_Libera_Reale
+    val_totale_port_h = round(val_pos_h + liq_libera_h, 2)
     pnl_eur_h = val_pos_h - cap_inv_h
     pnl_pct_h = ((val_pos_h / cap_inv_h) - 1.0) * 100.0 if cap_inv_h > 0 else 0.0
     col_pnl_h = "#4ADE80" if pnl_eur_h >= 0 else "#F87171"
-    liq_libera_h = calcola_liquidita_totale()
+    nascondi_eur = bool(st.session_state.get("nascondi_saldi", False))
+
+    str_val_tot = "€ ••••" if nascondi_eur else f"€ {val_totale_port_h:,.2f}"
+    str_val_az = "€ ••••" if nascondi_eur else f"€ {val_pos_h:,.2f}"
+    str_liq_lib = "€ ••••" if nascondi_eur else f"€ {liq_libera_h:,.2f}"
+    str_pnl_eur = "€ ••••" if nascondi_eur else f"€ {pnl_eur_h:+,.2f}"
 
     # 2 Metriche grandi ad alto contrasto (testi bianchi su card scure)
     m_c1, m_c2 = st.columns(2)
@@ -4481,10 +4544,10 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 </div>
                 <div style="font-family:'JetBrains Mono', monospace; font-size:2.05rem; font-weight:800;
                             color:#F8FAFC; margin-top:6px;">
-                    € {val_pos_h:,.2f}
+                    {str_val_tot}
                 </div>
                 <div style="font-size:0.82rem; color:#CBD5E1; margin-top:4px;">
-                    Capitale investito: € {cap_inv_h:,.2f} &nbsp;|&nbsp; Liquidità libera: € {liq_libera_h:,.2f}
+                    Azioni: {str_val_az} &nbsp;|&nbsp; Liquidità libera: {str_liq_lib}
                 </div>
             </div>
             """,
@@ -4500,7 +4563,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 </div>
                 <div style="font-family:'JetBrains Mono', monospace; font-size:2.05rem; font-weight:800;
                             color:{col_pnl_h}; margin-top:6px;">
-                    € {pnl_eur_h:+,.2f} <span style="font-size:1.30rem;">({pnl_pct_h:+.2f}%)</span>
+                    {str_pnl_eur} <span style="font-size:1.30rem;">({pnl_pct_h:+.2f}%)</span>
                 </div>
                 <div style="font-size:0.82rem; color:#CBD5E1; margin-top:4px;">
                     Posizioni attive: {len(port_h)} titoli monitorati automaticamente
@@ -4510,9 +4573,16 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             unsafe_allow_html=True,
         )
 
-    # 3) Riquadro unico "🧭 COSA DEVO FARE OGGI"
+    # 3) Riquadro unico "🧭 COSA DEVO FARE OGGI" con logica anti-panico settoriale (SPY/QQQ + SEC Form 4)
+    spy_stato = str((semaforo_header or {}).get("stato", "giallo")).lower()
+    spy_verde = (spy_stato == "verde")
+    qqq_verde, qqq_nota = _verifica_qqq_regime_verde()
+    mercato_pieno_verde = bool(spy_verde and qqq_verde)
+
     salute_map = st.session_state.get("home_salute_portafoglio") or {}
     vendite_azioni = []
+    prese_profitto = []
+    monitora_recupero = []
     avvisi_speculativi = []
     tickers_port_nomi = []
 
@@ -4531,11 +4601,12 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         pnl_p = ((att_p / pmc_p) - 1.0) * 100.0 if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_pct", 0) or 0)
         pnl_e = (att_p - pmc_p) * q_p if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_eur", 0) or 0)
 
-        # Criterio 1: Target di profitto vero (>= +20%)
-        if pnl_p >= 20.0:
-            vendite_azioni.append(
-                f"🔴 <b>AZIONE: VENDI {tk}</b> — Target di profitto raggiunto (<b>{pnl_p:+.1f}%</b> / <b>€ {pnl_e:+,.2f}</b>): "
-                f"consolida il guadagno e libera nuova liquidità."
+        # Criterio 1: Presa profitto su guadagni molto elevati (>= +35%)
+        if pnl_p >= 35.0:
+            str_gain_e = "€ ••••" if nascondi_eur else f"€ {pnl_e:+,.2f}"
+            prese_profitto.append(
+                f"💰 <b>CONSIDERA PRESA PROFITTO: {tk} ({pnl_p:+.1f}%)</b> ({str_gain_e}) — "
+                f"Puoi consolidare il guadagno oppure liberare liquidità per finanziare un nuovo segnale BUY."
             )
             continue
 
@@ -4544,19 +4615,43 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         if azienda_sana:
             continue
 
-        # Criterio 2: Deterioramento strutturale grave (Fase 4 confermata sotto SMA 200 con S-Score debole < 65)
+        # Criterio 2: Titolo in potenziale deterioramento (Fase 4 sotto SMA 200 con S-Score < 65)
         if ("FASE 4" in fase_s) and (sopra_200 is False) and (s_sc < 65):
-            # Distingue vecchie posizioni speculative in forte perdita (da liquidare solo vicino al pareggio)
-            if s_sc < 55 and pnl_p < -8.0:
-                avvisi_speculativi.append(
-                    f"🟠 <b>POSIZIONE SPECULATIVA ({tk})</b> — Sotto SMA 200 in Fase 4 (S-Score {s_sc}/100, P&amp;L {pnl_p:+.1f}%): "
-                    f"non svendere nel panico, pianifica l'uscita quando risale vicino al pareggio."
+            # Verifica acquisti ufficiali SEC Form 4 negli ultimi 90 giorni (es. APLD)
+            n_acq_sec = 0
+            try:
+                sec_info_p = get_sec_insider_buys_90gg(tk, max_docs=12) if "get_sec_insider_buys_90gg" in globals() else None
+                n_acq_sec = int((sec_info_p or {}).get("num_acquisti") or 0)
+            except Exception:
+                n_acq_sec = 0
+            ha_insider_sec = n_acq_sec > 0
+
+            # Logica anti-panico settoriale: NON proporre MAI vendita in perdita se SPY o QQQ è in correzione
+            # (rosso/giallo) oppure se il titolo presenta acquisti ufficiali SEC Form 4 negli ultimi 90 giorni.
+            if (not mercato_pieno_verde) or ha_insider_sec:
+                motivi_calma = []
+                if not mercato_pieno_verde:
+                    motivi_calma.append(f"mercato generale SPY={spy_stato.upper()} / {qqq_nota}")
+                if ha_insider_sec:
+                    motivi_calma.append(f"{n_acq_sec} acquisti ufficiali Insider SEC Form 4 (90gg)")
+                dettaglio_calma = " + ".join(motivi_calma)
+                monitora_recupero.append(
+                    f"🟡 <b>MONITORA RECUPERO — {tk}</b> risente della correzione generale/settoriale "
+                    f"(o ha acquisti Insider SEC): non vendere sui minimi di mercato "
+                    f"<span style='color:#CBD5E1; font-size:0.84rem;'>({dettaglio_calma}; P&amp;L {pnl_p:+.1f}%)</span>."
                 )
             else:
-                vendite_azioni.append(
-                    f"🔴 <b>AZIONE: VENDI {tk}</b> — Deterioramento strutturale grave (<b>Fase 4 confermata</b> sotto SMA 200, "
-                    f"S-Score debole <b>{s_sc}/100</b>, P&amp;L {pnl_p:+.1f}%)."
-                )
+                # Mercato generale SPY + QQQ in pieno regime VERDE, zero acquisti SEC e titolo crolla da solo
+                if s_sc < 55 and pnl_p < -8.0:
+                    avvisi_speculativi.append(
+                        f"🟠 <b>POSIZIONE SPECULATIVA ({tk})</b> — Crollo isolato sotto SMA 200 in Fase 4 "
+                        f"(S-Score {s_sc}/100, P&amp;L {pnl_p:+.1f}%): non svendere nel panico, pianifica l'uscita vicino al pareggio."
+                    )
+                else:
+                    vendite_azioni.append(
+                        f"🔴 <b>AZIONE: VENDI {tk}</b> — Deterioramento strutturale isolato con mercato SPY/QQQ in regime VERDE "
+                        f"(<b>Fase 4 confermata</b> sotto SMA 200, S-Score <b>{s_sc}/100</b>, zero acquisti SEC, P&amp;L {pnl_p:+.1f}%)."
+                    )
 
     # Costruisce blocco HTML "SUL PORTAFOGLIO ATTUALE"
     if not port_h:
@@ -4564,29 +4659,32 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             "<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
             "🟢 <b>PORTAFOGLIO VUOTO</b> — Non hai posizioni aperte al momento.</div>"
         )
-    elif vendite_azioni:
-        righe_v = "".join(
-            f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55; margin-bottom:6px;'>{r}</div>"
-            for r in vendite_azioni
-        )
-        righe_sp = "".join(
-            f"<div style='color:#E2E8F0; font-size:0.88rem; line-height:1.5; margin-top:4px;'>{r}</div>"
-            for r in avvisi_speculativi
-        )
-        blocco_port_html = righe_v + righe_sp
     else:
-        lista_tk_str = ", ".join(tickers_port_nomi)
-        blocco_port_html = (
-            f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55;'>"
-            f"🟢 <b>NESSUNA VENDITA</b> — I tuoi titoli (<b>{lista_tk_str}</b>) sono aziende solide: "
-            f"resta fermo e lascia lavorare il portafoglio (o valuta eventuale DCA solo se hai liquidità dedicata).</div>"
-        )
-        if avvisi_speculativi:
-            blocco_port_html += "".join(
-                f"<div style='color:#E2E8F0; font-size:0.88rem; line-height:1.5; margin-top:8px; "
-                f"padding-top:6px; border-top:1px solid #1E293B;'>{r}</div>"
-                for r in avvisi_speculativi
+        parti_port = []
+        if vendite_azioni:
+            for r in vendite_azioni:
+                parti_port.append(f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55; margin-bottom:6px;'>{r}</div>")
+        if prese_profitto:
+            for r in prese_profitto:
+                parti_port.append(f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55; margin-bottom:6px;'>{r}</div>")
+        if monitora_recupero:
+            for r in monitora_recupero:
+                parti_port.append(f"<div style='color:#F8FAFC; font-size:0.93rem; line-height:1.55; margin-bottom:6px;'>{r}</div>")
+        if not vendite_azioni:
+            lista_tk_str = ", ".join(tickers_port_nomi)
+            parti_port.insert(
+                0,
+                f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.55; margin-bottom:6px;'>"
+                f"🟢 <b>NESSUNA VENDITA</b> — I tuoi titoli (<b>{lista_tk_str}</b>) sono aziende solide: "
+                f"resta fermo e lascia lavorare il portafoglio (o valuta eventuale DCA solo se hai liquidità dedicata).</div>"
             )
+        if avvisi_speculativi:
+            for r in avvisi_speculativi:
+                parti_port.append(
+                    f"<div style='color:#E2E8F0; font-size:0.88rem; line-height:1.5; margin-top:6px; "
+                    f"padding-top:6px; border-top:1px solid #1E293B;'>{r}</div>"
+                )
+        blocco_port_html = "".join(parti_port)
 
     # Costruisce blocco HTML "SUI NUOVI ACQUISTI" (ESCLUSIVAMENTE BUY NUOVO TOP 3 di pattern_engine.py)
     pat_alerts_h = st.session_state.get("pattern_alerts") or {}
@@ -4617,6 +4715,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             if imp_per_ord < 30.0:
                 ordini_pronti = ordini_pronti[:1]
                 imp_per_ord = round(min(liq_libera_h, 500.0), 2)
+            str_imp_ord = "€ ••••" if nascondi_eur else f"€ {imp_per_ord:,.2f}"
             for al in ordini_pronti:
                 tk_o = str(al.get("ticker", "")).strip().upper()
                 trig_y = float(al.get("trigger_y") or 0.0)
@@ -4629,7 +4728,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 righe_ord.append(
                     f"<div style='color:#F8FAFC; font-size:0.95rem; line-height:1.6; margin-bottom:8px; "
                     f"padding:0.75rem 0.9rem; background:#0B0E11; border:1px solid #10B981; border-radius:8px;'>"
-                    f"🚀 <b>ORDINE PRONTO:</b> Acquista <b>€ {imp_per_ord:,.2f}</b> di <b>{tk_o}</b> a mercato "
+                    f"🚀 <b>ORDINE PRONTO:</b> Acquista <b>{str_imp_ord}</b> di <b>{tk_o}</b> a mercato "
                     f"(dopo le 15:45 italiane per avere lo spread migliore), verificando che il prezzo non superi "
                     f"<b>{simb_o}{max_entry:.2f}</b> — Stop Loss a <b>{simb_o}{stop_p:.2f}</b> — "
                     f"Target a <b>{simb_o}{targ_p:.2f}</b> (Orizzonte: <b>{durata_o}</b>).</div>"
@@ -4641,7 +4740,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 "⏳ <b>NESSUN ACQUISTO OGGI</b> — Attendi: nessun titolo ha ancora confermato la rottura del livello d'ingresso.</div>"
             )
 
-    bordo_box_oggi = "#EF4444" if vendite_azioni else "#10B981"
+    bordo_box_oggi = "#EF4444" if vendite_azioni else ("#F59E0B" if monitora_recupero else "#10B981")
     st.markdown(
         f"""
         <div style="background:#131722; border:1px solid #334155; border-left:5px solid {bordo_box_oggi};
