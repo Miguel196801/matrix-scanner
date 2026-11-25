@@ -118,7 +118,8 @@ def _reset_sessione_utente():
         "vista_attiva", "home_cascata_eseguita", "home_salute_portafoglio",
         "risultati_radar_ignition_80", "insider_results",
         "insider_promossi_oggi", "ai_palantir_candidati",
-        "home_anteprima_punto_attiva",
+        "home_anteprima_punto_attiva", "_home_hash_caricato",
+        "home_snapshot_decisionale",
     ]
     for k in chiavi_reset:
         st.session_state.pop(k, None)
@@ -249,10 +250,63 @@ def _cambia_password_utente_locale(username, vecchia_pwd, nuova_pwd):
         return True, "Password aggiornata e salvata in utenti_auth.json."
     return False, "Impossibile scrivere utenti_auth.json (ambiente in sola lettura)."
 
+def _get_data_giornaliera_auth_italia():
+    """Restituisce la data odierna nel fuso orario italiano (YYYY-MM-DD) per la firma giornaliera del token."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+    except Exception:
+        from datetime import timezone
+        return datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d")
+
+def _genera_firma_token_auth(username_lower, hashes_utente, data_str):
+    """Genera una firma SHA-256 giornaliera legata all'utente e agli hash delle sue credenziali."""
+    segreto_extra = ""
+    try:
+        segreto_extra = str(st.secrets.get("GITHUB_TOKEN", "") or st.secrets.get("AUTH_SECRET", ""))[:16]
+    except Exception:
+        segreto_extra = ""
+    base_hashes = "|".join(sorted([str(h).lower() for h in (hashes_utente or [])]))
+    payload = f"MATRIX_PRO_MOBILE_AUTH_V1|{username_lower}|{data_str}|{base_hashes}|{segreto_extra}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+def _genera_token_auth_url(username):
+    """Crea il token firmato '<utente>:<firma_sha256_giornaliera>' da salvare in st.query_params['auth']."""
+    u_key = str(username or "").strip().lower()
+    if not u_key:
+        return ""
+    mappa = _carica_mappa_credenziali()
+    info = mappa.get(u_key)
+    if not info:
+        return ""
+    data_oggi = _get_data_giornaliera_auth_italia()
+    firma = _genera_firma_token_auth(u_key, info.get("hashes", []), data_oggi)
+    return f"{u_key}:{firma}"
+
+def _verifica_token_auth_url(token_raw):
+    """Verifica il token firmato letto da st.query_params['auth'] e restituisce (valido, nome_canonico)."""
+    tok = str(token_raw or "").strip()
+    if ":" not in tok:
+        return False, ""
+    u_part, sig_part = tok.split(":", 1)
+    u_key = u_part.strip().lower()
+    sig_clean = sig_part.strip().lower()
+    if not u_key or not sig_clean:
+        return False, ""
+    mappa = _carica_mappa_credenziali()
+    info = mappa.get(u_key)
+    if not info:
+        return False, ""
+    data_oggi = _get_data_giornaliera_auth_italia()
+    firma_attesa = _genera_firma_token_auth(u_key, info.get("hashes", []), data_oggi)
+    if hmac.compare_digest(sig_clean, firma_attesa):
+        return True, info["username"]
+    return False, ""
+
 def richiedi_login_matrix():
     """
     Blocca l'accesso all'intera app finché st.session_state['autenticato'] non è True.
-    Mostra esclusivamente la schermata di login mobile-first stile EV Roadbook Italia.
+    Supporta sessione persistente su browser mobile tramite token firmato giornaliero in st.query_params['auth'].
     """
     if "autenticato" not in st.session_state:
         st.session_state["autenticato"] = False
@@ -261,6 +315,24 @@ def richiedi_login_matrix():
 
     # Assicura che utenti_auth.json venga inizializzato già al primo avvio
     _assicura_file_utenti_auth()
+
+    # Ripristino automatico sessione al ricaricamento del browser mobile (es. ritorno da Trade Republic)
+    try:
+        tok_url = st.query_params.get("auth")
+        if isinstance(tok_url, list):
+            tok_url = tok_url[0] if tok_url else ""
+        if tok_url:
+            ok_tok, nome_tok = _verifica_token_auth_url(tok_url)
+            if ok_tok:
+                st.session_state["autenticato"] = True
+                st.session_state["utente_corrente"] = nome_tok
+                st.session_state["utente_autenticato"] = nome_tok
+                return
+            else:
+                # Token scaduto o non valido: ripulisce il parametro URL
+                st.query_params.clear()
+    except Exception:
+        pass
 
     st.markdown(
         """
@@ -389,6 +461,13 @@ def richiedi_login_matrix():
                     st.session_state["autenticato"] = True
                     st.session_state["utente_corrente"] = nome_valido
                     st.session_state["utente_autenticato"] = nome_valido
+                    # Salva il token firmato giornaliero nei parametri URL per sessione persistente su Mobile
+                    try:
+                        tok_nuovo = _genera_token_auth_url(nome_valido)
+                        if tok_nuovo:
+                            st.query_params["auth"] = tok_nuovo
+                    except Exception:
+                        pass
                     st.rerun()
                 else:
                     st.error("❌ Utente o password non validi. Riprova.")
@@ -425,11 +504,16 @@ def render_box_account_sidebar():
                         st.success(f"✅ {msg_c}")
                     else:
                         st.error(f"❌ {msg_c}")
-    if st.sidebar.button("🚪 Esci", use_container_width=True, key="btn_logout_matrix"):
+    if st.sidebar.button("🚪 Esci (Logout)", use_container_width=True, key="btn_logout_matrix"):
         st.session_state["autenticato"] = False
         st.session_state.pop("utente_corrente", None)
         st.session_state.pop("utente_autenticato", None)
         _reset_sessione_utente()
+        # Svuota i parametri URL (incluso il token auth) per chiudere pulitamente la sessione
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
         st.rerun()
 
 # Esegue subito il controllo di accesso prima di caricare portafoglio, dati o sidebar
@@ -5620,14 +5704,256 @@ def _disegna_card_punto_periodico(portafoglio, modalita, etichetta_fin):
         unsafe_allow_html=True,
     )
 
+@st.cache_resource
+def _get_home_force_counter_store():
+    """Archivio in memoria di processo per il contatore di refresh manuale Home di ciascun utente."""
+    return {}
+
+class _NoOpProgress:
+    """Progress bar fittizia usata dentro @st.cache_data per evitare widget replay/warning."""
+    def progress(self, *args, **kwargs):
+        return None
+    def empty(self):
+        return None
+
+def _calcola_hash_portafoglio_cache(portafoglio, impostazioni):
+    """
+    Calcola un hash SHA-256 stabile della struttura del portafoglio e della watchlist dell'utente
+    (ignorando i prezzi live volatili così il ricaricamento del browser mobile fa CACHE HIT istantaneo).
+    """
+    righe_strutt = []
+    for p in (portafoglio or []):
+        if not isinstance(p, dict):
+            continue
+        tk = str(p.get("Ticker", "")).strip().upper()
+        if not tk:
+            continue
+        righe_strutt.append((
+            tk,
+            str(p.get("Tipo", "Spot")).strip().upper(),
+            round(float(p.get("Quantita", 0) or 0), 6),
+            round(float(p.get("Prezzo_Medio", 0) or 0), 4),
+            str(p.get("Data_Acquisto") or p.get("data_acquisto") or "")[:10],
+        ))
+    righe_strutt.sort()
+    imp_strutt = {
+        "wl": str((impostazioni or {}).get("lista_ticker_default") or "").strip(),
+        "cat": str((impostazioni or {}).get("catalizzatori") or "").strip(),
+        "esc": str((impostazioni or {}).get("esclusioni") or "").strip(),
+        "cap": (impostazioni or {}).get("capitale_versato"),
+    }
+    raw = json.dumps({"p": righe_strutt, "i": imp_strutt}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+@st.cache_data(ttl=1200, show_spinner=False)
+def _esegui_cascata_home_cached(
+    utente_corrente,
+    hash_portafoglio,
+    force_refresh_counter,
+    _portafoglio_raw,
+    _impostazioni_raw,
+    _semaforo_header_raw,
+):
+    """
+    Esegue e mette in cache per 20 minuti (ttl=1200) l'intera cascata della Home Page Pilota Automatico:
+    quotazioni, salute portafoglio, scansione principale + pattern_engine, Radar IGNITION 80,
+    Insider SEC, Setup Palantir AI, PODC/Allocazione e pre-calcolo Top 1 / Riserva / DCA.
+    Chiave cache: (utente_corrente, hash_portafoglio, force_refresh_counter).
+    """
+    chiave_u = str(utente_corrente or "fabio").strip().lower()
+    eurusd_live = get_live_eurusd()
+    impostazioni_loc = dict(_impostazioni_raw or {})
+    semaforo_loc = dict(_semaforo_header_raw or calcola_semaforo_mercato() or {})
+    port_loc = [dict(p) for p in (_portafoglio_raw or []) if isinstance(p, dict)]
+
+    # 1) Aggiornamento quotazioni live portafoglio
+    try:
+        if port_loc:
+            port_loc = aggiorna_quotazioni_portafoglio(port_loc, eurusd_live)
+            st.session_state.portafoglio = port_loc
+            salva_ultimo_agg_prezzi()
+    except Exception:
+        pass
+
+    # 2) Download batch unico Market Data Hub condiviso
+    wl_home = str(impostazioni_loc.get("lista_ticker_default") or "")
+    cat_home = str(impostazioni_loc.get("catalizzatori") or "")
+    esc_home = str(impostazioni_loc.get("esclusioni") or "")
+    wl_list_h = [t.strip().upper() for t in wl_home.replace("\n", ",").split(",") if t.strip()]
+    port_tks_h = [str(p.get("Ticker", "")).strip().upper() for p in port_loc if p.get("Ticker")]
+    bt_list_h = [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",") if t.strip()]
+    ig_list_h = list(IGNITION_UNIVERSE) if "IGNITION_UNIVERSE" in globals() else []
+    tutti_tks_hub = tuple(sorted(list(set(wl_list_h + port_tks_h + bt_list_h + ig_list_h))))
+    hub_ohlc = _scarica_ohlc_batch_cached(tutti_tks_hub, period="1y")
+
+    # 3) Valutazione Salute Portafoglio (S-Score, SEC Form 4 'buys', SMA 200, WinRate 60gg, anzianità)
+    try:
+        salute_h = _valuta_salute_portafoglio_home(port_loc, eurusd_live, ohlc_map=hub_ohlc)
+    except Exception:
+        salute_h = {}
+    st.session_state["home_salute_portafoglio"] = salute_h
+
+    # 4) Scansione Principale + pattern_engine + Bacheca Segnali Attivi
+    noop_pb = _NoOpProgress()
+    esegui_scansione_completa_motore(
+        impostazioni=impostazioni_loc,
+        tickers_input=wl_home,
+        catalizzatori_input=cat_home,
+        esclusioni_input=esc_home,
+        period="1y",
+        sma_short=50,
+        sma_long=200,
+        eurusd_rate=eurusd_live,
+        ignore_fase_4=True,
+        semaforo_header=semaforo_loc,
+        salva_impostazioni=False,
+        progress_bar=noop_pb,
+        mostra_info_avvio=False,
+        ohlc_map=hub_ohlc,
+        max_docs_sec=8,
+    )
+    if isinstance(st.session_state.get("portafoglio"), list) and st.session_state.get("portafoglio"):
+        port_loc = [dict(p) for p in st.session_state.get("portafoglio")]
+    salute_h = st.session_state.get("home_salute_portafoglio") or salute_h
+
+    # 5) Radar IGNITION 80 + Insider SEC leggero + Setup Palantir AI (sola proposta)
+    radar_rows = []
+    try:
+        radar_rows, _ = esegui_radar_ignition_80(watchlist_str=wl_home, ohlc_map=hub_ohlc, progress_bar=None)
+    except Exception:
+        radar_rows = []
+    ins_rows = []
+    try:
+        ins_rows, _ = esegui_scansione_insider_sec(
+            watchlist_str=wl_home,
+            portafoglio=port_loc,
+            solo_con_insider=True,
+            min_s_score=55,
+            max_dist_min=30,
+            include_panier_esteso=False,
+            max_docs_sec=8,
+            progress_bar=None,
+        )
+    except Exception:
+        ins_rows = []
+    pal_cands = []
+    try:
+        pal_cands, _, _ = esegui_scansione_ai_palantir(
+            watchlist_str=wl_home,
+            period="1y",
+            eurusd_rate=eurusd_live,
+            ohlc_map=hub_ohlc,
+            scrivi_paper=False,
+            progress_bar=None,
+        )
+    except Exception:
+        pal_cands = []
+
+    # 6) PODC & Allocazione su Liquidità Libera reale (senza +500 € finti)
+    res_podc = None
+    piano_alloc = None
+    liq_reale_alloc = 0.0
+    cap_inv_tmp = sum(float(p.get("Prezzo_Medio", 0) or 0) * float(p.get("Quantita", 0) or 0) for p in port_loc)
+    val_pos_tmp = sum(
+        float(p.get("Quantita", 0) or 0) * (float(p.get("Prezzo_Attuale_EUR")) if (p.get("Prezzo_Attuale_EUR") is not None and float(p.get("Prezzo_Attuale_EUR") or 0) > 0) else float(p.get("Prezzo_Medio", 0) or 0))
+        for p in port_loc
+    )
+    if chiave_u == "fabio":
+        liq_reale_alloc = round(max(0.0, float(calcola_liquidita_totale() or 0.0)), 2)
+    else:
+        cap_v_tmp = float(impostazioni_loc.get("capitale_versato")) if (impostazioni_loc.get("capitale_versato") is not None) else CAPITALE_VERSATO_DEFAULT
+        liq_reale_alloc = round(max(0.0, cap_v_tmp - cap_inv_tmp), 2)
+    try:
+        if port_loc:
+            res_podc = avvia_podc(port_loc, eurusd_live, cat_home, semaforo_loc.get("stato", "N/D"))
+            if liq_reale_alloc > 0:
+                piano_alloc = genera_piano_allocazione(port_loc, liq_reale_alloc, eurusd_live, wl_list_h)
+    except Exception:
+        pass
+
+    # 7) Pre-calcolo istantaneo delle decisioni Super-Automatismo (Top 1, Riserva Intelligente, DCA)
+    spy_st = str(semaforo_loc.get("stato", "giallo")).lower()
+    _, qqq_st, _ = _verifica_qqq_regime_verde()
+    pat_alerts_snap = st.session_state.get("pattern_alerts") or {}
+    val_tot_tmp = round(val_pos_tmp + liq_reale_alloc, 2)
+    top1_c, veto_m = _calcola_top1_super_automatismo(
+        portafoglio=port_loc,
+        val_totale_port=val_tot_tmp,
+        eurusd_rate=eurusd_live,
+        spy_stato=spy_st,
+        qqq_stato=qqq_st,
+        pattern_alerts=pat_alerts_snap,
+        radar_ignition_rows=radar_rows,
+        palantir_candidati=pal_cands,
+    )
+    riserva_snap = _trova_riserva_liquidita_intelligente(port_loc, salute_h)
+    dca_snap = _calcola_dca_doppio_binario(port_loc, salute_h, pat_alerts_snap, liq_reale_alloc)
+
+    return {
+        "portafoglio": port_loc,
+        "home_salute_portafoglio": salute_h,
+        "dashboard_stats": st.session_state.get("dashboard_stats"),
+        "pattern_alerts": pat_alerts_snap,
+        "pyramiding_alerts": st.session_state.get("pyramiding_alerts") or [],
+        "take_profit_alerts": st.session_state.get("take_profit_alerts") or [],
+        "zona_interesse_alerts": st.session_state.get("zona_interesse_alerts") or [],
+        "extended_hours_alerts": st.session_state.get("extended_hours_alerts") or [],
+        "df_fortezza": st.session_state.get("df_fortezza"),
+        "df_cavalli": st.session_state.get("df_cavalli"),
+        "df_monitor": st.session_state.get("df_monitor"),
+        "df_palantir": st.session_state.get("df_palantir"),
+        "risultati_radar_ignition_80": radar_rows,
+        "insider_results": ins_rows,
+        "ai_palantir_candidati": pal_cands,
+        "risultato_podc": res_podc,
+        "piano_allocazione": piano_alloc,
+        "liquidita_totale_alloc": liq_reale_alloc,
+        "home_snapshot_decisionale": {
+            "top1_cand": top1_c,
+            "veto_regime_msg": veto_m,
+            "riserva": riserva_snap,
+            "dca_cand": dca_snap,
+            "calcolato_alle": _get_now_italia().strftime("%H:%M"),
+        },
+    }
+
+def _applica_snapshot_home_a_session_state(snapshot):
+    """Ripopola istantaneamente tutte le chiavi di st.session_state dallo snapshot cachato."""
+    if not isinstance(snapshot, dict):
+        return
+    if isinstance(snapshot.get("portafoglio"), list):
+        st.session_state["portafoglio"] = snapshot["portafoglio"]
+    for k in (
+        "home_salute_portafoglio",
+        "dashboard_stats",
+        "pattern_alerts",
+        "pyramiding_alerts",
+        "take_profit_alerts",
+        "zona_interesse_alerts",
+        "extended_hours_alerts",
+        "df_fortezza",
+        "df_cavalli",
+        "df_monitor",
+        "df_palantir",
+        "risultati_radar_ignition_80",
+        "insider_results",
+        "ai_palantir_candidati",
+        "risultato_podc",
+        "piano_allocazione",
+        "liquidita_totale_alloc",
+        "home_snapshot_decisionale",
+    ):
+        if k in snapshot:
+            st.session_state[k] = snapshot[k]
+    st.session_state["scansione_completata"] = True
+    st.session_state["home_cascata_eseguita"] = True
+
 def render_home_pilota_automatico(impostazioni, semaforo_header):
     """
-    Renderizza la '🏠 Home Page — Pilota Automatico' con Super-Automatismo Decisionale:
-    1) Cascata unificata in cache condivisa (@st.cache_data ttl=900) di tutti i 5 motori.
-    2) 2 Metriche grandi ad alto contrasto + occhiolino privacy sincronizzato.
-    3) Riquadro unico '🧭 COSA DEVO FARE OGGI' (Portafoglio anti-panico, Top 1 Unico + 3 Scudi +
-       Riserva Intelligente Fonte A/B, DCA Doppio Binario).
-    4) Tendina Tabella Salute Portafoglio riordinata con colonna 'Insider SEC (90gg)'.
+    Renderizza la '🏠 Home Page — Pilota Automatico' con cache istantanea (@st.cache_data ttl=1200):
+    1) Al primo ingresso o su click '🔄 Aggiorna Analisi' esegue la cascata completa.
+    2) Al ricaricamento del browser mobile (es. ritorno da Trade Republic entro 20 min) ripopola
+       istantaneamente Home Page e Terminale Completo in ~0.2 secondi senza barre di attesa.
     """
     nome_u = PROFILO_ATTIVO.get("nome") or st.session_state.get("utente_corrente") or "Utente"
     chiave_u = PROFILO_ATTIVO.get("chiave", "fabio")
@@ -5642,126 +5968,24 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         except Exception:
             st.session_state.nascondi_saldi = False
 
-    # 1) Flusso automatico in cascata subito dopo il Login (o su click manuale '🔄 Aggiorna Analisi')
-    if not st.session_state.get("home_cascata_eseguita", False):
-        st.markdown(
-            f"""
-            <div style="background:#131722; border:1px solid #334155; border-left:5px solid #10B981;
-                        border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1rem;">
-                <div style="font-size:1.35rem; font-weight:800; color:#F8FAFC;">
-                    👋 Ciao {nome_u}, analisi completa in corso...
-                </div>
-                <div style="font-size:0.90rem; color:#E2E8F0; margin-top:6px;">
-                    Sto aggiornando quotazioni, salute del portafoglio, Breakout Matrix, Radar IGNITION, Insider SEC e Allocazione in cache condivisa.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        pbar_home = st.progress(0.05, text="1/5 • Aggiornamento prezzi live & download batch Market Data Hub...")
-        try:
-            if st.session_state.get("portafoglio"):
-                st.session_state.portafoglio = aggiorna_quotazioni_portafoglio(st.session_state.portafoglio, eurusd_live)
-                salva_ultimo_agg_prezzi()
-        except Exception:
-            pass
+    # 1) Esecuzione / Ripristino istantaneo dalla cache (@st.cache_data ttl=1200)
+    port_corrente_raw = st.session_state.get("portafoglio") or []
+    hash_pf = _calcola_hash_portafoglio_cache(port_corrente_raw, impostazioni)
+    force_store = _get_home_force_counter_store()
+    force_cnt = int(force_store.get(chiave_u, 0))
 
-        wl_home = str(impostazioni.get("lista_ticker_default") or "")
-        cat_home = str(impostazioni.get("catalizzatori") or "")
-        esc_home = str(impostazioni.get("esclusioni") or "")
-        wl_list_h = [t.strip().upper() for t in wl_home.replace("\n", ",").split(",") if t.strip()]
-        port_tks_h = [str(p.get("Ticker", "")).strip().upper() for p in (st.session_state.get("portafoglio") or []) if p.get("Ticker")]
-        bt_list_h = [t.strip().upper() for t in BIG_TECH_GROWTH_LIST.split(",") if t.strip()]
-        ig_list_h = list(IGNITION_UNIVERSE) if "IGNITION_UNIVERSE" in globals() else []
-        tutti_tks_hub = tuple(sorted(list(set(wl_list_h + port_tks_h + bt_list_h + ig_list_h))))
-        hub_ohlc = _scarica_ohlc_batch_cached(tutti_tks_hub, period="1y")
-
-        pbar_home.progress(0.22, text="2/5 • Valutazione Salute Portafoglio (S-Score, SEC Form 4, SMA 200, WinRate 60gg)...")
-        try:
-            st.session_state["home_salute_portafoglio"] = _valuta_salute_portafoglio_home(
-                st.session_state.get("portafoglio") or [],
-                eurusd_live,
-                ohlc_map=hub_ohlc,
+    if (not st.session_state.get("home_cascata_eseguita", False)) or (st.session_state.get("_home_hash_caricato") != hash_pf):
+        with st.spinner(f"👋 Ciao {nome_u}, analisi Pilota Automatico in corso..."):
+            snapshot = _esegui_cascata_home_cached(
+                chiave_u,
+                hash_pf,
+                force_cnt,
+                port_corrente_raw,
+                impostazioni,
+                semaforo_header,
             )
-        except Exception:
-            st.session_state["home_salute_portafoglio"] = {}
-
-        pbar_home.progress(0.35, text="3/5 • Scansione Principale + Pattern Engine + Bacheca Segnali Attivi...")
-        esegui_scansione_completa_motore(
-            impostazioni=impostazioni,
-            tickers_input=wl_home,
-            catalizzatori_input=cat_home,
-            esclusioni_input=esc_home,
-            period="1y",
-            sma_short=50,
-            sma_long=200,
-            eurusd_rate=eurusd_live,
-            ignore_fase_4=True,
-            semaforo_header=semaforo_header,
-            salva_impostazioni=False,
-            progress_bar=pbar_home,
-            mostra_info_avvio=False,
-            ohlc_map=hub_ohlc,
-            max_docs_sec=8,
-        )
-
-        pbar_home.progress(0.74, text="4/5 • Radar IGNITION 80 + Insider SEC (leggero) + Setup Palantir AI...")
-        try:
-            esegui_radar_ignition_80(watchlist_str=wl_home, ohlc_map=hub_ohlc, progress_bar=None)
-        except Exception:
-            pass
-        try:
-            esegui_scansione_insider_sec(
-                watchlist_str=wl_home,
-                portafoglio=st.session_state.get("portafoglio") or [],
-                solo_con_insider=True,
-                min_s_score=55,
-                max_dist_min=30,
-                include_panier_esteso=False,
-                max_docs_sec=8,
-                progress_bar=None,
-            )
-        except Exception:
-            pass
-        try:
-            esegui_scansione_ai_palantir(
-                watchlist_str=wl_home,
-                period="1y",
-                eurusd_rate=eurusd_live,
-                ohlc_map=hub_ohlc,
-                scrivi_paper=False,
-                progress_bar=None,
-            )
-        except Exception:
-            pass
-
-        pbar_home.progress(0.90, text="5/5 • Calcolo PODC & Allocazione su Liquidità Libera reale...")
-        try:
-            port_cur_h = st.session_state.get("portafoglio") or []
-            if port_cur_h:
-                st.session_state.risultato_podc = avvia_podc(
-                    port_cur_h,
-                    eurusd_live,
-                    cat_home,
-                    (semaforo_header or {}).get("stato", "N/D"),
-                )
-                # Calcola Liquidità Libera reale dell'utente (SENZA +500 € finti)
-                cap_inv_tmp = sum(float(p.get("Prezzo_Medio", 0) or 0) * float(p.get("Quantita", 0) or 0) for p in port_cur_h)
-                if chiave_u == "fabio":
-                    liq_reale_alloc = round(max(0.0, float(calcola_liquidita_totale() or 0.0)), 2)
-                else:
-                    cap_v_tmp = float(impostazioni.get("capitale_versato")) if (isinstance(impostazioni, dict) and impostazioni.get("capitale_versato") is not None) else CAPITALE_VERSATO_DEFAULT
-                    liq_reale_alloc = round(max(0.0, cap_v_tmp - cap_inv_tmp), 2)
-                st.session_state.liquidita_totale_alloc = liq_reale_alloc
-                if liq_reale_alloc > 0:
-                    st.session_state.piano_allocazione = genera_piano_allocazione(port_cur_h, liq_reale_alloc, eurusd_live, wl_list_h)
-        except Exception:
-            pass
-
-        pbar_home.progress(1.0, text="Analisi completata!")
-        pbar_home.empty()
-        st.session_state["home_cascata_eseguita"] = True
-        st.rerun()
+        _applica_snapshot_home_a_session_state(snapshot)
+        st.session_state["_home_hash_caricato"] = hash_pf
 
     # 2) Intestazione pulita della Home Page + pulsanti '👁️ Nascondi importi' e '🔄 Aggiorna Analisi'
     _agg_ora_h = leggi_ultimo_agg_prezzi()
@@ -5795,6 +6019,8 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     with c_hdr_r:
         st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
         if st.button("🔄 Aggiorna Analisi", type="primary", use_container_width=True, key="btn_home_aggiorna_cascata"):
+            # Incrementa force_refresh_counter per forzare il ricalcolo fresco della cascata
+            force_store[chiave_u] = int(force_store.get(chiave_u, 0)) + 1
             st.session_state["home_cascata_eseguita"] = False
             st.rerun()
 
@@ -5988,17 +6214,22 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     pat_alerts_h = st.session_state.get("pattern_alerts") or {}
     radar_ig_h = st.session_state.get("risultati_radar_ignition_80") or []
     palantir_h = st.session_state.get("ai_palantir_candidati") or []
+    snap_dec = st.session_state.get("home_snapshot_decisionale") or {}
 
-    top1_cand, veto_regime_msg = _calcola_top1_super_automatismo(
-        portafoglio=port_h,
-        val_totale_port=val_totale_port_h,
-        eurusd_rate=eurusd_live,
-        spy_stato=spy_stato,
-        qqq_stato=qqq_stato,
-        pattern_alerts=pat_alerts_h,
-        radar_ignition_rows=radar_ig_h,
-        palantir_candidati=palantir_h,
-    )
+    if "top1_cand" in snap_dec:
+        top1_cand = snap_dec.get("top1_cand")
+        veto_regime_msg = snap_dec.get("veto_regime_msg")
+    else:
+        top1_cand, veto_regime_msg = _calcola_top1_super_automatismo(
+            portafoglio=port_h,
+            val_totale_port=val_totale_port_h,
+            eurusd_rate=eurusd_live,
+            spy_stato=spy_stato,
+            qqq_stato=qqq_stato,
+            pattern_alerts=pat_alerts_h,
+            radar_ignition_rows=radar_ig_h,
+            palantir_candidati=palantir_h,
+        )
 
     ordine_buy_proposto = False
     if veto_regime_msg:
@@ -6038,7 +6269,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             and float(top1_cand.get("rr", 0)) >= 2.2
             and (top1_cand.get("is_breakout_matrix") or len(top1_cand.get("motori") or []) >= 2)
         )
-        riserva = _trova_riserva_liquidita_intelligente(port_h, salute_map) if top1_eccezionale else None
+        riserva = snap_dec.get("riserva") if ("riserva" in snap_dec) else (_trova_riserva_liquidita_intelligente(port_h, salute_map) if top1_eccezionale else None)
         if top1_eccezionale and riserva is not None:
             ordine_buy_proposto = True
             imp_sw = round(min(riserva["netto_eur"] + liq_libera_h, 500.0), 2)
@@ -6065,7 +6296,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     # Costruisce blocco HTML "3) DCA MATEMATICO DOPPIO BINARIO" (solo se liquidità >= 40 € e nessun nuovo BUY)
     blocco_dca_html = ""
     if (not ordine_buy_proposto) and liq_libera_h >= 40.0 and port_h:
-        dca_cand = _calcola_dca_doppio_binario(port_h, salute_map, pat_alerts_h, liq_libera_h)
+        dca_cand = snap_dec.get("dca_cand") if ("dca_cand" in snap_dec) else _calcola_dca_doppio_binario(port_h, salute_map, pat_alerts_h, liq_libera_h)
         if dca_cand is not None:
             taglia_dca, nota_comm_dca = _formatta_taglia_esecuzione_tr(dca_cand["importo_eur"], dca_cand["prezzo_eur"], nascondi_eur=nascondi_eur)
             str_pmc_old = "€ ••••" if nascondi_eur else f"€ {dca_cand['pmc_old']:.2f}"
