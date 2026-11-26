@@ -4557,30 +4557,11 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     vpoc_level, whale_badge = calcola_livello_balene(df)
     rsi_now = float(df['RSI'].iloc[-1]) if 'RSI' in df.columns and pd.notna(df['RSI'].iloc[-1]) else 50.0
     rsi_col = "#10B981" if rsi_now <= 30 else ("#EF4444" if rsi_now >= 70 else "#CE93D8")
-    titolo_main = f"<b>{tk_u}</b> {whale_badge}  {simb_g}{prezzo_attuale:.2f} <span style='color:{colore_titolo};'>({var_pct_oggi:+.2f}%)</span>  |  <span style='color:{rsi_col};'>RSI {rsi_now:.1f}</span>  [{timeframe.upper()}]"
+    _tn_title_tag = "  <span style='color:#38BDF8; font-weight:700;'>• 🛡️ Tom Nash</span>" if tn_g.get("scudo_tom_nash") else ""
+    titolo_main = f"<b>{tk_u}</b> {whale_badge} {simb_g}{prezzo_attuale:.2f} <span style='color:{colore_titolo};'>({var_pct_oggi:+.2f}%)</span> | <span style='color:{rsi_col};'>RSI {rsi_now:.1f}</span> [{timeframe.upper()}]{_tn_title_tag}"
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.70, 0.15, 0.15], subplot_titles=("", "Volume", f"RSI (14): {rsi_now:.1f}"))
 
-    # Badge discreto Scudo Tom Nash in alto a sinistra nell'area plot (ora che il titolo è fuori dalle candele)
-    if tn_g.get("scudo_tom_nash"):
-        fig.add_annotation(
-            text=" 🛡️ Scudo Tom Nash attivo ",
-            xref="x domain",
-            yref="y domain",
-            x=0.01,
-            y=0.98,
-            xanchor="left",
-            yanchor="top",
-            showarrow=False,
-            bgcolor="rgba(15, 36, 54, 0.88)",
-            bordercolor="#38BDF8",
-            borderwidth=1,
-            borderpad=3,
-            font=dict(size=10, color="#E0F2FE"),
-            row=1,
-            col=1,
-        )
-
-    # Tracce secondarie senza voce in legenda (mantiene legenda compatta su 1 sola riga anche su mobile)
+    # Tracce secondarie senza voce in legenda (mantiene legenda compatta in fondo sotto al grafico)
     if has_sma20:
         fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(0, 188, 212, 0.30)', width=1, dash='dot'), name='BB Sup', showlegend=False), row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.30)', width=1, dash='dot'), name='BB Inf', showlegend=False), row=1, col=1)
@@ -4785,9 +4766,9 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     fig.add_hline(y=70, line_dash="dash", line_color="#EF4444", line_width=1, row=3, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="#10B981", line_width=1, row=3, col=1)
 
-    # Layout compatto mobile-first: titolo fuori dall'area candele, legenda 1 sola riga, margini ridotti
+    # Layout pulito mobile-first: titolo in testa, pulsanti 1M..Tutto separati sotto, legenda in fondo sotto RSI
     fig.update_layout(
-        title=dict(text=titolo_main, x=0.01, y=0.985, xanchor="left", yanchor="top", font=dict(size=12, color="#F8FAFC")),
+        title=dict(text=titolo_main, x=0.01, y=0.988, xanchor="left", yanchor="top", font=dict(size=11, color="#F8FAFC")),
         height=height,
         dragmode="pan",
         xaxis_rangeslider_visible=False,
@@ -4795,22 +4776,21 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#131722',
         plot_bgcolor='#0B0E11',
         font=dict(family='Inter, sans-serif', color='#D1D4DC', size=11),
-        margin=dict(l=4, r=46, t=68, b=16),
+        margin=dict(l=4, r=46, t=66, b=54),
         hovermode='x unified',
         legend=dict(
             font=dict(size=10),
             orientation="h",
-            yanchor="bottom",
-            y=1.01,
+            yanchor="top",
+            y=-0.06,
             xanchor="left",
             x=0.0,
             tracegroupgap=4,
             bgcolor='rgba(19, 23, 34, 0.0)',
         ),
-        modebar=dict(bgcolor='rgba(19, 23, 34, 0.85)', color='#D1D4DC', activecolor='#2962FF'),
     )
 
-    # Rimozione buchi weekend solo sul Daily + selettori rapidi 1M / 3M / 6M / 1A / Tutto
+    # Rimozione buchi weekend solo sul Daily + selettori rapidi 1M / 3M / 6M / 1A / Tutto liberi da sovrapposizioni
     is_weekly = (interval == '1wk' or timeframe == '1wk')
     is_monthly = (interval == '1mo' or timeframe == '1mo')
     is_daily = (interval == '1d' and not is_weekly and not is_monthly)
@@ -4825,7 +4805,7 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
                 activecolor="#2962FF",
                 font=dict(color="#F8FAFC", size=10),
                 x=0.0,
-                y=1.075,
+                y=1.015,
                 xanchor="left",
                 yanchor="bottom",
                 buttons=[
@@ -8545,7 +8525,7 @@ with tab_confronto:
                         )
                         if fig_c:
                             fig_c = applica_controlli_grafico(fig_c, 1)
-                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]}, key=f"chart_conf_{t_curr}_{idx_c}_{j}")
+                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"chart_conf_{t_curr}_{idx_c}_{j}")
                             render_barra_intervalli_yahoo(t_curr, "conf", default_tf="3M")
                         else:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
@@ -8747,7 +8727,7 @@ with tab_portafoglio:
                             f"🛑 Stop: `{_sym_live}{_pat_live.get('stop_price'):.2f}` | R/R `1:{_pat_live.get('rr'):.2f}`"
                         )
                     fig_side = applica_controlli_grafico(fig_side, 2)
-                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]}, key=f"port_side_live_chart_{sel_t}")
+                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"port_side_live_chart_{sel_t}")
                     render_barra_intervalli_yahoo(sel_t, "port", default_tf="3M")
             with col_port_left:
                 _hdr_c1, _hdr_c2, _hdr_c3 = st.columns((1.25, 0.95, 1.15))
@@ -9759,7 +9739,7 @@ with tab_analisi:
                         f"🛑 Stop: `{_sym_an}{_pat_an.get('stop_price'):.2f}` | R/R `1:{_pat_an.get('rr'):.2f}`"
                     )
                 fig = applica_controlli_grafico(fig, 3)
-                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]})
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False})
             else:
                 st.error("Impossibile generare il grafico")
             if st.button("✖️ Chiudi grafico", use_container_width=True):
