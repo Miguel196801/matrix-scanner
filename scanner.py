@@ -6976,7 +6976,11 @@ def _calcola_hash_portafoglio_cache(portafoglio, impostazioni):
     raw = json.dumps({"p": righe_strutt, "i": imp_strutt}, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
-@st.cache_data(ttl=1200, show_spinner=False)
+@st.cache_resource
+def _get_home_snapshot_cache_store():
+    """Store in memoria di processo (TTL 1200s) per gli snapshot Home Page, con supporto a progress bar live su cache miss."""
+    return {}
+
 def _esegui_cascata_home_cached(
     utente_corrente,
     hash_portafoglio,
@@ -6984,20 +6988,40 @@ def _esegui_cascata_home_cached(
     _portafoglio_raw,
     _impostazioni_raw,
     _semaforo_header_raw,
+    progress_cb=None,
 ):
     """
     Esegue e mette in cache per 20 minuti (ttl=1200) l'intera cascata della Home Page Pilota Automatico:
-    quotazioni, salute portafoglio, scansione principale + pattern_engine, Radar IGNITION 80,
-    Insider SEC, Setup Palantir AI, PODC/Allocazione e pre-calcolo Top 1 / Riserva / DCA.
-    Chiave cache: (utente_corrente, hash_portafoglio, force_refresh_counter).
+    1) Quotazioni & Market Data Hub
+    2) Salute Portafoglio, Tom Nash & Insider SEC
+    3) Scansione principale + pattern_engine + Bacheca Segnali Attivi
+    4) Radar IGNITION 80, Insider SEC & Setup Palantir AI
+    5) Calcolo Top 1, Piano B Qualitativo & DCA Doppio Binario
+    Su cache hit (< 1200s) restituisce istantaneamente lo snapshot; su cache miss aggiorna progress_cb live.
     """
+    import time
+    cache_store = _get_home_snapshot_cache_store()
+    cache_key = (str(utente_corrente or "fabio").strip().lower(), str(hash_portafoglio or ""), int(force_refresh_counter or 0))
+    now_ts = time.monotonic()
+    cached_entry = cache_store.get(cache_key)
+    if cached_entry is not None and (now_ts - cached_entry[0]) < 1200.0:
+        return cached_entry[1]
+
+    def _notify(pct, msg):
+        if callable(progress_cb):
+            try:
+                progress_cb(pct, msg)
+            except Exception:
+                pass
+
     chiave_u = str(utente_corrente or "fabio").strip().lower()
     eurusd_live = get_live_eurusd()
     impostazioni_loc = dict(_impostazioni_raw or {})
     semaforo_loc = dict(_semaforo_header_raw or calcola_semaforo_mercato() or {})
     port_loc = [dict(p) for p in (_portafoglio_raw or []) if isinstance(p, dict)]
 
-    # 1) Aggiornamento quotazioni live portafoglio
+    # Fase 1/5: Quotazioni live portafoglio + Market Data Hub condiviso
+    _notify(15, "Fase 1/5 — Aggiorno quotazioni portafoglio e scarico Market Data Hub...")
     try:
         if port_loc:
             port_loc = aggiorna_quotazioni_portafoglio(port_loc, eurusd_live)
@@ -7006,7 +7030,6 @@ def _esegui_cascata_home_cached(
     except Exception:
         pass
 
-    # 2) Download batch unico Market Data Hub condiviso
     wl_home = str(impostazioni_loc.get("lista_ticker_default") or "")
     cat_home = str(impostazioni_loc.get("catalizzatori") or "")
     esc_home = str(impostazioni_loc.get("esclusioni") or "")
@@ -7017,14 +7040,16 @@ def _esegui_cascata_home_cached(
     tutti_tks_hub = tuple(sorted(list(set(wl_list_h + port_tks_h + bt_list_h + ig_list_h))))
     hub_ohlc = _scarica_ohlc_batch_cached(tutti_tks_hub, period="1y")
 
-    # 3) Valutazione Salute Portafoglio (S-Score, SEC Form 4 'buys', SMA 200, WinRate 60gg, anzianità)
+    # Fase 2/5: Salute Portafoglio (S-Score, Scudo Tom Nash, SEC Form 4 'buys', SMA 200, WinRate 60gg)
+    _notify(35, "Fase 2/5 — Valuto salute portafoglio, Scudo Tom Nash e Insider SEC...")
     try:
         salute_h = _valuta_salute_portafoglio_home(port_loc, eurusd_live, ohlc_map=hub_ohlc)
     except Exception:
         salute_h = {}
     st.session_state["home_salute_portafoglio"] = salute_h
 
-    # 4) Scansione Principale + pattern_engine + Bacheca Segnali Attivi
+    # Fase 3/5: Scansione Principale + pattern_engine + Bacheca Segnali Attivi
+    _notify(58, "Fase 3/5 — Eseguo scansione tecnica, figure grafiche e Bacheca Segnali...")
     noop_pb = _NoOpProgress()
     esegui_scansione_completa_motore(
         impostazioni=impostazioni_loc,
@@ -7047,7 +7072,8 @@ def _esegui_cascata_home_cached(
         port_loc = [dict(p) for p in st.session_state.get("portafoglio")]
     salute_h = st.session_state.get("home_salute_portafoglio") or salute_h
 
-    # 5) Radar IGNITION 80 + Insider SEC leggero + Setup Palantir AI (sola proposta)
+    # Fase 4/5: Radar IGNITION 80 + Insider SEC leggero + Setup Palantir AI
+    _notify(80, "Fase 4/5 — Analizzo Radar IGNITION 80, Insider SEC e Setup Palantir AI...")
     radar_rows = []
     try:
         radar_rows, _ = esegui_radar_ignition_80(watchlist_str=wl_home, ohlc_map=hub_ohlc, progress_bar=None)
@@ -7080,7 +7106,8 @@ def _esegui_cascata_home_cached(
     except Exception:
         pal_cands = []
 
-    # 6) PODC & Allocazione su Liquidità Libera reale (senza +500 € finti)
+    # Fase 5/5: Calcolo Top 1 Unico, Piano B Qualitativo & DCA Doppio Binario
+    _notify(95, "Fase 5/5 — Calcolo Top 1 Unico, Piano B Qualitativo e DCA Doppio Binario...")
     res_podc = None
     piano_alloc = None
     liq_reale_alloc = 0.0
@@ -7095,7 +7122,6 @@ def _esegui_cascata_home_cached(
         cap_v_tmp = float(impostazioni_loc.get("capitale_versato")) if (impostazioni_loc.get("capitale_versato") is not None) else CAPITALE_VERSATO_DEFAULT
         liq_reale_alloc = round(max(0.0, cap_v_tmp - cap_inv_tmp), 2)
 
-    # 7) Pre-calcolo istantaneo delle decisioni Super-Automatismo (Top 1, Piano B Qualitativo, DCA Doppio Binario)
     spy_st = str(semaforo_loc.get("stato", "giallo")).lower()
     _, qqq_st, _ = _verifica_qqq_regime_verde()
     pat_alerts_snap = st.session_state.get("pattern_alerts") or {}
@@ -7123,7 +7149,7 @@ def _esegui_cascata_home_cached(
         if _dca_b1 and int(_dca_b1.get("binario", 2)) == 1 and int(_dca_b1.get("s_score", 0)) >= 75 and float(_dca_b1.get("riduzione_rimb", 0)) >= 6.0:
             dca_piano_b_snap = _dca_b1
 
-    return {
+    snap_res = {
         "portafoglio": port_loc,
         "home_salute_portafoglio": salute_h,
         "dashboard_stats": st.session_state.get("dashboard_stats"),
@@ -7151,6 +7177,9 @@ def _esegui_cascata_home_cached(
             "calcolato_alle": _now_italia().strftime("%d/%m/%Y %H:%M"),
         },
     }
+    cache_store[cache_key] = (time.monotonic(), snap_res)
+    _notify(100, "Analisi completata!")
+    return snap_res
 
 def _applica_snapshot_home_a_session_state(snapshot):
     """Ripopola istantaneamente tutte le chiavi di st.session_state dallo snapshot cachato."""
@@ -7210,31 +7239,41 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     force_cnt = int(force_store.get(chiave_u, 0))
 
     if (not st.session_state.get("home_cascata_eseguita", False)) or (st.session_state.get("_home_hash_caricato") != hash_pf):
+        import time
+        t0_home = time.monotonic()
         loading_slot = st.empty()
         with loading_slot.container():
             st.markdown(
-                f"""
-                <div style="background:#131722; border:1px solid #334155; border-left:5px solid #10B981;
-                            border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1rem;">
-                    <div style="font-size:1.32rem; font-weight:800; color:#F8FAFC;">
-                        👋 Ciao {nome_u}, analisi Pilota Automatico in corso...
-                    </div>
-                    <div style="font-size:0.88rem; color:#E2E8F0; margin-top:6px;">
-                        Sto aggiornando quotazioni, salute portafoglio e segnali dei motori (alla riapertura entro 20 min sarà istantaneo).
-                    </div>
-                </div>
-                """,
+                f"<div style='background:#131722; border:1px solid #334155; border-left:5px solid #10B981; "
+                f"border-radius:12px; padding:1.25rem 1.45rem; margin-bottom:0.85rem;'>"
+                f"<div style='font-size:1.28rem; font-weight:800; color:#F8FAFC;'>"
+                f"👋 Ciao {nome_u}, analisi Pilota Automatico in corso...</div>"
+                f"<div style='font-size:0.86rem; color:#E2E8F0; margin-top:5px;'>"
+                f"Avanzamento live in 5 fasi (alla riapertura entro 20 minuti il ripristino sarà istantaneo).</div></div>",
                 unsafe_allow_html=True,
             )
-            with st.spinner("Elaborazione in corso..."):
-                snapshot = _esegui_cascata_home_cached(
-                    chiave_u,
-                    hash_pf,
-                    force_cnt,
-                    port_corrente_raw,
-                    impostazioni,
-                    semaforo_header,
+            prog_bar_home = st.progress(0)
+            status_slot_home = st.empty()
+
+            def _aggiorna_progresso_home(pct, msg):
+                elapsed_s = time.monotonic() - t0_home
+                prog_bar_home.progress(min(100, max(0, int(pct))))
+                status_slot_home.markdown(
+                    f"<div style='color:#E0F2FE; font-size:0.88rem; font-weight:600; padding:2px 4px;'>"
+                    f"⏳ {msg} <span style='color:#94A3B8;'>(⏱️ {elapsed_s:.1f}s)</span></div>",
+                    unsafe_allow_html=True,
                 )
+
+            _aggiorna_progresso_home(5, "Avvio motore Pilota Automatico...")
+            snapshot = _esegui_cascata_home_cached(
+                chiave_u,
+                hash_pf,
+                force_cnt,
+                port_corrente_raw,
+                impostazioni,
+                semaforo_header,
+                progress_cb=_aggiorna_progresso_home,
+            )
         loading_slot.empty()
         _applica_snapshot_home_a_session_state(snapshot)
         st.session_state["_home_hash_caricato"] = hash_pf
@@ -7431,16 +7470,25 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         # Deterioramento potenziale (Fase 4 sotto SMA 200 con S-Score < 65)
         if ("FASE 4" in fase_s) and (sopra_200 is False) and (s_sc < 65):
             if (not mercato_pieno_verde) or ha_insider_sec:
-                motivi_calma = []
-                if not mercato_pieno_verde:
-                    motivi_calma.append(f"mercato generale SPY={spy_stato.upper()} / {qqq_nota}")
-                if ha_insider_sec:
-                    motivi_calma.append(f"{n_acq_sec} acquisti ufficiali Insider SEC Form 4 (90gg)")
-                monitora_recupero.append(
-                    f"🟡 <b>MONITORA RECUPERO — {tk}</b> risente della correzione generale/settoriale "
-                    f"(o ha acquisti Insider SEC): non vendere sui minimi di mercato "
-                    f"<span style='color:#CBD5E1; font-size:0.84rem;'>({' + '.join(motivi_calma)}; P&amp;L {pnl_p:+.1f}%)</span>."
-                )
+                if ha_insider_sec and (not mercato_pieno_verde):
+                    msg_mon = (
+                        f"🟡 <b>MONITORA RECUPERO — {tk}</b> protetto da <b>{n_acq_sec} acquisti ufficiali Insider SEC Form 4 (90gg)</b> "
+                        f"+ correzione generale di mercato (SPY={spy_stato.upper()} / {qqq_nota}): non vendere sui minimi "
+                        f"<span style='color:#CBD5E1; font-size:0.84rem;'>(P&amp;L {pnl_p:+.1f}%)</span>."
+                    )
+                elif ha_insider_sec:
+                    msg_mon = (
+                        f"🟡 <b>MONITORA RECUPERO — {tk}</b> protetto da <b>{n_acq_sec} acquisti ufficiali Insider SEC Form 4 (90gg)</b>: "
+                        f"i dirigenti stanno comprando sul calo, non vendere sui minimi "
+                        f"<span style='color:#CBD5E1; font-size:0.84rem;'>(P&amp;L {pnl_p:+.1f}%)</span>."
+                    )
+                else:
+                    msg_mon = (
+                        f"🟡 <b>MONITORA RECUPERO — {tk}</b> risente della correzione generale/settoriale "
+                        f"(SPY={spy_stato.upper()} / {qqq_nota}): non vendere sui minimi di mercato "
+                        f"<span style='color:#CBD5E1; font-size:0.84rem;'>(P&amp;L {pnl_p:+.1f}%)</span>."
+                    )
+                monitora_recupero.append(msg_mon)
             else:
                 if s_sc < 55 and pnl_p < -8.0:
                     avvisi_speculativi.append(
@@ -7696,30 +7744,21 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             )
 
     bordo_box_oggi = "#EF4444" if vendite_azioni else ("#F59E0B" if monitora_recupero else "#10B981")
-    st.markdown(
-        f"""
-        <div style="background:#131722; border:1px solid #334155; border-left:5px solid {bordo_box_oggi};
-                    border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1.1rem;">
-            <div style="font-size:1.22rem; font-weight:800; color:#F8FAFC; margin-bottom:0.95rem; letter-spacing:0.01em;">
-                🧭 COSA DEVO FARE OGGI
-            </div>
-            <div style="font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;
-                        letter-spacing:0.05em; margin-bottom:0.40rem;">
-                📌 Sul Portafoglio Attuale
-            </div>
-            {blocco_port_html}
-            <div style="height:1px; background:#2A2E39; margin:1.05rem 0;"></div>
-            <div style="font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;
-                        letter-spacing:0.05em; margin-bottom:0.40rem;">
-                🎯 Sui Nuovi Acquisti (Top 1 Unico)
-            </div>
-            {blocco_acq_html}
-            {blocco_dca_html}
-            {blocco_prio_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Costruzione HTML priva di qualsiasi indentazione iniziale (>= 4 spazi) per impedire a Markdown di renderizzare blocchi <code>
+    _card_oggi_html = "".join([
+        f"<div style='background:#131722; border:1px solid #334155; border-left:5px solid {bordo_box_oggi}; "
+        f"border-radius:12px; padding:1.35rem 1.5rem; margin-bottom:1.1rem;'>",
+        "<div style='font-size:1.22rem; font-weight:800; color:#F8FAFC; margin-bottom:0.95rem; letter-spacing:0.01em;'>🧭 COSA DEVO FARE OGGI</div>",
+        "<div style='font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.40rem;'>📌 Sul Portafoglio Attuale</div>",
+        blocco_port_html.strip(),
+        "<div style='height:1px; background:#2A2E39; margin:1.05rem 0;'></div>",
+        "<div style='font-size:0.80rem; font-weight:700; color:#CBD5E1; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.40rem;'>🎯 Sui Nuovi Acquisti (Top 1 Unico)</div>",
+        blocco_acq_html.strip(),
+        blocco_dca_html.strip(),
+        blocco_prio_html.strip(),
+        "</div>",
+    ])
+    st.markdown(_card_oggi_html, unsafe_allow_html=True)
 
     # 3b) Box periodico: "Il Punto della Settimana / Fine Mese & Radar Rotazione Balene"
     _render_box_punto_periodico_home(port_h)
@@ -7962,7 +8001,7 @@ tab_riepilogo, tab_portafoglio, tab_console, tab_confronto, tab_scanner, tab_ana
     "Scanner Dashboard",
     "Analisi Singola",
     "Registro Acquisti & Vendite",
-    "Portfolio AI", "🕵️ Insider & Stagionalità", "🩺 Check Regole"])
+    "Portfolio AI", "🕵️ Insider & Stagionalità", "🩺 Check 4 Regole"])
 
 with tab_riepilogo:
     st.subheader("🧭 Riepilogo Operativo Unificato (Allineato al Pilota Automatico)")
@@ -8950,7 +8989,7 @@ with tab_analisi:
                 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_stella_watchlist'):
                     regia_tracker.render_stella_watchlist(ticker_input.strip().upper(), 'singola_top')
             with c_wl_2:
-                if st.button("🩺 Check 3 Regole", key="btn_check_singola_3reg", use_container_width=True):
+                if st.button("🩺 Check 4 Regole (Tecnica & Tom Nash)", key="btn_check_singola_3reg", use_container_width=True):
                     st.session_state["_run_check_singola"] = ticker_input.strip().upper()
             if st.session_state.get("_run_check_singola") == ticker_input.strip().upper():
                 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_check_3_regole'):
@@ -9780,7 +9819,7 @@ def _leggi_tutti_ticker_wl():
     return _tks
 
 with tab_check_regole:
-    st.subheader('🩺 Check-Up 3 Regole (IGNITION • BY FABIO • BY Standard)')
+    st.subheader('🩺 Check 4 Regole (Tecnica & Tom Nash — IGNITION • BY FABIO • BY Standard • Tom Nash & PAC)')
     st.caption('Lascia in bianco e clicca Controlla Tutta la Watchlist per filtrare tutti i 71 titoli, oppure inserisci ticker specifici.')
     chk_in = st.text_input('Ticker specifici (opzionale, es. MU, GOOGL, META):', value='', key='txt_check_multi_regole')
     f_col1, f_col2, f_col3 = st.columns([1.6, 1.3, 1.8])

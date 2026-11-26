@@ -545,7 +545,7 @@ def render_check_3_regole(
     }
     salute_map_chk = st.session_state.get("home_salute_portafoglio") or {}
     righe = []
-    with st.spinner(f"Verifica 3 Regole in corso su {len(tks)} titoli..."):
+    with st.spinner(f"Verifica 4 Regole (Tecnica & Tom Nash) in corso su {len(tks)} titoli..."):
         for tk in tks:
             # Inizializza subito _tk_full prima del blocco try/except per evitare UnboundLocalError
             _nome_init = _NOMI_USA.get(tk, '')
@@ -664,21 +664,14 @@ def render_check_3_regole(
                     continue
                 if s_score < min_score:
                     continue
-                pre_tag = " | ⏳ PRE-IGNITION" if is_pre_ign else ""
-                _nome_az = _NOMI_USA.get(tk, '')
-                if not _nome_az:
-                    try:
-                        _inf = t_obj.info or {}
-                        _nome_az = str(_inf.get('shortName') or _inf.get('longName') or '').strip()[:24]
-                    except Exception:
-                        pass
-                _tk_full = f'{_nome_az} ({tk})' if _nome_az else tk
-                hdr_tk = f'{_tk_full} — Score {s_score}{pre_tag} | ${p_cur:.2f} ({var_pct:+.1f}%)'
-                righe.append({"Titolo": hdr_tk, "Motore": "🚀 IGNITION", "Esito": "✅ PASSA" if ok_ign else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_ign})
-                righe.append({"Titolo": _tk_full, "Motore": "🟢 BY FABIO", "Esito": "✅ PASSA" if ok_fab else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_fab})
-                righe.append({"Titolo": _tk_full, "Motore": "🔵 BY Standard", "Esito": "✅ PASSA" if ok_std else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_std})
+                pre_tag = " | ⏳ PRE-IGN" if is_pre_ign else ""
+                _tk_comp = f"{tk} ${p_cur:.2f} ({var_pct:+.1f}%)"
+                det_ign_full = f"Score {s_score}{pre_tag} | {det_ign}"
+                righe.append({"Titolo": _tk_comp, "Motore": "🚀 IGNITION", "Esito": "✅ PASSA" if ok_ign else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_ign_full})
+                righe.append({"Titolo": tk, "Motore": "🟢 BY FABIO", "Esito": "✅ PASSA" if ok_fab else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_fab})
+                righe.append({"Titolo": tk, "Motore": "🔵 BY Standard", "Esito": "✅ PASSA" if ok_std else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_std})
 
-                # 4a riga diagnostica per i titoli posseduti in portafoglio: Scudo Tom Nash & Stato PAC/Spot
+                # 4a riga diagnostica per i titoli posseduti in portafoglio: Scudo Tom Nash, PAC/Spot & Insider SEC
                 if tk in port_map_chk:
                     pos_p = port_map_chk[tk]
                     inf_sal = salute_map_chk.get(tk) if isinstance(salute_map_chk, dict) else None
@@ -693,12 +686,7 @@ def render_check_3_regole(
                         q_pac_p = q_tot_p if is_pac_tp else 0.0
                         q_spot_p = 0.0 if is_pac_tp else q_tot_p
                     pac_sosp = bool(pos_p.get("PAC_Sospeso", False))
-                    if q_pac_p > 1e-6 and q_spot_p > 1e-6:
-                        stato_pac_lbl = f"{'⏸️ PAC Sospeso — Long' if pac_sosp else '🟢 PAC Attivo'} + Spot ({q_pac_p:.2f} PAC + {q_spot_p:.2f} Spot)"
-                    elif q_pac_p > 1e-6:
-                        stato_pac_lbl = "⏸️ PAC Sospeso — Long (quote PAC 100% protette)" if pac_sosp else "🟢 PAC Attivo (quote PAC 100% protette)"
-                    else:
-                        stato_pac_lbl = "📂 Posizione Spot"
+                    sec_buys_p = int(inf_sal.get("sec_buys") or 0) if isinstance(inf_sal, dict) else 0
 
                     # Recupera dati Tom Nash da salute_map o calcolandoli con tom_nash_fn
                     if isinstance(inf_sal, dict) and ("scudo_tom_nash" in inf_sal):
@@ -728,21 +716,36 @@ def render_check_3_regole(
                             nota_tn = ", ".join(parti_tn) if parti_tn else "Dati fondamentali N/D"
                             badge_m = ""
 
-                    esito_tn = "🛡️ PROTETTO" if (scudo_ok or q_pac_p > 1e-6) else "⚪ MONITORA"
-                    pezzi_det = [
-                        f"{'🛡️ Scudo Tom Nash ATTIVO' if scudo_ok else 'ℹ️ Scudo Tom Nash non attivo'} ({nota_tn})",
-                        stato_pac_lbl,
-                    ]
+                    # Costruisce un motivo positivo chiaro se protetto da Scudo Tom Nash, PAC (Attivo/Sospeso Long) o Insider SEC
+                    motivi_prot = []
+                    if scudo_ok:
+                        motivi_prot.append(f"Scudo Tom Nash ({nota_tn})")
+                    if q_pac_p > 1e-6 and q_spot_p > 1e-6:
+                        motivi_prot.append(f"{'PAC Sospeso Long' if pac_sosp else 'PAC Attivo'} + Spot ({q_pac_p:.2f} PAC + {q_spot_p:.2f} Spot)")
+                    elif q_pac_p > 1e-6:
+                        motivi_prot.append("PAC Sospeso Long" if pac_sosp else "PAC Attivo")
+                    if sec_buys_p > 0:
+                        motivi_prot.append(f"{sec_buys_p} acq. Insider SEC 90gg")
+
+                    if motivi_prot:
+                        esito_tn = "🛡️ PROTETTO"
+                        det_tn_str = f"🛡️ Protetto da {' + '.join(motivi_prot)}"
+                        if not scudo_ok and nota_tn and nota_tn != "Dati fondamentali N/D":
+                            det_tn_str += f" | {nota_tn}"
+                    else:
+                        esito_tn = "⚪ MONITORA"
+                        det_tn_str = f"📂 Posizione Spot ({nota_tn})"
                     if badge_m:
-                        pezzi_det.append(badge_m)
+                        det_tn_str += f" | {badge_m}"
+
                     righe.append({
-                        "Titolo": _tk_full,
+                        "Titolo": tk,
                         "Motore": "🛡️ Tom Nash & PAC",
                         "Esito": esito_tn,
-                        "Dettaglio Criteri (✅ Passa | ❌ Manca)": " | ".join(pezzi_det),
+                        "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_tn_str,
                     })
             except Exception as ex:
-                righe.append({"Titolo": _tk_full, "Motore": "Errore", "Esito": "❌", "Dettaglio Criteri (✅ Passa | ❌ Manca)": str(ex)[:50]})
+                righe.append({"Titolo": tk, "Motore": "Errore", "Esito": "❌", "Dettaglio Criteri (✅ Passa | ❌ Manca)": str(ex)[:50]})
     if not righe:
         _f_attivi = [str(solo_fase2)] if (solo_fase2 and solo_fase2 != 'Tutte le Fasi') else []
         if solo_pre_ign:
@@ -757,8 +760,8 @@ def render_check_3_regole(
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Titolo": st.column_config.TextColumn("Titolo", width="large"),
-            "Motore": st.column_config.TextColumn("Motore", width="small"),
+            "Titolo": st.column_config.TextColumn("Titolo", width="small"),
+            "Motore": st.column_config.TextColumn("Motore", width="medium"),
             "Esito": st.column_config.TextColumn("Esito", width="small"),
             "Dettaglio Criteri (✅ Passa | ❌ Manca)": st.column_config.TextColumn("Dettaglio Criteri (✅ Passa | ❌ Manca)", width="large"),
         },
