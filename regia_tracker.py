@@ -671,11 +671,12 @@ def render_check_3_regole(
                 righe.append({"Titolo": tk, "Motore": "🟢 BY FABIO", "Esito": "✅ PASSA" if ok_fab else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_fab})
                 righe.append({"Titolo": tk, "Motore": "🔵 BY Standard", "Esito": "✅ PASSA" if ok_std else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_std})
 
-                # 4a riga diagnostica per i titoli posseduti in portafoglio: Scudo Tom Nash, PAC/Spot & Insider SEC
-                if tk in port_map_chk:
+                # 4a riga diagnostica SEMPRE presente (titoli in portafoglio e non): Scudo Tom Nash & Stato PAC/Spot
+                inf_sal = salute_map_chk.get(tk) if isinstance(salute_map_chk, dict) else None
+                in_port = tk in port_map_chk
+                q_pac_p, q_spot_p, pac_sosp = 0.0, 0.0, False
+                if in_port:
                     pos_p = port_map_chk[tk]
-                    inf_sal = salute_map_chk.get(tk) if isinstance(salute_map_chk, dict) else None
-                    # Calcola stato PAC/Spot (gestione 100% manuale del flag PAC_Sospeso)
                     q_tot_p = float(pos_p.get("Quantita", 0) or 0)
                     has_split = (pos_p.get("Quantita_PAC") is not None) or (pos_p.get("Quantita_Spot") is not None)
                     if has_split:
@@ -686,37 +687,38 @@ def render_check_3_regole(
                         q_pac_p = q_tot_p if is_pac_tp else 0.0
                         q_spot_p = 0.0 if is_pac_tp else q_tot_p
                     pac_sosp = bool(pos_p.get("PAC_Sospeso", False))
-                    sec_buys_p = int(inf_sal.get("sec_buys") or 0) if isinstance(inf_sal, dict) else 0
+                sec_buys_p = int(inf_sal.get("sec_buys") or 0) if isinstance(inf_sal, dict) else 0
 
-                    # Recupera dati Tom Nash da salute_map o calcolandoli con tom_nash_fn
-                    if isinstance(inf_sal, dict) and ("scudo_tom_nash" in inf_sal):
-                        scudo_ok = bool(inf_sal.get("scudo_tom_nash"))
-                        nota_tn = str(inf_sal.get("scudo_tom_nash_nota") or "")
-                        badge_m = str(inf_sal.get("badge_multipli") or "")
-                    else:
+                # Recupera dati Tom Nash da salute_map o calcolandoli con tom_nash_fn
+                if isinstance(inf_sal, dict) and ("scudo_tom_nash" in inf_sal):
+                    scudo_ok = bool(inf_sal.get("scudo_tom_nash"))
+                    nota_tn = str(inf_sal.get("scudo_tom_nash_nota") or "")
+                    badge_m = str(inf_sal.get("badge_multipli") or "")
+                else:
+                    _inf_raw = {}
+                    try:
+                        _inf_raw = t_obj.info or {}
+                    except Exception:
                         _inf_raw = {}
-                        try:
-                            _inf_raw = t_obj.info or {}
-                        except Exception:
-                            _inf_raw = {}
-                        if callable(tom_nash_fn):
-                            _tn_r = tom_nash_fn(_inf_raw, s_score=s_score)
-                            scudo_ok = bool(_tn_r.get("scudo_tom_nash"))
-                            nota_tn = str(_tn_r.get("scudo_tom_nash_nota") or "")
-                            badge_m = str(_tn_r.get("badge_multipli") or "")
-                        else:
-                            rg = _inf_raw.get("revenueGrowth")
-                            fpe = _inf_raw.get("forwardPE")
-                            scudo_ok = bool(rg is not None and float(rg) >= 0.05 and fpe is not None and 0 < float(fpe) < 65)
-                            parti_tn = []
-                            if rg is not None:
-                                parti_tn.append(f"Fatturato {float(rg)*100:+.0f}%")
-                            if fpe is not None and float(fpe) > 0:
-                                parti_tn.append(f"Forward P/E {float(fpe):.1f}x")
-                            nota_tn = ", ".join(parti_tn) if parti_tn else "Dati fondamentali N/D"
-                            badge_m = ""
+                    if callable(tom_nash_fn):
+                        _tn_r = tom_nash_fn(_inf_raw, s_score=s_score)
+                        scudo_ok = bool(_tn_r.get("scudo_tom_nash"))
+                        nota_tn = str(_tn_r.get("scudo_tom_nash_nota") or "")
+                        badge_m = str(_tn_r.get("badge_multipli") or "")
+                    else:
+                        rg = _inf_raw.get("revenueGrowth")
+                        fpe = _inf_raw.get("forwardPE")
+                        scudo_ok = bool(rg is not None and float(rg) >= 0.05 and fpe is not None and 0 < float(fpe) < 65)
+                        parti_tn = []
+                        if rg is not None:
+                            parti_tn.append(f"Fatturato {float(rg)*100:+.0f}%")
+                        if fpe is not None and float(fpe) > 0:
+                            parti_tn.append(f"Forward P/E {float(fpe):.1f}x")
+                        nota_tn = ", ".join(parti_tn) if parti_tn else "Dati fondamentali N/D"
+                        badge_m = ""
 
-                    # Costruisce un motivo positivo chiaro se protetto da Scudo Tom Nash, PAC (Attivo/Sospeso Long) o Insider SEC
+                if in_port:
+                    # Motivo positivo chiaro per titoli posseduti in portafoglio
                     motivi_prot = []
                     if scudo_ok:
                         motivi_prot.append(f"Scudo Tom Nash ({nota_tn})")
@@ -735,15 +737,24 @@ def render_check_3_regole(
                     else:
                         esito_tn = "⚪ MONITORA"
                         det_tn_str = f"📂 Posizione Spot ({nota_tn})"
-                    if badge_m:
-                        det_tn_str += f" | {badge_m}"
+                else:
+                    # Titoli non ancora in portafoglio: mostra comunque la 4a riga (Scudo Tom Nash + Non in portafoglio)
+                    if scudo_ok:
+                        esito_tn = "🛡️ SANO"
+                        det_tn_str = f"🛡️ Scudo Tom Nash ATTIVO ({nota_tn}) | Non in portafoglio"
+                    else:
+                        esito_tn = "⚪ NEUTRO"
+                        det_tn_str = f"ℹ️ Fondamentali: {nota_tn} | Non in portafoglio"
 
-                    righe.append({
-                        "Titolo": tk,
-                        "Motore": "🛡️ Tom Nash & PAC",
-                        "Esito": esito_tn,
-                        "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_tn_str,
-                    })
+                if badge_m:
+                    det_tn_str += f" | {badge_m}"
+
+                righe.append({
+                    "Titolo": tk,
+                    "Motore": "🛡️ Tom Nash & PAC",
+                    "Esito": esito_tn,
+                    "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_tn_str,
+                })
             except Exception as ex:
                 righe.append({"Titolo": tk, "Motore": "Errore", "Esito": "❌", "Dettaglio Criteri (✅ Passa | ❌ Manca)": str(ex)[:50]})
     if not righe:

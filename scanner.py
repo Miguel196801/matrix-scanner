@@ -3598,6 +3598,63 @@ PANIER_INSIDER_MID_LARGE = [
     "ANF", "AEO", "URBN", "FIVE", "OLLI", "DG", "DLTR", "TGT", "WMT", "COST"
 ]
 
+def _valuta_verdetto_coerente_scudi(r, prezzo_nat_corrente=None):
+    """
+    Allinea il verdetto di Analisi Singola agli Scudi della Home Page Pilota Automatico
+    per eliminare ogni contraddizione:
+    se esiste un pattern BUY (o segnale BY) ma lo Scudo 1 (Regime SPY/QQQ ROSSO) è attivo
+    oppure il prezzo attuale è ancora sotto il Trigger Y (Pre-Breakout) o già esteso > +3.5%,
+    sostituisce il verde libero con '🟡 PATTERN RILEVATO — ⏳ IN ATTESA SCUDO' indicando i motivi esatti.
+    Restituisce (segnale_display, in_attesa_scudo: bool, motivo_scudo_str).
+    """
+    tk_u = str((r or {}).get("ticker") or "").strip().upper()
+    seg_orig = str((r or {}).get("segnale") or "HOLD")
+    pat = None
+    pat_sing = st.session_state.get("pattern_singola_attivo")
+    if isinstance(pat_sing, dict) and str(pat_sing.get("ticker", "")).strip().upper() == tk_u:
+        pat = pat_sing
+    else:
+        pat_map = (st.session_state.get("pattern_alerts") or {}).get("per_ticker") or {}
+        if isinstance(pat_map, dict) and tk_u in pat_map:
+            pat = pat_map.get(tk_u)
+
+    has_pat_buy = bool(isinstance(pat, dict) and str(pat.get("lato", "")).upper() != "SELL")
+    is_seg_buy = ("BY" in seg_orig.upper()) or bool((r or {}).get("trigger_by_fabio"))
+    if not (has_pat_buy or is_seg_buy):
+        return seg_orig, False, ""
+
+    motivi_blocco = []
+    # Scudo 1 — Regime SPY / QQQ ROSSO
+    try:
+        sem_cor = st.session_state.get("semaforo_mercato")
+        if not isinstance(sem_cor, dict) or not sem_cor.get("stato"):
+            sem_cor = semaforo_header if ("semaforo_header" in globals() and isinstance(semaforo_header, dict)) else calcola_semaforo_mercato()
+        spy_st_c = str((sem_cor or {}).get("stato", "giallo")).lower()
+        _, qqq_st_c, _ = _verifica_qqq_regime_verde()
+        if spy_st_c == "rosso" or str(qqq_st_c).lower() == "rosso":
+            motivi_blocco.append("Regime SPY/QQQ ROSSO (Scudo 1)")
+    except Exception:
+        pass
+
+    # Verifica Trigger Y del pattern (Pre-Breakout sotto Trigger Y o già esteso > +3.5%)
+    if has_pat_buy:
+        trig_y = float(pat.get("trigger_y") or 0.0)
+        dist_y = pat.get("dist_y_pct")
+        stato_tr = str(pat.get("stato_trigger", "")).upper()
+        simb_p = "$" if str(pat.get("currency", "USD")).upper() == "USD" else "€"
+        p_ref = float(prezzo_nat_corrente) if (prezzo_nat_corrente is not None and float(prezzo_nat_corrente) > 0) else float(pat.get("prezzo") or (r or {}).get("prezzo_usd") or 0.0)
+        sotto_y = ("PRE-BREAKOUT" in stato_tr) or (dist_y is not None and float(dist_y) < 0.0) or (trig_y > 0 and p_ref > 0 and p_ref < trig_y)
+        oltre_y = (dist_y is not None and float(dist_y) > 3.5) or (trig_y > 0 and p_ref > trig_y * 1.035)
+        if sotto_y and trig_y > 0:
+            motivi_blocco.append(f"Sotto Trigger Y {simb_p}{trig_y:.2f} (attendi rottura confermata)")
+        elif oltre_y and trig_y > 0:
+            motivi_blocco.append(f"Oltre +3.5% dal Trigger Y {simb_p}{trig_y:.2f} (non inseguire)")
+
+    if motivi_blocco:
+        fig_lbl = f" ({pat.get('figura')})" if (has_pat_buy and pat.get("figura")) else ""
+        return f"🟡 PATTERN RILEVATO{fig_lbl} — ⏳ IN ATTESA SCUDO", True, " + ".join(motivi_blocco)
+    return seg_orig, False, ""
+
 def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     tk = r['ticker']
     info_y = {}
@@ -3617,7 +3674,38 @@ def render_scheda_titolo_pro(r, eurusd_rate=1.12):
     vpoc_val, whale_b = calcola_livello_balene(df_1y) if ('calcola_livello_balene' in globals() and df_1y is not None) else (None, "")
     _, stag_txt = calcola_stagionalita_10y(tk) if 'calcola_stagionalita_10y' in globals() else (None, "N/D")
 
-    st.markdown(f"## {nome_az} ({tk}) {whale_b} — {r['segnale']}")
+    # Allinea il verdetto agli Scudi della Home Page Pilota Automatico (zero contraddizioni)
+    _p_nat_live = float(df_1y["Close"].iloc[-1]) if (df_1y is not None and not df_1y.empty) else r.get("prezzo_usd")
+    _seg_coerente, _in_attesa_scudo, _motivo_scudo = _valuta_verdetto_coerente_scudi(r, prezzo_nat_corrente=_p_nat_live)
+
+    # Badge Scudo Fondamentale Tom Nash & Stato manuale PAC/Spot nell'intestazione accanto al verdetto
+    _tn_scheda = _valuta_fondamentali_tom_nash(info_y, s_score=r.get("s_score", 50)) if "_valuta_fondamentali_tom_nash" in globals() else {}
+    _badge_tn_hdr = ""
+    if _tn_scheda.get("scudo_tom_nash"):
+        _nota_tn_h = str(_tn_scheda.get("scudo_tom_nash_nota") or "")
+        _badge_tn_hdr = (
+            f" <span title='{_nota_tn_h}' style='display:inline-block; vertical-align:middle; margin-left:8px; "
+            f"background:#0F2436; color:#38BDF8; border:1px solid #38BDF8; border-radius:999px; "
+            f"padding:2px 10px; font-size:0.76rem; font-weight:700;'>🛡️ SCUDO TOM NASH</span>"
+        )
+    _pos_scheda = next((p for p in (st.session_state.get("portafoglio") or []) if str(p.get("Ticker", "")).strip().upper() == str(tk).upper()), None)
+    _badge_pac_hdr = ""
+    if _pos_scheda:
+        _st_p_h = _stato_pac_manuale(_pos_scheda)
+        _tp_p_h = _formatta_badge_tipo_posizione(_pos_scheda, con_dettaglio=False)
+        _lbl_p_h = _st_p_h if _st_p_h != "N/A" else f"📂 {_tp_p_h}"
+        _badge_pac_hdr = (
+            f" <span style='display:inline-block; vertical-align:middle; margin-left:6px; "
+            f"background:#1E293B; color:#E2E8F0; border:1px solid #475569; border-radius:999px; "
+            f"padding:2px 9px; font-size:0.74rem; font-weight:600;'>{_lbl_p_h}</span>"
+        )
+
+    st.markdown(
+        f"<h2 style='margin-bottom:6px; line-height:1.3;'>{nome_az} ({tk}) {whale_b} — {_seg_coerente}{_badge_tn_hdr}{_badge_pac_hdr}</h2>",
+        unsafe_allow_html=True,
+    )
+    if _in_attesa_scudo and _motivo_scudo:
+        st.warning(f"🛡️ **Allineamento Scudi Home Page:** {_motivo_scudo} — nessun semaforo verde operativo finché lo scudo non si libera.")
     if sub_sett:
         st.markdown(sub_sett, unsafe_allow_html=True)
 
@@ -4372,15 +4460,42 @@ def calcola_livello_balene(df):
     return vpoc, badge
 
 def applica_controlli_grafico(fig, chart_id):
-    # Rimossi i pulsanti di zoom manuali sopra il grafico per lasciare spazio pulito su mobile:
-    # navigazione fluida con pan a un dito, pinch-to-zoom e doppio tap per ripristinare la vista iniziale.
+    """
+    Rifinisce il grafico Plotly per mobile/desktop senza toccare pattern_engine.py:
+    - Pan fluido a un dito, pinch-to-zoom e doppio tap per ripristinare la vista.
+    - Compatta automaticamente eventuali etichette lunghe di pattern_engine (Trigger Y / Target / Stop)
+      per evitare sovrapposizioni su schermi stretti da smartphone.
+    """
     if fig is not None:
         fig.update_layout(dragmode="pan")
         fig.update_yaxes(fixedrange=False, row=1, col=1)
+        try:
+            for ann in (fig.layout.annotations or []):
+                txt = str(getattr(ann, "text", "") or "")
+                if "Trigger Y" in txt:
+                    m_p = re.search(r"([\$€]\s*[\d,\.]+)", txt)
+                    if m_p:
+                        ann.text = f" ⚡ Y: {m_p.group(1)} "
+                        ann.font.size = 10
+                elif "Target" in txt and ("R/R" in txt or "🎯" in txt):
+                    m_p = re.search(r"([\$€]\s*[\d,\.]+)", txt)
+                    m_pct = re.search(r"([+\-]\d+(?:\.\d+)?%)", txt)
+                    if m_p:
+                        pct_s = f" ({m_pct.group(1)})" if m_pct else ""
+                        ann.text = f" 🎯 T: {m_p.group(1)}{pct_s} "
+                        ann.font.size = 10
+                elif "Stop" in txt and "🛑" in txt:
+                    m_p = re.search(r"([\$€]\s*[\d,\.]+)", txt)
+                    if m_p:
+                        ann.text = f" 🛑 SL: {m_p.group(1)} "
+                        ann.font.size = 10
+        except Exception:
+            pass
     return fig
 
-def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d', interval='1d', eurusd_rate=1.12, height=860, pattern_info=None):
-    df = yf.Ticker(ticker).history(period=period, interval=interval)
+def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d', interval='1d', eurusd_rate=1.12, height=640, pattern_info=None):
+    tk_u = str(ticker or "").strip().upper()
+    df = yf.Ticker(tk_u).history(period=period, interval=interval)
     if df.empty:
         return None
     df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
@@ -4397,6 +4512,14 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             df = df.resample('M').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
     if len(df) < 2:
         return None
+
+    # Recupera valuta e dati Tom Nash dalla cache _get_info_cached (zero chiamate lente extra)
+    info_g = _get_info_cached(tk_u) if "_get_info_cached" in globals() else {}
+    cur_g = str((info_g or {}).get("currency", "USD") or "USD").upper()
+    simb_g = "€" if cur_g == "EUR" else "$"
+    conv_eur_to_chart = 1.0 if cur_g == "EUR" else float(eurusd_rate or 1.12)
+    s_sc_g = calcola_s_score(info_g) if "calcola_s_score" in globals() else 50
+    tn_g = _valuta_fondamentali_tom_nash(info_g, s_score=s_sc_g) if "_valuta_fondamentali_tom_nash" in globals() else {}
 
     # Calcola le medie mobili reali solo quando lo storico ha abbastanza candele (evita linee fittizie sulle IPO recenti)
     has_sma20 = len(df) >= 20
@@ -4434,33 +4557,36 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     vpoc_level, whale_badge = calcola_livello_balene(df)
     rsi_now = float(df['RSI'].iloc[-1]) if 'RSI' in df.columns and pd.notna(df['RSI'].iloc[-1]) else 50.0
     rsi_col = "#10B981" if rsi_now <= 30 else ("#EF4444" if rsi_now >= 70 else "#CE93D8")
-    titolo_main = f"<b>{ticker}</b> {whale_badge}  ${prezzo_attuale:.2f}  <span style='color:{colore_titolo};'>({var_pct_oggi:+.2f}%)</span>  |  <span style='color:{rsi_col};'>RSI: {rsi_now:.1f}</span>  [{timeframe.upper()}]"
+    titolo_main = f"<b>{tk_u}</b> {whale_badge}  {simb_g}{prezzo_attuale:.2f} <span style='color:{colore_titolo};'>({var_pct_oggi:+.2f}%)</span>  |  <span style='color:{rsi_col};'>RSI {rsi_now:.1f}</span>  [{timeframe.upper()}]"
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.70, 0.15, 0.15], subplot_titles=("", "Volume", f"RSI (14): {rsi_now:.1f}"))
 
-    # Intestazione compatta stile TradingView in alto a sinistra dentro il grafico (evita sovrapposizioni con la legenda)
-    fig.add_annotation(
-        text=titolo_main,
-        xref="x domain",
-        yref="y domain",
-        x=0.005,
-        y=0.99,
-        xanchor="left",
-        yanchor="top",
-        showarrow=False,
-        bgcolor="rgba(11, 14, 17, 0.72)",
-        borderpad=3,
-        font=dict(size=11, color="#D1D4DC"),
-        row=1,
-        col=1,
-    )
+    # Badge discreto Scudo Tom Nash in alto a sinistra nell'area plot (ora che il titolo è fuori dalle candele)
+    if tn_g.get("scudo_tom_nash"):
+        fig.add_annotation(
+            text=" 🛡️ Scudo Tom Nash attivo ",
+            xref="x domain",
+            yref="y domain",
+            x=0.01,
+            y=0.98,
+            xanchor="left",
+            yanchor="top",
+            showarrow=False,
+            bgcolor="rgba(15, 36, 54, 0.88)",
+            bordercolor="#38BDF8",
+            borderwidth=1,
+            borderpad=3,
+            font=dict(size=10, color="#E0F2FE"),
+            row=1,
+            col=1,
+        )
 
+    # Tracce secondarie senza voce in legenda (mantiene legenda compatta su 1 sola riga anche su mobile)
     if has_sma20:
-        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Sup'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.35)', width=1, dash='dot'), name='BB Inf'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#00BCD4', width=1.3), name='SMA 20'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Upper'], line=dict(color='rgba(0, 188, 212, 0.30)', width=1, dash='dot'), name='BB Sup', showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['BB_Lower'], fill='tonexty', fillcolor='rgba(0, 188, 212, 0.05)', line=dict(color='rgba(0, 188, 212, 0.30)', width=1, dash='dot'), name='BB Inf', showlegend=False), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df['SMA_20'], line=dict(color='#00BCD4', width=1.2), name='SMA 20', showlegend=False), row=1, col=1)
 
     # Candele Hollow stile StockCharts: colore su Close vs Chiusura prec., riempimento (vuota/piena) su Close vs Open
-    # Sedute positive (Close >= Chiusura prec.): Verde vuota se Close >= Open, Verde piena se Close < Open (es. Gap Up)
     fig.add_trace(
         go.Candlestick(
             x=df.index,
@@ -4470,19 +4596,18 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             close=df['Close'].where(is_up),
             name='Prezzo',
             legendgroup='prezzo',
-            showlegend=True,
+            showlegend=False,
             increasing_line_color="#10B981",
             increasing_fillcolor="#0B0E11",
-            increasing_line_width=1.3,
+            increasing_line_width=1.4,
             decreasing_line_color="#10B981",
             decreasing_fillcolor="#10B981",
-            decreasing_line_width=1.1,
-            whiskerwidth=0.4,
+            decreasing_line_width=1.2,
+            whiskerwidth=0.45,
         ),
         row=1,
         col=1,
     )
-    # Sedute negative (Close < Chiusura prec.): Rossa vuota se Close >= Open (es. Gap Down con rimbalzo), Rossa piena se Close < Open
     fig.add_trace(
         go.Candlestick(
             x=df.index,
@@ -4495,11 +4620,11 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             showlegend=False,
             increasing_line_color="#EF4444",
             increasing_fillcolor="#0B0E11",
-            increasing_line_width=1.3,
+            increasing_line_width=1.4,
             decreasing_line_color="#EF4444",
             decreasing_fillcolor="#EF4444",
-            decreasing_line_width=1.1,
-            whiskerwidth=0.4,
+            decreasing_line_width=1.2,
+            whiskerwidth=0.45,
         ),
         row=1,
         col=1,
@@ -4509,16 +4634,133 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
     if has_sma_long:
         fig.add_trace(go.Scatter(x=df.index, y=df['SMA_Long'], line=dict(color='#2962FF', width=1.7), name=f'SMA {sma_long}'), row=1, col=1)
 
-    if prezzo_medio_eur is not None:
-        prezzo_medio_usd = prezzo_medio_eur * eurusd_rate
-        fig.add_hline(y=prezzo_medio_usd, line_dash="dot", line_color="#10B981", line_width=1.8, annotation_text=f" PMC: ${prezzo_medio_usd:.2f} (€{prezzo_medio_eur:.2f}) ", annotation_position="top left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#10B981", size=11), row=1, col=1)
+    # Recupera eventuale pattern attivo per evitare sovrapposizione Res / Trigger Y
+    _pat_for_range = pattern_info
+    if _pat_for_range is None:
+        _pat_for_range = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(tk_u)
+    _trig_y_val = None
+    if isinstance(_pat_for_range, dict) and _pat_for_range.get("trigger_y"):
+        try:
+            _trig_y_val = float(_pat_for_range["trigger_y"])
+        except Exception:
+            _trig_y_val = None
 
+    # Linea PMC + simbolo ancorato sull'ultima seduta + badge pillola ad alto contrasto
+    prezzo_medio_chart = None
+    if prezzo_medio_eur is not None and float(prezzo_medio_eur) > 0:
+        prezzo_medio_chart = float(prezzo_medio_eur) * conv_eur_to_chart
+        fig.add_hline(
+            y=prezzo_medio_chart,
+            line_dash="dot",
+            line_color="#10B981",
+            line_width=1.8,
+            annotation_text=f" 💼 PMC {simb_g}{prezzo_medio_chart:.2f} (€{float(prezzo_medio_eur):.2f}) ",
+            annotation_position="top left",
+            annotation_bgcolor="rgba(11, 24, 18, 0.90)",
+            annotation_bordercolor="#10B981",
+            annotation_borderwidth=1,
+            annotation_font=dict(color="#4ADE80", size=10),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[df.index[-1]],
+                y=[prezzo_medio_chart],
+                mode="markers",
+                marker=dict(symbol="star", size=11, color="#10B981", line=dict(width=1.2, color="#FFFFFF")),
+                name="💼 PMC",
+                showlegend=False,
+                hovertemplate=f"<b>💼 PMC Portafoglio</b><br>{simb_g}{prezzo_medio_chart:.2f} (€{float(prezzo_medio_eur):.2f})<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+
+    # Marker diamanti oro/verde per ogni acquisto reale da registro_acquisti*.json (con fallback portafoglio*.json)
+    acq_x, acq_y, acq_hover = [], [], []
+    try:
+        reg_acq_g = carica_json(REGISTRO_ACQUISTI_FILE, default=[])
+        idx_naive = df.index.tz_localize(None) if getattr(df.index, "tz", None) is not None else df.index
+        trovati_reg = False
+        for row_a in (reg_acq_g if isinstance(reg_acq_g, list) else []):
+            if not isinstance(row_a, dict) or str(row_a.get("Ticker", "")).strip().upper() != tk_u:
+                continue
+            dt_a_s = str(row_a.get("Data", "")).strip()[:10]
+            p_a_eur = float(row_a.get("Prezzo_EUR") or 0.0)
+            if len(dt_a_s) < 10 or p_a_eur <= 0:
+                continue
+            try:
+                ts_a = pd.Timestamp(dt_a_s)
+                pos_idx = int(np.argmin(np.abs((idx_naive - ts_a).total_seconds())))
+                if abs((idx_naive[pos_idx] - ts_a).days) <= 10:
+                    p_a_chart = round(p_a_eur * conv_eur_to_chart, 2)
+                    acq_x.append(df.index[pos_idx])
+                    acq_y.append(p_a_chart)
+                    q_a = float(row_a.get("Quantita") or 0.0)
+                    tp_a = str(row_a.get("Tipo") or "Spot")
+                    mot_a = str(row_a.get("Motivo_Segnale") or "Manuale / Storico")
+                    ff_a = str(row_a.get("Fonte_Fondi") or "N/D")
+                    acq_hover.append(
+                        f"<b>💎 Acquisto Reale ({tp_a})</b><br>"
+                        f"Data: {dt_a_s}<br>"
+                        f"Prezzo: {simb_g}{p_a_chart:.2f} (€{p_a_eur:.2f})<br>"
+                        f"Quantità: {q_a:.4f}<br>"
+                        f"Motivo: {mot_a}<br>"
+                        f"Fonte: {ff_a}"
+                    )
+                    trovati_reg = True
+            except Exception:
+                continue
+        # Fallback su Data_Acquisto da portafoglio.json per posizioni storiche non ancora nel registro
+        if not trovati_reg:
+            pos_st = next((p for p in (st.session_state.get("portafoglio") or []) if str(p.get("Ticker", "")).strip().upper() == tk_u), None)
+            if pos_st:
+                dt_p_s = str(pos_st.get("Data_Acquisto") or pos_st.get("data_acquisto") or "").strip()[:10]
+                p_p_eur = float(pos_st.get("Prezzo_Medio") or 0.0)
+                if len(dt_p_s) >= 10 and p_p_eur > 0:
+                    try:
+                        ts_p = pd.Timestamp(dt_p_s)
+                        pos_idx = int(np.argmin(np.abs((idx_naive - ts_p).total_seconds())))
+                        if abs((idx_naive[pos_idx] - ts_p).days) <= 10:
+                            p_p_chart = round(p_p_eur * conv_eur_to_chart, 2)
+                            acq_x.append(df.index[pos_idx])
+                            acq_y.append(p_p_chart)
+                            acq_hover.append(
+                                f"<b>💎 Posizione Storica ({pos_st.get('Tipo', 'Spot')})</b><br>"
+                                f"Data: {dt_p_s}<br>"
+                                f"PMC: {simb_g}{p_p_chart:.2f} (€{p_p_eur:.2f})<br>"
+                                f"Quantità: {float(pos_st.get('Quantita') or 0):.4f}"
+                            )
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    if acq_x:
+        fig.add_trace(
+            go.Scatter(
+                x=acq_x,
+                y=acq_y,
+                mode="markers",
+                marker=dict(symbol="diamond", size=12, color="#FACC15", line=dict(width=1.8, color="#10B981")),
+                name=f"💎 Acquisti ({len(acq_x)})",
+                text=acq_hover,
+                hovertemplate="%{text}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
+
+    # Etichette compatte e alternate (evita di stampare Res se coincide entro ±1.5% con Trigger Y)
     if vpoc_level:
-        fig.add_hline(y=vpoc_level, line_dash="dashdot", line_color="#E040FB", line_width=1.4, annotation_text=f" 🐋 VPOC: ${vpoc_level:.2f} ", annotation_position="bottom right", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#E040FB", size=10), row=1, col=1)
-    fig.add_hline(y=supporto, line_dash="dash", line_color="#10B981", line_width=1.2, annotation_text=f" Sup: {supporto:.2f} ", annotation_position="bottom left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#10B981", size=10), row=1, col=1)
-    fig.add_hline(y=resistenza, line_dash="dash", line_color="#EF4444", line_width=1.2, annotation_text=f" Res: {resistenza:.2f} ", annotation_position="top left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#EF4444", size=10), row=1, col=1)
+        fig.add_hline(y=vpoc_level, line_dash="dashdot", line_color="#E040FB", line_width=1.3, annotation_text=f" 🐋 VPOC {simb_g}{vpoc_level:.2f} ", annotation_position="bottom right", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#E040FB", size=10), row=1, col=1)
+    fig.add_hline(y=supporto, line_dash="dash", line_color="#10B981", line_width=1.1, annotation_text=f" Sup {supporto:.2f} ", annotation_position="bottom left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#10B981", size=10), row=1, col=1)
+    res_vicina_y = (_trig_y_val is not None and _trig_y_val > 0 and abs(resistenza - _trig_y_val) / _trig_y_val <= 0.015)
+    if not res_vicina_y:
+        fig.add_hline(y=resistenza, line_dash="dash", line_color="#EF4444", line_width=1.1, annotation_text=f" Res {resistenza:.2f} ", annotation_position="top left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#EF4444", size=10), row=1, col=1)
     if gap_level:
-        fig.add_hline(y=gap_level, line_dash="dot", line_color="#F59E0B", line_width=1.5, annotation_text=f" Gap: {gap_level:.2f} ", annotation_position="top left", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#F59E0B", size=10), row=1, col=1)
+        fig.add_hline(y=gap_level, line_dash="dot", line_color="#F59E0B", line_width=1.3, annotation_text=f" Gap {gap_level:.2f} ", annotation_position="top right", annotation_bgcolor="rgba(11, 14, 17, 0.85)", annotation_font=dict(color="#F59E0B", size=10), row=1, col=1)
 
     by_x, by_y, sell_x, sell_y = list(), list(), list(), list()
     if len(df) >= 60:
@@ -4533,18 +4775,19 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
                     sell_x.append(df.index[i]); sell_y.append(df['High'].iloc[i] * 1.015)
 
     if by_x:
-        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=13, color='#10B981', line=dict(width=1.2, color='#FFFFFF')), name=f'▲ BY ({len(by_x)})'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=by_x, y=by_y, mode='markers', marker=dict(symbol='triangle-up', size=12, color='#10B981', line=dict(width=1.2, color='#FFFFFF')), name=f'▲ BY ({len(by_x)})'), row=1, col=1)
     if sell_x:
-        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=13, color='#EF4444', line=dict(width=1.2, color='#FFFFFF')), name=f'▼ SELL ({len(sell_x)})'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=sell_x, y=sell_y, mode='markers', marker=dict(symbol='triangle-down', size=12, color='#EF4444', line=dict(width=1.2, color='#FFFFFF')), name=f'▼ SELL ({len(sell_x)})'), row=1, col=1)
 
     vol_colors = ['rgba(16, 185, 129, 0.65)' if up else 'rgba(239, 68, 68, 0.65)' for up in is_up]
-    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=vol_colors, name='Volume'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#9C27B0', width=1.5), name='RSI 14'), row=3, col=1)
+    fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=vol_colors, name='Volume', showlegend=False), row=2, col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], line=dict(color='#9C27B0', width=1.5), name='RSI 14', showlegend=False), row=3, col=1)
     fig.add_hline(y=70, line_dash="dash", line_color="#EF4444", line_width=1, row=3, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="#10B981", line_width=1, row=3, col=1)
 
-    # Layout compatto stile TradingView ottimizzato anche per schermo mobile
+    # Layout compatto mobile-first: titolo fuori dall'area candele, legenda 1 sola riga, margini ridotti
     fig.update_layout(
+        title=dict(text=titolo_main, x=0.01, y=0.985, xanchor="left", yanchor="top", font=dict(size=12, color="#F8FAFC")),
         height=height,
         dragmode="pan",
         xaxis_rangeslider_visible=False,
@@ -4552,13 +4795,22 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#131722',
         plot_bgcolor='#0B0E11',
         font=dict(family='Inter, sans-serif', color='#D1D4DC', size=11),
-        margin=dict(l=8, r=42, t=28, b=20),
+        margin=dict(l=4, r=46, t=68, b=16),
         hovermode='x unified',
-        legend=dict(font=dict(size=10), orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0, bgcolor='rgba(19, 23, 34, 0.75)'),
-        modebar=dict(bgcolor='rgba(19, 23, 34, 0.92)', color='#D1D4DC', activecolor='#2962FF'),
+        legend=dict(
+            font=dict(size=10),
+            orientation="h",
+            yanchor="bottom",
+            y=1.01,
+            xanchor="left",
+            x=0.0,
+            tracegroupgap=4,
+            bgcolor='rgba(19, 23, 34, 0.0)',
+        ),
+        modebar=dict(bgcolor='rgba(19, 23, 34, 0.85)', color='#D1D4DC', activecolor='#2962FF'),
     )
 
-    # Applica la rimozione dei buchi dei weekend solo sul timeframe Daily (mai su Weekly/Monthly)
+    # Rimozione buchi weekend solo sul Daily + selettori rapidi 1M / 3M / 6M / 1A / Tutto
     is_weekly = (interval == '1wk' or timeframe == '1wk')
     is_monthly = (interval == '1mo' or timeframe == '1mo')
     is_daily = (interval == '1d' and not is_weekly and not is_monthly)
@@ -4566,9 +4818,30 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         fig.update_xaxes(gridcolor='#1E222D', zerolinecolor='#2A2E39', rangebreaks=[dict(bounds=["sat", "mon"])], fixedrange=False)
     else:
         fig.update_xaxes(gridcolor='#1E222D', zerolinecolor='#2A2E39', fixedrange=False)
+    if is_daily or is_weekly:
+        fig.update_xaxes(
+            rangeselector=dict(
+                bgcolor="#1E293B",
+                activecolor="#2962FF",
+                font=dict(color="#F8FAFC", size=10),
+                x=0.0,
+                y=1.075,
+                xanchor="left",
+                yanchor="bottom",
+                buttons=[
+                    dict(count=1, label="1M", step="month", stepmode="backward"),
+                    dict(count=3, label="3M", step="month", stepmode="backward"),
+                    dict(count=6, label="6M", step="month", stepmode="backward"),
+                    dict(count=1, label="1A", step="year", stepmode="backward"),
+                    dict(step="all", label="Tutto"),
+                ],
+            ),
+            row=1,
+            col=1,
+        )
     fig.update_yaxes(gridcolor='#1E222D', zerolinecolor='#2A2E39', side='right', fixedrange=False)
 
-    # Finestra visibile iniziale intelligente per timeframe (mantenendo tutto lo storico scorribile)
+    # Finestra visibile iniziale ottimizzata mobile: 68 sedute sul Daily (candele larghe e nitide)
     end_dt = df.index[-1]
     if is_monthly:
         sub_df = df.tail(48)
@@ -4579,9 +4852,9 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         left_pad = pd.Timedelta(days=4)
         right_pad = pd.Timedelta(days=14)
     elif timeframe == '1d':
-        sub_df = df.tail(95)
+        sub_df = df.tail(68)
         left_pad = pd.Timedelta(days=1)
-        right_pad = pd.Timedelta(days=4)
+        right_pad = pd.Timedelta(days=3)
     elif timeframe in ["5D", "1M", "3M", "6M", "YTD", "1Y", "1A", "2Y"]:
         if timeframe == "5D":
             sub_df = df.tail(6)
@@ -4594,12 +4867,11 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             days_map = {"1M": 30, "3M": 90, "6M": 182, "1Y": 365, "1A": 365}
             sub_df = df[df.index >= (end_dt - pd.Timedelta(days=days_map.get(timeframe, 182)))]
         if len(sub_df) < 2:
-            sub_df = df.tail(min(95, len(df)))
+            sub_df = df.tail(min(68, len(df)))
         left_pad = pd.Timedelta(days=1)
-        right_pad = pd.Timedelta(days=4)
+        right_pad = pd.Timedelta(days=3)
     else:
-        # Intraday (15m / 1h): mostra le ultime 95 candele
-        sub_df = df.tail(95)
+        sub_df = df.tail(68)
         left_pad = pd.Timedelta(minutes=15)
         right_pad = pd.Timedelta(hours=2)
 
@@ -4607,14 +4879,12 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         x_start = sub_df.index[0] - left_pad
         x_end = end_dt + right_pad
 
-        # Calcolo range asse Y iniziale sul min/max visibile (+ livelli attivi pattern_engine) con margine 5%
+        # Calcolo range asse Y iniziale: candele + Trigger Y + Stop Loss (Target e PMC solo se entro ±12% dal prezzo
+        # per non schiacciare mai le candele creando spazio nero vuoto in alto!)
         vis_low = float(sub_df['Low'].min())
         vis_high = float(sub_df['High'].max())
-        _pat_for_range = pattern_info
-        if _pat_for_range is None:
-            _pat_for_range = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(str(ticker).upper())
         if isinstance(_pat_for_range, dict):
-            for _k_lvl in ("trigger_y", "target_price", "stop_price"):
+            for _k_lvl in ("trigger_y", "stop_price"):
                 _v_lvl = _pat_for_range.get(_k_lvl)
                 if _v_lvl is not None:
                     try:
@@ -4624,10 +4894,22 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
                             vis_high = max(vis_high, _fv)
                     except Exception:
                         pass
+            _v_targ = _pat_for_range.get("target_price")
+            if _v_targ is not None and prezzo_attuale > 0:
+                try:
+                    _ft = float(_v_targ)
+                    if _ft > 0 and abs(_ft - prezzo_attuale) / prezzo_attuale <= 0.12:
+                        vis_high = max(vis_high, _ft)
+                except Exception:
+                    pass
+        if prezzo_medio_chart is not None and prezzo_attuale > 0:
+            if abs(prezzo_medio_chart - prezzo_attuale) / prezzo_attuale <= 0.12:
+                vis_low = min(vis_low, prezzo_medio_chart)
+                vis_high = max(vis_high, prezzo_medio_chart)
 
         span_y = max(vis_high - vis_low, vis_high * 0.02, 1e-6)
-        y_min = max(0.0, vis_low - span_y * 0.05)
-        y_max = vis_high + span_y * 0.05
+        y_min = max(0.0, vis_low - span_y * 0.06)
+        y_max = vis_high + span_y * 0.06
 
         fig.update_xaxes(range=[x_start, x_end], row=1, col=1)
         fig.update_xaxes(range=[x_start, x_end], row=2, col=1)
@@ -6910,30 +7192,55 @@ def _disegna_card_punto_periodico(portafoglio, modalita, etichetta_fin):
         except Exception:
             riga_flussi_html = ""
 
-    st.markdown(
-        f"""
-        <div style="background:#131722; border:1px solid #334155; border-left:5px solid #38BDF8;
-                    border-radius:12px; padding:1.25rem 1.45rem; margin-bottom:1.1rem;">
-            <div style="font-size:1.14rem; font-weight:800; color:#F8FAFC; margin-bottom:0.20rem;">
-                {titolo_box}
-            </div>
-            <div style="font-size:0.78rem; color:#CBD5E1; margin-bottom:0.85rem;">
-                {etichetta_fin}
-            </div>
-            <div style="color:#F8FAFC; font-size:0.93rem; line-height:1.58; margin-bottom:0.65rem;">
-                {riga_clima}
-            </div>
-            <div style="color:#F8FAFC; font-size:0.93rem; line-height:1.58; margin-bottom:0.65rem;">
-                {riga_settori}
-            </div>
-            <div style="color:#F8FAFC; font-size:0.93rem; line-height:1.58;">
-                {riga_balene}
-            </div>
-            {riga_flussi_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # 0) TERMOMETRO MACRO TOM NASH (SPY Drawdown 52 settimane) in cima al Box Periodico
+    riga_macro_tn_html = ""
+    try:
+        _sem_box = st.session_state.get("semaforo_mercato")
+        if not isinstance(_sem_box, dict) or _sem_box.get("spy_drawdown_pct") is None:
+            _sem_box = semaforo_header if ("semaforo_header" in globals() and isinstance(semaforo_header, dict) and semaforo_header.get("spy_drawdown_pct") is not None) else calcola_semaforo_mercato()
+        _dd_box = _sem_box.get("spy_drawdown_pct") if isinstance(_sem_box, dict) else None
+        _zona_box = str((_sem_box or {}).get("zona_sconto_tom_nash") or "normale").lower()
+        if _dd_box is not None:
+            _dd_it = f"{float(_dd_box):.1f}%".replace(".", ",")
+            if _zona_box == "sconto":
+                _bg_m, _brd_m, _fg_m = "#0F2436", "#38BDF8", "#E0F2FE"
+                _txt_m = (
+                    f"📉 <b>Contesto Macro SPY ({_dd_it} dai massimi 52w):</b> "
+                    f"Modalità Sconto Istituzionale attiva — vietate vendite nel panico e priorità al DCA mirato sui campioni fondamentali."
+                )
+            elif _zona_box == "bear":
+                _bg_m, _brd_m, _fg_m = "#2B1418", "#F59E0B", "#FEF3C7"
+                _txt_m = (
+                    f"🛡️ <b>Contesto Macro SPY ({_dd_it} dai massimi 52w):</b> "
+                    f"Prudenza Bear Market — vietato svendere aziende sane nel panico, procedi solo con piccoli accumuli scaglionati."
+                )
+            else:
+                _bg_m, _brd_m, _fg_m = "#0B0E11", "#334155", "#E2E8F0"
+                _txt_m = (
+                    f"📊 <b>Contesto Macro SPY ({_dd_it} dai massimi 52w):</b> "
+                    f"Mercato vicino ai massimi (nessuna fascia sconto -8%/-10% attiva — operatività ordinaria con 3 Scudi attivi)."
+                )
+            riga_macro_tn_html = (
+                f"<div style='background:{_bg_m}; border:1px solid {_brd_m}; border-left:4px solid {_brd_m}; "
+                f"border-radius:8px; padding:0.55rem 0.85rem; margin-bottom:0.70rem; color:{_fg_m}; "
+                f"font-size:0.91rem; line-height:1.5;'>{_txt_m}</div>"
+            )
+    except Exception:
+        riga_macro_tn_html = ""
+
+    # Costruzione HTML priva di indentazioni >= 4 spazi per rendering garantito su Markdown Streamlit
+    _card_periodo_html = "".join([
+        "<div style='background:#131722; border:1px solid #334155; border-left:5px solid #38BDF8; border-radius:12px; padding:1.25rem 1.45rem; margin-bottom:1.1rem;'>",
+        f"<div style='font-size:1.14rem; font-weight:800; color:#F8FAFC; margin-bottom:0.20rem;'>{titolo_box}</div>",
+        f"<div style='font-size:0.78rem; color:#CBD5E1; margin-bottom:0.85rem;'>{etichetta_fin}</div>",
+        riga_macro_tn_html,
+        f"<div style='color:#F8FAFC; font-size:0.93rem; line-height:1.58; margin-bottom:0.65rem;'>{riga_clima}</div>",
+        f"<div style='color:#F8FAFC; font-size:0.93rem; line-height:1.58; margin-bottom:0.65rem;'>{riga_settori}</div>",
+        f"<div style='color:#F8FAFC; font-size:0.93rem; line-height:1.58;'>{riga_balene}</div>",
+        riga_flussi_html,
+        "</div>",
+    ])
+    st.markdown(_card_periodo_html, unsafe_allow_html=True)
 
 @st.cache_resource
 def _get_home_force_counter_store():
@@ -8238,7 +8545,7 @@ with tab_confronto:
                         )
                         if fig_c:
                             fig_c = applica_controlli_grafico(fig_c, 1)
-                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True}, key=f"chart_conf_{t_curr}_{idx_c}_{j}")
+                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]}, key=f"chart_conf_{t_curr}_{idx_c}_{j}")
                             render_barra_intervalli_yahoo(t_curr, "conf", default_tf="3M")
                         else:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
@@ -8440,7 +8747,7 @@ with tab_portafoglio:
                             f"🛑 Stop: `{_sym_live}{_pat_live.get('stop_price'):.2f}` | R/R `1:{_pat_live.get('rr'):.2f}`"
                         )
                     fig_side = applica_controlli_grafico(fig_side, 2)
-                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True}, key=f"port_side_live_chart_{sel_t}")
+                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]}, key=f"port_side_live_chart_{sel_t}")
                     render_barra_intervalli_yahoo(sel_t, "port", default_tf="3M")
             with col_port_left:
                 _hdr_c1, _hdr_c2, _hdr_c3 = st.columns((1.25, 0.95, 1.15))
@@ -9188,9 +9495,12 @@ with tab_analisi:
                 <p style="margin: 0.2rem 0;"><strong>⚖️ RAPPORTO RISCHIO/RENDIMENTO:</strong> Rischio <span style="color: #F23645;">{rischio_pct}%</span> vs Rendimento <span style="color: #089981;">+{targets_analisi['upside1']}%</span> → <strong>Rapporto 1:{rapporto_rr} ✅</strong></p>
             </div>
             """, unsafe_allow_html=True)
+        _seg_coer_box, _att_sc_box, _mot_sc_box = _valuta_verdetto_coerente_scudi(r)
         if r.get('is_ipo_recente'):
             # Per le IPO recenti l'avviso esplicativo è già mostrato in testa alla scheda
             pass
+        elif _att_sc_box:
+            st.warning(f"**{_seg_coer_box}**: {_mot_sc_box} (Setup tecnico: {r.get('motivo_by', '')})")
         elif r.get('trigger_by_fabio'):
             st.success(f"**🟢 BY FABIO**: {r['motivo_by']}")
         elif "BY" in r['segnale']:
@@ -9437,7 +9747,7 @@ with tab_analisi:
                 _pat_s = st.session_state.get("pattern_singola_attivo")
                 if isinstance(_pat_s, dict) and str(_pat_s.get("ticker", "")).upper() == _tk_g_up:
                     _pat_an = _pat_s
-            fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_config['period'], 50, 200, prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_config['tf'], interval=tf_config['interval'], eurusd_rate=eurusd_rate, height=860, pattern_info=_pat_an)
+            fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_config['period'], 50, 200, prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_config['tf'], interval=tf_config['interval'], eurusd_rate=eurusd_rate, height=640, pattern_info=_pat_an)
             if fig:
                 # Se il titolo ha un pattern attivo (da scansione o da Analisi Singola), traccia Trigger Y, Target e Stop
                 if _pat_an:
@@ -9449,7 +9759,7 @@ with tab_analisi:
                         f"🛑 Stop: `{_sym_an}{_pat_an.get('stop_price'):.2f}` | R/R `1:{_pat_an.get('rr'):.2f}`"
                     )
                 fig = applica_controlli_grafico(fig, 3)
-                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True})
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": "hover", "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"]})
             else:
                 st.error("Impossibile generare il grafico")
             if st.button("✖️ Chiudi grafico", use_container_width=True):
