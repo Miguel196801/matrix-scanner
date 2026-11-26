@@ -4,18 +4,27 @@
         "Ticker": "CRWD",
         "Operazione": "Mediazione / Incremento",
         "Motivo_Segnale": "DCA Binario 1 (Pullback Fase 2)",
-        "Tipo": "PAC",
+        "Tipo": "Spot",
         "Quantita": 1.0,
         "Prezzo_EUR": 189.98,
-        "Totale_EUR": 189.98
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 189.98,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 189.98
     },
     {
         "Data": "2026-11-16 22:03",
         "Ticker": "ONDS",
         "Operazione": "Aggiunta Quote",
+        "Motivo_Segnale": "Manuale / Storico",
         "Tipo": "Spot",
         "Quantita": 58.0,
         "Prezzo_EUR": 4.29,
-        "Totale_EUR": 248.82
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 248.82,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 248.82
     }
 ]

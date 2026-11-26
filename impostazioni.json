@@ -6,5 +6,8 @@
     "tickers": "MT, ONDS",
     "watchlist": "MT, ONDS",
     "liquidita_aggiuntiva": 0.0,
+    "saldo_cassa_allineato": 0.0,
+    "data_allineamento_cassa": "2026-11-26",
+    "ultimo_id_vendita_allineato": 3,
     "ultimo_agg_prezzi": "24/11/2026 07:02"
 }

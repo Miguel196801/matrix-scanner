@@ -2,6 +2,7 @@
     {
         "Ticker": "APLD",
         "Tipo": "PAC",
+        "PAC_Sospeso": true,
         "Quantita": 91.736081,
         "Prezzo_Medio": 16.56,
         "Prezzo_Attuale_EUR": 13.17,
@@ -12,7 +13,7 @@
         "Trend": "🔴 Forte -",
         "Earnings": "⚪ Utili tra 50gg",
         "Variazione_Pct": -9.3,
-        "Stato_PAC": "🟢 PAC ATTIVO",
+        "Stato_PAC": "⏸️ PAC Sospeso — Long",
         "Ultimo_Segnale": "🔴 BY: 18/09/2026 (-48.5%)",
         "Valore_Carico": 1487.77,
         "Variazione_Abs": 1.49
@@ -40,6 +41,7 @@
     {
         "Ticker": "ONDS",
         "Tipo": "Spot",
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
         "Quantita": 156.21147,
         "Prezzo_Medio": 4.79,
         "Categoria": "Azione",
@@ -116,6 +118,7 @@
     {
         "Ticker": "NVDA",
         "Tipo": "Spot",
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
         "Quantita": 4.0,
         "Prezzo_Medio": 133.54,
         "Prezzo_Attuale_EUR": 141.21,
@@ -172,8 +175,11 @@
     },
     {
         "Ticker": "CRWD",
-        "Tipo": "PAC",
+        "Tipo": "PAC + Spot",
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
         "Quantita": 1.29,
+        "Quantita_PAC": 0.29,
+        "Quantita_Spot": 1.0,
         "Prezzo_Medio": 193.79,
         "PAC_Settimanale": 10.0,
         "Categoria": "Azione",

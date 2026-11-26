@@ -518,7 +518,16 @@ def _rileva_fase_weinstein_ufficiale(df):
     return "FASE 1 (Accumulazione/Basing)"
 
 
-def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_score=0, solo_pre_ign=False, rileva_fase_fn=None):
+def render_check_3_regole(
+    tickers_list,
+    eurusd_rate=1.08,
+    solo_fase2=False,
+    min_score=0,
+    solo_pre_ign=False,
+    rileva_fase_fn=None,
+    portafoglio=None,
+    tom_nash_fn=None,
+):
     tks = []
     for x in (tickers_list or []):
         t_c = str(x).strip().upper()
@@ -527,6 +536,14 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
     if not tks:
         st.info("Inserisci almeno un ticker valido per avviare il controllo.")
         return
+    # Mappa posizioni possedute per la 4a riga diagnostica (Scudo Tom Nash & Stato PAC/Spot)
+    _port_src = portafoglio if portafoglio is not None else (st.session_state.get("portafoglio") or [])
+    port_map_chk = {
+        str(p.get("Ticker", "")).strip().upper(): p
+        for p in _port_src
+        if isinstance(p, dict) and p.get("Ticker")
+    }
+    salute_map_chk = st.session_state.get("home_salute_portafoglio") or {}
     righe = []
     with st.spinner(f"Verifica 3 Regole in corso su {len(tks)} titoli..."):
         for tk in tks:
@@ -660,6 +677,70 @@ def render_check_3_regole(tickers_list, eurusd_rate=1.08, solo_fase2=False, min_
                 righe.append({"Titolo": hdr_tk, "Motore": "🚀 IGNITION", "Esito": "✅ PASSA" if ok_ign else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_ign})
                 righe.append({"Titolo": _tk_full, "Motore": "🟢 BY FABIO", "Esito": "✅ PASSA" if ok_fab else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_fab})
                 righe.append({"Titolo": _tk_full, "Motore": "🔵 BY Standard", "Esito": "✅ PASSA" if ok_std else "❌ NO", "Dettaglio Criteri (✅ Passa | ❌ Manca)": det_std})
+
+                # 4a riga diagnostica per i titoli posseduti in portafoglio: Scudo Tom Nash & Stato PAC/Spot
+                if tk in port_map_chk:
+                    pos_p = port_map_chk[tk]
+                    inf_sal = salute_map_chk.get(tk) if isinstance(salute_map_chk, dict) else None
+                    # Calcola stato PAC/Spot (gestione 100% manuale del flag PAC_Sospeso)
+                    q_tot_p = float(pos_p.get("Quantita", 0) or 0)
+                    has_split = (pos_p.get("Quantita_PAC") is not None) or (pos_p.get("Quantita_Spot") is not None)
+                    if has_split:
+                        q_pac_p = float(pos_p.get("Quantita_PAC", 0) or 0)
+                        q_spot_p = float(pos_p.get("Quantita_Spot", 0) or 0)
+                    else:
+                        is_pac_tp = str(pos_p.get("Tipo", "Spot")).strip().upper().startswith("PAC")
+                        q_pac_p = q_tot_p if is_pac_tp else 0.0
+                        q_spot_p = 0.0 if is_pac_tp else q_tot_p
+                    pac_sosp = bool(pos_p.get("PAC_Sospeso", False))
+                    if q_pac_p > 1e-6 and q_spot_p > 1e-6:
+                        stato_pac_lbl = f"{'⏸️ PAC Sospeso — Long' if pac_sosp else '🟢 PAC Attivo'} + Spot ({q_pac_p:.2f} PAC + {q_spot_p:.2f} Spot)"
+                    elif q_pac_p > 1e-6:
+                        stato_pac_lbl = "⏸️ PAC Sospeso — Long (quote PAC 100% protette)" if pac_sosp else "🟢 PAC Attivo (quote PAC 100% protette)"
+                    else:
+                        stato_pac_lbl = "📂 Posizione Spot"
+
+                    # Recupera dati Tom Nash da salute_map o calcolandoli con tom_nash_fn
+                    if isinstance(inf_sal, dict) and ("scudo_tom_nash" in inf_sal):
+                        scudo_ok = bool(inf_sal.get("scudo_tom_nash"))
+                        nota_tn = str(inf_sal.get("scudo_tom_nash_nota") or "")
+                        badge_m = str(inf_sal.get("badge_multipli") or "")
+                    else:
+                        _inf_raw = {}
+                        try:
+                            _inf_raw = t_obj.info or {}
+                        except Exception:
+                            _inf_raw = {}
+                        if callable(tom_nash_fn):
+                            _tn_r = tom_nash_fn(_inf_raw, s_score=s_score)
+                            scudo_ok = bool(_tn_r.get("scudo_tom_nash"))
+                            nota_tn = str(_tn_r.get("scudo_tom_nash_nota") or "")
+                            badge_m = str(_tn_r.get("badge_multipli") or "")
+                        else:
+                            rg = _inf_raw.get("revenueGrowth")
+                            fpe = _inf_raw.get("forwardPE")
+                            scudo_ok = bool(rg is not None and float(rg) >= 0.05 and fpe is not None and 0 < float(fpe) < 65)
+                            parti_tn = []
+                            if rg is not None:
+                                parti_tn.append(f"Fatturato {float(rg)*100:+.0f}%")
+                            if fpe is not None and float(fpe) > 0:
+                                parti_tn.append(f"Forward P/E {float(fpe):.1f}x")
+                            nota_tn = ", ".join(parti_tn) if parti_tn else "Dati fondamentali N/D"
+                            badge_m = ""
+
+                    esito_tn = "🛡️ PROTETTO" if (scudo_ok or q_pac_p > 1e-6) else "⚪ MONITORA"
+                    pezzi_det = [
+                        f"{'🛡️ Scudo Tom Nash ATTIVO' if scudo_ok else 'ℹ️ Scudo Tom Nash non attivo'} ({nota_tn})",
+                        stato_pac_lbl,
+                    ]
+                    if badge_m:
+                        pezzi_det.append(badge_m)
+                    righe.append({
+                        "Titolo": _tk_full,
+                        "Motore": "🛡️ Tom Nash & PAC",
+                        "Esito": esito_tn,
+                        "Dettaglio Criteri (✅ Passa | ❌ Manca)": " | ".join(pezzi_det),
+                    })
             except Exception as ex:
                 righe.append({"Titolo": _tk_full, "Motore": "Errore", "Esito": "❌", "Dettaglio Criteri (✅ Passa | ❌ Manca)": str(ex)[:50]})
     if not righe:
