@@ -17,7 +17,201 @@ import os
 import re
 import hashlib
 import hmac
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+def _get_tz_italia():
+    """Restituisce il fuso orario italiano (ZoneInfo Europe/Rome) con fallback UTC+1."""
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Rome")
+    except Exception:
+        return timezone(timedelta(hours=1))
+
+def _now_italia():
+    """Restituisce data e ora correnti nel fuso orario italiano (anche su Streamlit Cloud UTC)."""
+    return datetime.now(_get_tz_italia())
+
+# ==============================================================================
+# CALENDARIO AUTOMATICO CHIUSURE & ORARI RIDOTTI BORSA USA (NYSE / NASDAQ)
+# ==============================================================================
+def _calcola_pasqua_gregoriana(anno):
+    """Calcola la data della Domenica di Pasqua gregoriana (algoritmo di Butcher/Meeus)."""
+    a = anno % 19
+    b = anno // 100
+    c = anno % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    mese = (h + l - 7 * m + 114) // 31
+    giorno = ((h + l - 7 * m + 114) % 31) + 1
+    return date(anno, mese, giorno)
+
+def _nth_weekday_of_month(anno, mese, weekday, n):
+    """Restituisce l'n-esimo giorno della settimana (0=Lun .. 6=Dom) nel mese indicato."""
+    primo = date(anno, mese, 1)
+    offset = (weekday - primo.weekday()) % 7
+    return primo + timedelta(days=offset + (n - 1) * 7)
+
+def _last_weekday_of_month(anno, mese, weekday):
+    """Restituisce l'ultimo giorno della settimana (0=Lun .. 6=Dom) nel mese indicato."""
+    ultimo = date(anno + 1, 1, 1) - timedelta(days=1) if mese == 12 else date(anno, mese + 1, 1) - timedelta(days=1)
+    offset = (ultimo.weekday() - weekday) % 7
+    return ultimo - timedelta(days=offset)
+
+def _osservanza_nyse(data_festa, permetti_anno_precedente=True):
+    """
+    Applica la regola di compensazione (observed) NYSE/Nasdaq:
+    - Sabato -> Venerdì precedente (eccetto il 1° Gennaio che per regola NYSE non chiude il 31 Dic).
+    - Domenica -> Lunedì successivo.
+    """
+    wd = data_festa.weekday()
+    if wd == 5:
+        if not permetti_anno_precedente and data_festa.month == 1 and data_festa.day == 1:
+            return None
+        return data_festa - timedelta(days=1)
+    if wd == 6:
+        return data_festa + timedelta(days=1)
+    return data_festa
+
+def _get_calendario_nyse_anno(anno):
+    """
+    Calcola automaticamente per l'anno indicato:
+    - chiusure: dict {date: nome_festivita} di tutte le chiusure feriali NYSE / Nasdaq
+      (Capodanno, MLK Day, Presidents' Day, Venerdì Santo, Memorial Day, Juneteenth,
+      Independence Day, Labor Day, Thanksgiving Day, Natale + giorni compensativi observed).
+    - orari_ridotti: dict {date: nome_evento} delle sedute con chiusura anticipata alle 19:00 italiane
+      (Black Friday, Vigilia Independence Day 3 Lug feriale, Vigilia Natale 24 Dic feriale).
+    """
+    chiusure = {}
+    orari_ridotti = {}
+
+    # 1) Capodanno (New Year's Day — 1 Gennaio; se sabato non chiude il 31 Dic precedente)
+    nyd_obs = _osservanza_nyse(date(anno, 1, 1), permetti_anno_precedente=False)
+    if nyd_obs is not None and nyd_obs.year == anno:
+        suff = " (osservato)" if nyd_obs != date(anno, 1, 1) else ""
+        chiusure[nyd_obs] = f"Capodanno / New Year's Day{suff}"
+
+    # 2) Martin Luther King Jr. Day (3° lunedì di Gennaio)
+    chiusure[_nth_weekday_of_month(anno, 1, 0, 3)] = "Martin Luther King Jr. Day"
+
+    # 3) Presidents' Day (3° lunedì di Febbraio)
+    chiusure[_nth_weekday_of_month(anno, 2, 0, 3)] = "Presidents' Day"
+
+    # 4) Venerdì Santo / Good Friday (Pasqua - 2 giorni)
+    good_friday = _calcola_pasqua_gregoriana(anno) - timedelta(days=2)
+    chiusure[good_friday] = "Venerdì Santo / Good Friday"
+
+    # 5) Memorial Day (ultimo lunedì di Maggio)
+    chiusure[_last_weekday_of_month(anno, 5, 0)] = "Memorial Day"
+
+    # 6) Juneteenth National Independence Day (19 Giugno, con osservanza Ven/Lun)
+    j19_obs = _osservanza_nyse(date(anno, 6, 19))
+    if j19_obs is not None:
+        suff = " (osservato)" if j19_obs != date(anno, 6, 19) else ""
+        chiusure[j19_obs] = f"Juneteenth National Independence Day{suff}"
+
+    # 7) Independence Day (4 Luglio, con osservanza Ven/Lun)
+    ind_obs = _osservanza_nyse(date(anno, 7, 4))
+    if ind_obs is not None:
+        suff = " (osservato)" if ind_obs != date(anno, 7, 4) else ""
+        chiusure[ind_obs] = f"Independence Day{suff}"
+
+    # 8) Labor Day (1° lunedì di Settembre)
+    chiusure[_nth_weekday_of_month(anno, 9, 0, 1)] = "Labor Day"
+
+    # 9) Thanksgiving Day (4° giovedì di Novembre)
+    thanksgiving = _nth_weekday_of_month(anno, 11, 3, 4)
+    chiusure[thanksgiving] = "Thanksgiving Day"
+
+    # 10) Natale / Christmas Day (25 Dicembre, con osservanza Ven/Lun)
+    xmas_obs = _osservanza_nyse(date(anno, 12, 25))
+    if xmas_obs is not None:
+        suff = " (osservato)" if xmas_obs != date(anno, 12, 25) else ""
+        chiusure[xmas_obs] = f"Natale / Christmas Day{suff}"
+
+    # --- CHIUSURE ANTICIPATE ALLE 19:00 ITALIANE (13:00 ET) ---
+    # A) Black Friday (venerdì successivo al Thanksgiving)
+    black_friday = thanksgiving + timedelta(days=1)
+    if black_friday.weekday() < 5 and black_friday not in chiusure:
+        orari_ridotti[black_friday] = "Black Friday"
+
+    # B) Vigilia Independence Day (3 Luglio feriale, se non già chiuso per observed 4 Luglio)
+    vig_luglio = date(anno, 7, 3)
+    if vig_luglio.weekday() < 5 and vig_luglio not in chiusure:
+        orari_ridotti[vig_luglio] = "Vigilia Independence Day"
+
+    # C) Vigilia di Natale (24 Dicembre feriale, se non già chiuso per observed 25 Dicembre)
+    vig_natale = date(anno, 12, 24)
+    if vig_natale.weekday() < 5 and vig_natale not in chiusure:
+        orari_ridotti[vig_natale] = "Vigilia di Natale"
+
+    return chiusure, orari_ridotti
+
+def _analizza_stato_borsa_usa_oggi_domani(data_rif=None):
+    """
+    Verifica con fuso orario italiano (ZoneInfo Europe/Rome) eventuali festività
+    o chiusure anticipate (19:00 italiane) di NYSE / Nasdaq per OGGI e DOMANI.
+    Restituisce una lista di avvisi pronti per il rendering banner.
+    """
+    oggi = data_rif or _now_italia().date()
+    domani = oggi + timedelta(days=1)
+    chiusure, orari_ridotti = _get_calendario_nyse_anno(oggi.year)
+    if domani.year != oggi.year:
+        ch_next, rid_next = _get_calendario_nyse_anno(domani.year)
+        chiusure.update(ch_next)
+        orari_ridotti.update(rid_next)
+
+    avvisi = []
+    if oggi.weekday() < 5 and oggi in chiusure:
+        avvisi.append({
+            "tipo": "chiusa_oggi",
+            "testo": f"🇺🇸 BORSA USA CHIUSA OGGI ({chiusure[oggi]}) — Nessuna contrattazione fino alla prossima apertura.",
+        })
+    elif oggi.weekday() < 5 and oggi in orari_ridotti:
+        avvisi.append({
+            "tipo": "ridotto_oggi",
+            "testo": f"⏰ ORARIO RIDOTTO BORSA USA: Oggi Wall Street chiude in anticipo alle 19:00 italiane ({orari_ridotti[oggi]}).",
+        })
+
+    if domani.weekday() < 5 and domani in chiusure:
+        avvisi.append({
+            "tipo": "chiusa_domani",
+            "testo": f"📅 AVVISO: DOMANI BORSA USA CHIUSA ({chiusure[domani]}) — Wall Street resterà chiusa.",
+        })
+    elif domani.weekday() < 5 and domani in orari_ridotti:
+        avvisi.append({
+            "tipo": "ridotto_domani",
+            "testo": f"⏰ ORARIO RIDOTTO BORSA USA: Domani Wall Street chiude in anticipo alle 19:00 italiane ({orari_ridotti[domani]}).",
+        })
+    return avvisi
+
+def render_banner_calendario_borsa_usa():
+    """Mostra eventuali banner ad alto contrasto su chiusure feriali o orari ridotti NYSE / Nasdaq."""
+    avvisi = _analizza_stato_borsa_usa_oggi_domani()
+    if not avvisi:
+        return
+    stili = {
+        "chiusa_oggi": ("#2B1418", "#EF4444", "#FEE2E2"),
+        "chiusa_domani": ("#2A1F0D", "#F59E0B", "#FEF3C7"),
+        "ridotto_oggi": ("#0F2436", "#38BDF8", "#E0F2FE"),
+        "ridotto_domani": ("#0F2436", "#38BDF8", "#E0F2FE"),
+    }
+    blocchi = []
+    for av in avvisi:
+        bg, brd, fg = stili.get(av["tipo"], ("#1E293B", "#64748B", "#F8FAFC"))
+        blocchi.append(
+            f"<div style='background:{bg}; border:1px solid {brd}; border-left:5px solid {brd}; "
+            f"border-radius:10px; padding:0.65rem 1.05rem; margin-bottom:0.55rem; "
+            f"color:{fg}; font-size:0.92rem; font-weight:700; line-height:1.35;'>"
+            f"{av['testo']}</div>"
+        )
+    st.markdown("".join(blocchi), unsafe_allow_html=True)
 
 warnings.filterwarnings('ignore')
 st.set_page_config(page_title="MATRIX DVMS V6.1.3 PRO", layout="wide", page_icon="🛡️")
@@ -874,15 +1068,177 @@ def _sync_github_file(file_path, content_str, mode="push"):
 # Espone la funzione di sincronizzazione GitHub anche al modulo regia_tracker
 st.session_state["_sync_github_file_fn"] = _sync_github_file
 
-def registra_acquisto_storico(ticker, tipo, qta, prezzo_eur, nota="Acquisto"):
+OPZIONI_MOTIVO_ACQUISTO = [
+    "DCA Binario 1 (Pullback Fase 2)",
+    "DCA Binario 2 (Supporto)",
+    "Breakout Matrix",
+    "Radar IGNITION 80",
+    "Setup Palantir AI",
+    "Switch Riserva Intelligente",
+    "Cluster Insider SEC",
+    "Manuale / Discrezionale",
+]
+
+OPZIONI_MOTIVO_VENDITA = [
+    "Presa Profitto >= +35%",
+    "Target Raggiunto",
+    "Stop Loss",
+    "Switch Riserva Intelligente",
+    "Deterioramento Strutturale (Fase 4)",
+    "Manuale / Discrezionale",
+]
+
+def _rileva_motivo_segnale_ticker(ticker, lato="ACQUISTO"):
+    """
+    Rileva automaticamente il motivo/segnale operativo attivo per il ticker indicato
+    ispezionando st.session_state (Home Page Pilota Automatico, Scanner, Radar IGNITION,
+    Setup Palantir, Insider SEC, Salute Portafoglio) e la Bacheca Segnali Attivi.
+    Restituisce una voce valida di OPZIONI_MOTIVO_ACQUISTO o OPZIONI_MOTIVO_VENDITA.
+    """
+    tk = str(ticker or "").strip().upper()
+    lato_u = str(lato or "ACQUISTO").strip().upper()
+    if not tk:
+        return "Manuale / Discrezionale"
+
+    snap_dec = st.session_state.get("home_snapshot_decisionale") or {}
+    bacheca = st.session_state.get("bacheca_segnali_attivi")
+    if not isinstance(bacheca, dict):
+        try:
+            bacheca = _carica_segnali_attivi()
+        except Exception:
+            bacheca = {"aperti": [], "chiusi": []}
+
+    if lato_u == "VENDITA":
+        # 1) Riserva Intelligente Fonte A / Fonte B (Switch o Presa Profitto >= +35%)
+        riserva = snap_dec.get("riserva") or {}
+        if str(riserva.get("ticker", "")).strip().upper() == tk:
+            fonte_r = str(riserva.get("fonte", "")).upper()
+            if "FONTE A" in fonte_r or float(riserva.get("pnl_pct") or 0.0) >= 35.0:
+                if snap_dec.get("top1_cand"):
+                    return "Switch Riserva Intelligente"
+                return "Presa Profitto >= +35%"
+            return "Switch Riserva Intelligente"
+
+        # 2) Alert espliciti di Take Profit
+        for tp in (st.session_state.get("take_profit_alerts") or []):
+            tp_tk = str(tp.get("Ticker") or tp.get("ticker") or "").strip().upper() if isinstance(tp, dict) else str(tp).strip().upper()
+            if tp_tk == tk:
+                return "Presa Profitto >= +35%"
+
+        # 3) Salute Portafoglio (P&L >= +35%, Stop Loss, Deterioramento Fase 4)
+        salute_map = st.session_state.get("home_salute_portafoglio") or {}
+        inf_sal = None
+        if isinstance(salute_map, dict):
+            inf_sal = salute_map.get(tk)
+        elif isinstance(salute_map, list):
+            for row_s in salute_map:
+                if isinstance(row_s, dict) and str(row_s.get("Ticker") or row_s.get("ticker") or "").strip().upper() == tk:
+                    inf_sal = row_s
+                    break
+        if isinstance(inf_sal, dict):
+            pnl_s = float(inf_sal.get("pnl_pct") or 0.0)
+            fase_s = str(inf_sal.get("fase") or "").upper()
+            stato_s = str(inf_sal.get("stato") or inf_sal.get("verdetto") or inf_sal.get("azione") or "").upper()
+            if pnl_s >= 35.0:
+                return "Presa Profitto >= +35%"
+            if "STOP" in stato_s:
+                return "Stop Loss"
+            if "FASE 4" in fase_s or "DETERIOR" in stato_s:
+                return "Deterioramento Strutturale (Fase 4)"
+            if "TARGET" in stato_s:
+                return "Target Raggiunto"
+
+        # 4) Bacheca Segnali Attivi (aperti/chiusi per target o stop)
+        for gruppo in ("aperti", "chiusi"):
+            for seg in (bacheca.get(gruppo) or []):
+                if not isinstance(seg, dict):
+                    continue
+                if str(seg.get("Ticker") or seg.get("ticker") or "").strip().upper() == tk:
+                    esito = str(seg.get("Esito") or seg.get("Stato") or seg.get("stato") or "").upper()
+                    if "TARGET" in esito:
+                        return "Target Raggiunto"
+                    if "STOP" in esito:
+                        return "Stop Loss"
+
+        return "Manuale / Discrezionale"
+
+    # --- LATO ACQUISTO / MEDIAZIONE ---
+    # 1) Proposta DCA Doppio Binario della Home Page
+    dca_cand = snap_dec.get("dca_cand") or {}
+    if str(dca_cand.get("ticker", "")).strip().upper() == tk:
+        return "DCA Binario 1 (Pullback Fase 2)" if int(dca_cand.get("binario") or 1) == 1 else "DCA Binario 2 (Supporto)"
+
+    # 2) Top 1 Unico della Home Page (incluso eventuale Switch da Riserva Intelligente)
+    top1_cand = snap_dec.get("top1_cand") or {}
+    if str(top1_cand.get("ticker", "")).strip().upper() == tk:
+        riserva = snap_dec.get("riserva") or {}
+        liq_alloc = float(st.session_state.get("liquidita_totale_alloc") or 0.0)
+        if riserva and liq_alloc < 40.0:
+            return "Switch Riserva Intelligente"
+        motori_txt = " ".join([str(m) for m in (top1_cand.get("motori") or [])]).upper()
+        if top1_cand.get("is_breakout_matrix") or "BREAKOUT" in motori_txt or "MATRIX" in motori_txt:
+            return "Breakout Matrix"
+        if "IGNITION" in motori_txt:
+            return "Radar IGNITION 80"
+        if "PALANTIR" in motori_txt:
+            return "Setup Palantir AI"
+        if int(top1_cand.get("sec_buys") or 0) >= 1:
+            return "Cluster Insider SEC"
+        return "Breakout Matrix"
+
+    # 3) Bacheca Segnali Attivi (segnali aperti)
+    for seg in (bacheca.get("aperti") or []):
+        if not isinstance(seg, dict):
+            continue
+        if str(seg.get("Ticker") or seg.get("ticker") or "").strip().upper() == tk:
+            fonte_s = f"{seg.get('Fonte', '')} {seg.get('Pattern', '')} {seg.get('Motivo', '')}".upper()
+            if "INSIDER" in fonte_s:
+                return "Cluster Insider SEC"
+            if "IGNITION" in fonte_s:
+                return "Radar IGNITION 80"
+            if "PALANTIR" in fonte_s:
+                return "Setup Palantir AI"
+            return "Breakout Matrix"
+
+    # 4) Radar IGNITION 80
+    for r_ig in (st.session_state.get("risultati_radar_ignition_80") or []):
+        if isinstance(r_ig, dict) and str(r_ig.get("Ticker") or r_ig.get("ticker") or "").strip().upper() == tk:
+            return "Radar IGNITION 80"
+
+    # 5) Setup Palantir AI
+    for r_pl in (st.session_state.get("ai_palantir_candidati") or []):
+        if isinstance(r_pl, dict) and str(r_pl.get("Ticker") or r_pl.get("ticker") or "").strip().upper() == tk:
+            return "Setup Palantir AI"
+
+    # 6) Pattern / Breakout Matrix & Pyramiding
+    pat_alerts = st.session_state.get("pattern_alerts") or {}
+    if isinstance(pat_alerts, dict) and tk in {str(k).strip().upper() for k in pat_alerts.keys()}:
+        return "Breakout Matrix"
+    for pyr in (st.session_state.get("pyramiding_alerts") or []):
+        pyr_tk = str(pyr.get("Ticker") or pyr.get("ticker") or "").strip().upper() if isinstance(pyr, dict) else str(pyr).strip().upper()
+        if pyr_tk == tk:
+            return "Breakout Matrix"
+
+    # 7) Cluster Insider SEC
+    for ins_r in (st.session_state.get("insider_results") or []):
+        if isinstance(ins_r, dict) and str(ins_r.get("Ticker") or ins_r.get("ticker") or "").strip().upper() == tk:
+            return "Cluster Insider SEC"
+
+    return "Manuale / Discrezionale"
+
+def registra_acquisto_storico(ticker, tipo, qta, prezzo_eur, nota="Acquisto", motivo_segnale=None):
+    """Registra un acquisto o una mediazione nello storico acquisti (sincronizzato su GitHub)."""
     try:
         storico = carica_json(REGISTRO_ACQUISTI_FILE, default=[])
         if not isinstance(storico, list):
             storico = []
+        tk_u = str(ticker).strip().upper()
+        motivo_fin = str(motivo_segnale).strip() if motivo_segnale else _rileva_motivo_segnale_ticker(tk_u, "ACQUISTO")
         storico.insert(0, {
-            "Data": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "Ticker": str(ticker).upper(),
+            "Data": _now_italia().strftime("%Y-%m-%d %H:%M"),
+            "Ticker": tk_u,
             "Operazione": nota,
+            "Motivo_Segnale": motivo_fin,
             "Tipo": str(tipo),
             "Quantita": round(float(qta), 4),
             "Prezzo_EUR": round(float(prezzo_eur), 4),
@@ -1136,7 +1492,7 @@ def _get_segnali_attivi_path():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), SEGNALI_ATTIVI_FILE)
 
 def _carica_segnali_attivi():
-    """Carica la bacheca persistente dei segnali attivi dell'utente loggato (con pull GitHub su Cloud)."""
+    """Carica la bacheca persistente dei segnali attivi dell'utente loggato (su Cloud scarica da GitHub)."""
     dati = carica_json(SEGNALI_ATTIVI_FILE, default={"aperti": [], "chiusi": []})
     if isinstance(dati, dict):
         dati.setdefault("aperti", [])
@@ -1145,12 +1501,19 @@ def _carica_segnali_attivi():
     return {"aperti": [], "chiusi": []}
 
 def _salva_segnali_attivi(dati):
-    """Salva la bacheca segnali attivi dell'utente loggato mantenendo max 10 chiusi (con sync GitHub)."""
+    """
+    Salva la bacheca segnali attivi dell'utente loggato (max 10 chiusi) su disco locale
+    e sincronizza automaticamente SEGNALI_ATTIVI_FILE su GitHub tramite _sync_github_file().
+    """
     if not isinstance(dati, dict):
         dati = {"aperti": [], "chiusi": []}
     dati["aperti"] = list(dati.get("aperti") or [])
     dati["chiusi"] = list(dati.get("chiusi") or [])[:10]
     salva_json(SEGNALI_ATTIVI_FILE, dati)
+    try:
+        st.session_state["bacheca_segnali_attivi"] = dati
+    except Exception:
+        pass
 
 def _calcola_livello_rischio_segnale(stop_pct, s_score=None):
     """Restituisce il livello di rischio visivo con peperoncini in base allo stop e all'S-Score."""
@@ -1495,7 +1858,7 @@ def render_bacheca_segnali_attivi(eurusd_rate=1.12):
                 if st.button("❌ Archivia", key=f"btn_arch_sig_{sig_id}_{idx_s}", use_container_width=True):
                     sig_arch = dict(sig)
                     sig_arch["stato"] = "ARCHIVIATO"
-                    sig_arch["data_chiusura"] = datetime.now().strftime("%Y-%m-%d")
+                    sig_arch["data_chiusura"] = _now_italia().strftime("%Y-%m-%d")
                     sig_arch["rendimento_pct"] = round(var_pct, 2)
                     dati["aperti"] = [x for k_x, x in enumerate(aperti) if k_x != idx_s]
                     dati["chiusi"] = ([sig_arch] + chiusi)[:10]
@@ -1795,7 +2158,7 @@ def leggi_ultimo_agg_prezzi():
         fp_port = os.path.join(os.path.dirname(os.path.abspath(__file__)), PORTAFOGLIO_FILE)
         if os.path.exists(fp_port):
             try:
-                ora_best = datetime.fromtimestamp(os.path.getmtime(fp_port)).strftime("%d/%m/%Y %H:%M")
+                ora_best = datetime.fromtimestamp(os.path.getmtime(fp_port), tz=_get_tz_italia()).strftime("%d/%m/%Y %H:%M")
             except Exception:
                 ora_best = "-"
         else:
@@ -1805,7 +2168,8 @@ def leggi_ultimo_agg_prezzi():
     return ora_best
 
 def salva_ultimo_agg_prezzi(ora_str=None):
-    nuova_ora = str(ora_str).strip() if ora_str else datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Usa sempre l'ora italiana reale (ZoneInfo Europe/Rome) anche su server Streamlit Cloud in UTC
+    nuova_ora = str(ora_str).strip() if ora_str else _now_italia().strftime("%d/%m/%Y %H:%M")
     fp_imp = _get_impostazioni_path()
     imp = {}
     if os.path.exists(fp_imp):
@@ -1816,12 +2180,7 @@ def salva_ultimo_agg_prezzi(ora_str=None):
                 imp = data_imp
         except Exception:
             imp = {}
-    ora_finale = _scegli_ora_piu_recente(
-        nuova_ora,
-        imp.get("ultimo_agg_prezzi"),
-        imp.get("_saved_last_price_update"),
-        st.session_state.get("_last_price_update")
-    ) or nuova_ora
+    ora_finale = nuova_ora
     imp["ultimo_agg_prezzi"] = ora_finale
     imp.pop("_saved_last_price_update", None)
     try:
@@ -2362,10 +2721,13 @@ def format_ultimo_segnale_display(ticker, prezzo_attuale_usd):
 ALIQUOTA_TASSE = 0.26
 ANNI_COMPENSAZIONE = 4
 
-def registra_vendita(ticker, qta_venduta, prezzo_medio, prezzo_vendita, data_vendita=None):
+def registra_vendita(ticker, qta_venduta, prezzo_medio, prezzo_vendita, data_vendita=None, motivo_segnale=None):
+    """Registra una vendita nel registro vendite e fiscalità (sincronizzato su GitHub) con Motivo_Segnale."""
     try:
         if data_vendita is None:
-            data_vendita = datetime.now().strftime("%Y-%m-%d")
+            data_vendita = _now_italia().strftime("%Y-%m-%d")
+        tk_u = ticker.strip().upper()
+        motivo_fin = str(motivo_segnale).strip() if motivo_segnale else _rileva_motivo_segnale_ticker(tk_u, "VENDITA")
         pnl_lordo = ((prezzo_vendita - prezzo_medio) * qta_venduta) - 1.0  # Comm. 1 EUR Trade Republic
         pnl_pct = ((prezzo_vendita / prezzo_medio) - 1) * 100 if prezzo_medio > 0 else 0
         minusvalenze = carica_json(MINUSVALENZE_FILE)
@@ -2387,14 +2749,14 @@ def registra_vendita(ticker, qta_venduta, prezzo_medio, prezzo_vendita, data_ven
             tipo_operazione = "minusvalenza"
             pnl_netto = pnl_lordo
             scadenza = (datetime.strptime(data_vendita, "%Y-%m-%d") + timedelta(days=365*ANNI_COMPENSAZIONE)).strftime("%Y-%m-%d")
-            minusvalenze.append({'Data': data_vendita, 'Scadenza': scadenza, 'Importo': abs(pnl_lordo), 'Ticker': ticker.strip().upper()})
+            minusvalenze.append({'Data': data_vendita, 'Scadenza': scadenza, 'Importo': abs(pnl_lordo), 'Ticker': tk_u})
         minusvalenze = [m for m in minusvalenze if m.get('Importo', 0) > 0]
         salva_json(MINUSVALENZE_FILE, minusvalenze)
         registro = carica_json(REGISTRO_VENDITE_FILE)
         id_op = max([v.get('id', 0) for v in registro], default=0) + 1
-        registro.append({'id': id_op, 'Data': data_vendita, 'Ticker': ticker.strip().upper(), 'Qta_Venduta': round(qta_venduta, 6), 'Prezzo_Medio': round(prezzo_medio, 4), 'Prezzo_Vendita': round(prezzo_vendita, 4), 'PnL_Lordo': round(pnl_lordo, 2), 'PnL_Pct': round(pnl_pct, 2), 'Minusvalenze_Usate': round(minusvalenze_usate, 2), 'Tasse': round(tasse, 2), 'PnL_Netto': round(pnl_netto, 2), 'Tipo': tipo_operazione})
+        registro.append({'id': id_op, 'Data': data_vendita, 'Ticker': tk_u, 'Motivo_Segnale': motivo_fin, 'Qta_Venduta': round(qta_venduta, 6), 'Prezzo_Medio': round(prezzo_medio, 4), 'Prezzo_Vendita': round(prezzo_vendita, 4), 'PnL_Lordo': round(pnl_lordo, 2), 'PnL_Pct': round(pnl_pct, 2), 'Minusvalenze_Usate': round(minusvalenze_usate, 2), 'Tasse': round(tasse, 2), 'PnL_Netto': round(pnl_netto, 2), 'Tipo': tipo_operazione})
         salva_json(REGISTRO_VENDITE_FILE, registro)
-        return {'id': id_op, 'pnl_lordo': pnl_lordo, 'pnl_pct': pnl_pct, 'tasse': tasse, 'pnl_netto': pnl_netto, 'minusvalenze_usate': minusvalenze_usate, 'tipo': tipo_operazione}
+        return {'id': id_op, 'pnl_lordo': pnl_lordo, 'pnl_pct': pnl_pct, 'tasse': tasse, 'pnl_netto': pnl_netto, 'minusvalenze_usate': minusvalenze_usate, 'tipo': tipo_operazione, 'motivo_segnale': motivo_fin}
     except Exception as e:
         print(f"Errore registrazione vendita: {e}")
         return None
@@ -5936,7 +6298,7 @@ def _esegui_cascata_home_cached(
             "veto_regime_msg": veto_m,
             "riserva": riserva_snap,
             "dca_cand": dca_snap,
-            "calcolato_alle": _get_now_italia().strftime("%H:%M"),
+            "calcolato_alle": _now_italia().strftime("%d/%m/%Y %H:%M"),
         },
     }
 
@@ -6027,8 +6389,13 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         _applica_snapshot_home_a_session_state(snapshot)
         st.session_state["_home_hash_caricato"] = hash_pf
 
-    # 2) Intestazione pulita della Home Page + pulsanti '👁️ Nascondi importi' e '🔄 Aggiorna Analisi'
-    _agg_ora_h = leggi_ultimo_agg_prezzi()
+    # 2) Banner automatico festività / chiusure anticipate Borsa USA (NYSE / Nasdaq)
+    render_banner_calendario_borsa_usa()
+
+    # 3) Intestazione pulita della Home Page + pulsanti '👁️ Nascondi importi' e '🔄 Aggiorna Analisi'
+    # Usa sempre l'ora italiana reale (ZoneInfo Europe/Rome) salvata nello snapshot o in impostazioni
+    _snap_ora_it = (st.session_state.get("home_snapshot_decisionale") or {}).get("calcolato_alle")
+    _agg_ora_h = _snap_ora_it or leggi_ultimo_agg_prezzi() or _now_italia().strftime("%d/%m/%Y %H:%M")
     c_hdr_l, c_hdr_priv, c_hdr_r = st.columns([2.8, 0.95, 1.05])
     with c_hdr_l:
         st.markdown(
@@ -6482,6 +6849,8 @@ st.markdown(f'''
 ''', unsafe_allow_html=True)
 if 'regia_tracker' in globals() and hasattr(regia_tracker, 'render_barra_indici_usa'):
     regia_tracker.render_barra_indici_usa()
+# Banner automatico festività / chiusure anticipate Borsa USA (NYSE / Nasdaq)
+render_banner_calendario_borsa_usa()
 
 if st.sidebar.button("🏠 Torna alla Home Semplificata", use_container_width=True, key="btn_torna_home_sidebar"):
     st.session_state["vista_attiva"] = "home"
@@ -6959,6 +7328,18 @@ with tab_portafoglio:
             new_qta = st.number_input("Quantità", min_value=0.0001, step=0.0001, format="%.6f", key="num_new_qta_port")
         with col_add4:
             new_medio = st.number_input("Prezzo Medio €", min_value=0.01, step=0.01, key="num_new_pmc_port")
+        # Rilevamento automatico del motivo/segnale attivo appena cambia il ticker digitato
+        _tk_hint_port = str(new_ticker).strip().upper()
+        if st.session_state.get("_last_tk_motivo_port") != _tk_hint_port:
+            st.session_state["_last_tk_motivo_port"] = _tk_hint_port
+            st.session_state["sel_motivo_acq_port"] = _rileva_motivo_segnale_ticker(_tk_hint_port, "ACQUISTO")
+        if "sel_motivo_acq_port" not in st.session_state or st.session_state["sel_motivo_acq_port"] not in OPZIONI_MOTIVO_ACQUISTO:
+            st.session_state["sel_motivo_acq_port"] = "Manuale / Discrezionale"
+        new_motivo_acq = st.selectbox(
+            "🎯 Motivo Segnale (rilevato automaticamente se presente, modificabile)",
+            OPZIONI_MOTIVO_ACQUISTO,
+            key="sel_motivo_acq_port",
+        )
         if st.button("✅ Conferma Acquisto in Portafoglio", type="primary", key="btn_add_port_direct"):
             _tk_clean = str(new_ticker).strip().upper()
             if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
@@ -6981,7 +7362,7 @@ with tab_portafoglio:
                         _trovato_m = True
                         salva_ultimo_agg_prezzi()
                         salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
-                        registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC")
+                        registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC", motivo_segnale=new_motivo_acq)
                         break
                 if not _trovato_m:
                     _q_n = round(float(new_qta), 6)
@@ -6996,11 +7377,11 @@ with tab_portafoglio:
                         "Valore_Attuale": round(_q_n * _pm_n, 2),
                         "PnL_EUR": 0.0,
                         "PnL_%": 0.0,
-                        "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
+                        "Data_Acquisto": _now_italia().strftime("%Y-%m-%d")
                     })
                     salva_ultimo_agg_prezzi()
                     salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
-                    registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto")
+                    registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto", motivo_segnale=new_motivo_acq)
                 st.rerun()
 
     _msg_rld_port = st.session_state.pop("_msg_reload_disk", None)
@@ -7204,6 +7585,9 @@ with tab_portafoglio:
                                 nuova_qta = st.number_input("Nuova Qta", min_value=0.0001, step=0.0001, key=f"qta_{ticker}_{idx_pos}")
                             with col_a2:
                                 nuovo_prezzo_acq = st.number_input("Prezzo Acquisto €", min_value=0.01, step=0.01, key=f"prezzo_acq_{ticker}_{idx_pos}")
+                            _mot_auto_acq = _rileva_motivo_segnale_ticker(ticker, "ACQUISTO")
+                            _idx_mot_acq = OPZIONI_MOTIVO_ACQUISTO.index(_mot_auto_acq) if _mot_auto_acq in OPZIONI_MOTIVO_ACQUISTO else len(OPZIONI_MOTIVO_ACQUISTO) - 1
+                            motivo_acq_card = st.selectbox("🎯 Motivo Segnale", OPZIONI_MOTIVO_ACQUISTO, index=_idx_mot_acq, key=f"mot_acq_{ticker}_{idx_pos}")
                             if st.button("✅ Conferma Aggiunta", key=f"add_{ticker}_{idx_pos}", use_container_width=True):
                                     if nuova_qta > 0 and nuovo_prezzo_acq > 0:
                                         vecchio_medio = pos['Prezzo_Medio']
@@ -7212,7 +7596,7 @@ with tab_portafoglio:
                                         pos['Prezzo_Medio'] = round(nuovo_medio, 4)
                                         salva_json(PORTAFOGLIO_FILE, portafoglio)
                                         st.session_state.portafoglio = portafoglio
-                                        registra_acquisto_storico(ticker, pos.get('Tipo', 'Spot'), nuova_qta, nuovo_prezzo_acq, nota="Aggiunta Quote")
+                                        registra_acquisto_storico(ticker, pos.get('Tipo', 'Spot'), nuova_qta, nuovo_prezzo_acq, nota="Aggiunta Quote", motivo_segnale=motivo_acq_card)
                                         st.success(f"✅ Aggiunte {nuova_qta} quote di {ticker}. Nuovo medio: €{nuovo_medio:.4f}")
                                         st.rerun()
                             st.markdown("---")
@@ -7226,11 +7610,14 @@ with tab_portafoglio:
                             else:
                                 qta_da_vendere = st.number_input(f"Quantità da vendere (max {quantita:.6f})", min_value=0.0001, max_value=quantita, step=0.0001, value=min(quantita, 1.0), key=f"qta_vend_{ticker}_{idx_pos}")
                             prezzo_vendita = st.number_input("Prezzo di vendita €", min_value=0.01, step=0.01, value=float(prezzo_eur) if prezzo_eur else 0.01, key=f"prezzo_vend_{ticker}_{idx_pos}")
+                            _mot_auto_vend = _rileva_motivo_segnale_ticker(ticker, "VENDITA")
+                            _idx_mot_vend = OPZIONI_MOTIVO_VENDITA.index(_mot_auto_vend) if _mot_auto_vend in OPZIONI_MOTIVO_VENDITA else len(OPZIONI_MOTIVO_VENDITA) - 1
+                            motivo_vend_card = st.selectbox("🎯 Motivo Segnale Vendita", OPZIONI_MOTIVO_VENDITA, index=_idx_mot_vend, key=f"mot_vend_{ticker}_{idx_pos}")
                             if qta_da_vendere > 0 and prezzo_vendita > 0 and prezzo_medio > 0:
                                 pnl_lordo_prev = ((prezzo_vendita - prezzo_medio) * qta_da_vendere) - 1.0
                                 pnl_pct_prev = ((prezzo_vendita / prezzo_medio) - 1) * 100
                                 minusvalenze_disp = carica_json(MINUSVALENZE_FILE)
-                                oggi_str = datetime.now().strftime("%Y-%m-%d")
+                                oggi_str = _now_italia().strftime("%Y-%m-%d")
                                 tasse_sim = 0
                                 if pnl_lordo_prev > 0:
                                     residuo = pnl_lordo_prev
@@ -7253,7 +7640,7 @@ with tab_portafoglio:
                                 """, unsafe_allow_html=True)
                                 if st.button(f"🔴 Conferma Vendita {ticker}", key=f"vend_{ticker}_{idx_pos}", type="primary"):
                                     if qta_da_vendere <= quantita:
-                                        risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita)
+                                        risultato = registra_vendita(ticker, qta_da_vendere, prezzo_medio, prezzo_vendita, motivo_segnale=motivo_vend_card)
                                         if risultato and 'regia_tracker' in globals() and hasattr(regia_tracker, 'salta_ticker_5gg'):
                                             regia_tracker.salta_ticker_5gg(ticker)
                                         if risultato:
@@ -7449,13 +7836,24 @@ with tab_console:
         with st.expander("⚙️ Modifica Portafoglio (Aggiungi/Rimuovi Titoli)"):
             col_add1, col_add2, col_add3, col_add4 = st.columns([2, 1, 1, 1])
             with col_add1:
-                new_ticker = st.text_input("Ticker (es. AAPL)").upper()
+                new_ticker = st.text_input("Ticker (es. AAPL)", key="inp_new_tk_console").upper()
             with col_add2:
-                new_tipo = st.selectbox("Tipo", ["Spot", "PAC"])
+                new_tipo = st.selectbox("Tipo", ["Spot", "PAC"], key="sel_new_tp_console")
             with col_add3:
-                new_qta = st.number_input("Quantità", min_value=0.0001, step=0.0001)
+                new_qta = st.number_input("Quantità", min_value=0.0001, step=0.0001, key="num_new_qta_console")
             with col_add4:
-                new_medio = st.number_input("Prezzo Medio €", min_value=0.01, step=0.01)
+                new_medio = st.number_input("Prezzo Medio €", min_value=0.01, step=0.01, key="num_new_pmc_console")
+            _tk_hint_cons = str(new_ticker).strip().upper()
+            if st.session_state.get("_last_tk_motivo_console") != _tk_hint_cons:
+                st.session_state["_last_tk_motivo_console"] = _tk_hint_cons
+                st.session_state["sel_motivo_acq_console"] = _rileva_motivo_segnale_ticker(_tk_hint_cons, "ACQUISTO")
+            if "sel_motivo_acq_console" not in st.session_state or st.session_state["sel_motivo_acq_console"] not in OPZIONI_MOTIVO_ACQUISTO:
+                st.session_state["sel_motivo_acq_console"] = "Manuale / Discrezionale"
+            new_motivo_cons = st.selectbox(
+                "🎯 Motivo Segnale (rilevato automaticamente se presente, modificabile)",
+                OPZIONI_MOTIVO_ACQUISTO,
+                key="sel_motivo_acq_console",
+            )
             if st.button("➕ Aggiungi al Portafoglio"):
                 _tk_clean = str(new_ticker).strip().upper()
                 if _tk_clean and float(new_qta) > 0 and float(new_medio) > 0:
@@ -7477,7 +7875,7 @@ with tab_console:
                                 _item_m["PnL_%"] = round(((_item_m["Valore_Attuale"] / _item_m["Valore_Carico"]) - 1) * 100, 2) if _item_m["Valore_Carico"] > 0 else 0.0
                             _trovato_m = True
                             salva_ultimo_agg_prezzi(); salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
-                            registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC"); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
+                            registra_acquisto_storico(_tk_clean, str(_item_m.get("Tipo", new_tipo)), float(new_qta), float(new_medio), nota="Mediazione PMC", motivo_segnale=new_motivo_cons); st.success(f"✅ {_tk_clean} mediato! Totale: {_q_new:.4f} az. | Nuovo PMC: € {_pmc_new:.2f}")
                             break
                     if not _trovato_m:
                         _q_n = round(float(new_qta), 6)
@@ -7492,10 +7890,10 @@ with tab_console:
                             "Valore_Attuale": round(_q_n * _pm_n, 2),
                             "PnL_EUR": 0.0,
                             "PnL_%": 0.0,
-                            "Data_Acquisto": datetime.now().strftime("%Y-%m-%d")
+                            "Data_Acquisto": _now_italia().strftime("%Y-%m-%d")
                         })
                         salva_ultimo_agg_prezzi(); salva_json(PORTAFOGLIO_FILE, st.session_state.portafoglio)
-                        registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto"); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
+                        registra_acquisto_storico(_tk_clean, str(new_tipo), _q_n, _pm_n, nota="Nuovo Acquisto", motivo_segnale=new_motivo_cons); st.success(f"✅ {_tk_clean} aggiunto al portafoglio ({_q_n:.4f} az. @ € {_pm_n:.2f})!")
             st.markdown("---")
             st.write("Rimuovi un titolo:")
             port_att = st.session_state.portafoglio or carica_json(PORTAFOGLIO_FILE) or PORTAFOGLIO_INIZIALE
@@ -8114,19 +8512,29 @@ with tab_analisi:
                 st.rerun()
 with tab_registro:
     st.markdown("### 📒 Registro Acquisti & Mediazioni")
-    if os.path.exists("registro_acquisti.json"):
-        with open("registro_acquisti.json", "r", encoding="utf-8") as _fa:
-            _dati_acq = json.load(_fa)
-        if _dati_acq:
-            st.dataframe(pd.DataFrame(_dati_acq), use_container_width=True, hide_index=True)
-        else:
-            st.info("Nessun acquisto registrato finora.")
+    _dati_acq = carica_json(REGISTRO_ACQUISTI_FILE, default=[])
+    if isinstance(_dati_acq, list) and _dati_acq:
+        _righe_acq_norm = []
+        for _ra in _dati_acq:
+            if not isinstance(_ra, dict):
+                continue
+            _righe_acq_norm.append({
+                "Data": _ra.get("Data", ""),
+                "Ticker": _ra.get("Ticker", ""),
+                "Operazione": _ra.get("Operazione", ""),
+                "Motivo Segnale": _ra.get("Motivo_Segnale") or "Manuale / Storico",
+                "Tipo": _ra.get("Tipo", ""),
+                "Quantita": _ra.get("Quantita", 0),
+                "Prezzo_EUR": _ra.get("Prezzo_EUR", 0),
+                "Totale_EUR": _ra.get("Totale_EUR", 0),
+            })
+        st.dataframe(pd.DataFrame(_righe_acq_norm), use_container_width=True, hide_index=True)
     else:
         st.info("Il registro acquisti si creerà automaticamente al primo nuovo acquisto o mediazione.")
 
     st.subheader("📋 Registro Vendite & Fiscalità")
     anni_disponibili = ["Tutti"] + [str(y) for y in range(2024, 2028)]
-    anno_corrente = str(datetime.now().year)
+    anno_corrente = str(_now_italia().year)
     index_default = anni_disponibili.index(anno_corrente) if anno_corrente in anni_disponibili else 0
     anno_filter = st.selectbox("📅 Filtra per anno:", anni_disponibili, index=index_default)
     anno_val = None if anno_filter == "Tutti" else int(anno_filter)
@@ -8178,9 +8586,9 @@ with tab_registro:
             from io import StringIO
             output = StringIO()
             writer = csv.writer(output)
-            writer.writerow(['ID', 'Data', 'Ticker', 'Qta Venduta', 'Prezzo Medio', 'Prezzo Vendita', 'P&L Lordo', 'P&L %', 'Minusvalenze Usate', 'Tasse', 'P&L Netto', 'Tipo'])
+            writer.writerow(['ID', 'Data', 'Ticker', 'Motivo Segnale', 'Qta Venduta', 'Prezzo Medio', 'Prezzo Vendita', 'P&L Lordo', 'P&L %', 'Minusvalenze Usate', 'Tasse', 'P&L Netto', 'Tipo'])
             for v in registro:
-                writer.writerow([v.get('id', ''), v.get('Data', ''), v.get('Ticker', ''), v.get('Qta_Venduta', ''), v.get('Prezzo_Medio', ''), v.get('Prezzo_Vendita', ''), v.get('PnL_Lordo', ''), v.get('PnL_Pct', ''), v.get('Minusvalenze_Usate', ''), v.get('Tasse', ''), v.get('PnL_Netto', ''), v.get('Tipo', '')])
+                writer.writerow([v.get('id', ''), v.get('Data', ''), v.get('Ticker', ''), v.get('Motivo_Segnale') or 'Manuale / Storico', v.get('Qta_Venduta', ''), v.get('Prezzo_Medio', ''), v.get('Prezzo_Vendita', ''), v.get('PnL_Lordo', ''), v.get('PnL_Pct', ''), v.get('Minusvalenze_Usate', ''), v.get('Tasse', ''), v.get('PnL_Netto', ''), v.get('Tipo', '')])
             csv_data = output.getvalue()
         if csv_data:
             st.download_button(label="⬇️ Scarica CSV", data=csv_data, file_name=f"registro_vendite_{anno_filter}.csv", mime="text/csv")
@@ -8195,8 +8603,12 @@ with tab_registro:
     st.markdown("---")
     if registro:
         df_registro = pd.DataFrame(registro)
-        df_display = df_registro[['id', 'Data', 'Ticker', 'Qta_Venduta', 'Prezzo_Medio', 'Prezzo_Vendita', 'PnL_Lordo', 'PnL_Pct', 'Minusvalenze_Usate', 'Tasse', 'PnL_Netto', 'Tipo']].copy()
-        df_display.columns = ['ID', 'Data', 'Ticker', 'Qta', 'P.Medio', 'P.Vendita', 'P&L Lordo', 'P&L %', 'MV Usate', 'Tasse', 'P&L Netto', 'Tipo']
+        if 'Motivo_Segnale' not in df_registro.columns:
+            df_registro['Motivo_Segnale'] = 'Manuale / Storico'
+        else:
+            df_registro['Motivo_Segnale'] = df_registro['Motivo_Segnale'].fillna('').replace('', 'Manuale / Storico')
+        df_display = df_registro[['id', 'Data', 'Ticker', 'Motivo_Segnale', 'Qta_Venduta', 'Prezzo_Medio', 'Prezzo_Vendita', 'PnL_Lordo', 'PnL_Pct', 'Minusvalenze_Usate', 'Tasse', 'PnL_Netto', 'Tipo']].copy()
+        df_display.columns = ['ID', 'Data', 'Ticker', 'Motivo Segnale', 'Qta', 'P.Medio', 'P.Vendita', 'P&L Lordo', 'P&L %', 'MV Usate', 'Tasse', 'P&L Netto', 'Tipo']
         def color_pnl(val):
             try:
                 v = float(val)
