@@ -364,6 +364,11 @@ def _deduplica_e_allinea_tracker_list(sh_list):
                 visti_reali_chiusi[k_ch] = len(pulita)
                 pulita.append(r)
         else:
+            # I record virtuali 'Metodo Sistema' aggiornano SL/Trailing in silenzio: pulisce eventuali Avviso_SL residui
+            if str(r.get('Avviso_SL') or '').strip():
+                r['Avviso_SL'] = ''
+                r['Avviso_SL_Tipo'] = ''
+                mod = True
             bid = str(r.get('Bivio_ID') or '').strip()
             tp_s = _inferisci_tipo_segnale_sistema(r)
             if bid:
@@ -1387,7 +1392,8 @@ def ottieni_avvisi_protezione_pendenti(portafoglio=None):
 def conferma_avviso_sl(ticker, nuovo_sl=None):
     """
     Archivia l'avviso Protezione Profitto sia nella Home Page sia nel Tracker salvando
-    SL_Confermato_TR su regia_tracker*.json (con sincronizzazione GitHub automatica).
+    SL_Confermato_TR su regia_tracker*.json (con sincronizzazione GitHub automatica) e
+    sincronizzando la conferma anche sull'eventuale record gemello con lo stesso Bivio_ID.
     """
     tk = str(ticker or '').strip().upper()
     if not tk:
@@ -1397,6 +1403,10 @@ def conferma_avviso_sl(ticker, nuovo_sl=None):
         return False
     oggi = _oggi_italia_str()
     mod = False
+    bivi_confermati = set()
+    sl_conf_ref = round(float(nuovo_sl), 2) if (nuovo_sl is not None and float(nuovo_sl or 0) > 0) else 0.0
+
+    # 1) Conferma sui record attivi del ticker (priorità Portafoglio Reale) e raccoglie gli eventuali Bivio_ID
     for rec in sh_list:
         if not isinstance(rec, dict):
             continue
@@ -1405,13 +1415,42 @@ def conferma_avviso_sl(ticker, nuovo_sl=None):
         if str(rec.get('Stato') or '') != 'Attivo':
             continue
         if _is_operazione_portafoglio_reale(rec) or str(rec.get('Avviso_SL') or '').strip():
-            sl_val = round(float(nuovo_sl if nuovo_sl is not None else (rec.get('Stop_Loss') or 0.0)), 2)
+            sl_val = round(float(sl_conf_ref if sl_conf_ref > 0 else (rec.get('Stop_Loss') or 0.0)), 2)
+            if sl_val > 0 and sl_conf_ref <= 0:
+                sl_conf_ref = sl_val
             rec['Avviso_SL'] = ''
+            rec['Avviso_SL_Tipo'] = ''
             if sl_val > 0:
                 rec['SL_Confermato_TR'] = sl_val
                 rec['SL_Notificato_Telegram'] = max(float(rec.get('SL_Notificato_Telegram') or 0.0), sl_val)
             rec['Data_Conferma_SL'] = oggi
+            bid_c = str(rec.get('Bivio_ID') or '').strip()
+            if bid_c:
+                bivi_confermati.add(bid_c)
             mod = True
+
+    # 2) Sincronizza la conferma anche sull'eventuale record gemello (stesso Bivio_ID o virtuale dello stesso ticker)
+    for rec in sh_list:
+        if not isinstance(rec, dict) or str(rec.get('Stato') or '') != 'Attivo':
+            continue
+        bid_r = str(rec.get('Bivio_ID') or '').strip()
+        tk_r = str(rec.get('Ticker') or '').strip().upper()
+        if (bid_r and bid_r in bivi_confermati) or (tk_r == tk and not _is_operazione_portafoglio_reale(rec)):
+            if str(rec.get('Avviso_SL') or '').strip():
+                rec['Avviso_SL'] = ''
+                rec['Avviso_SL_Tipo'] = ''
+                mod = True
+            if sl_conf_ref > 0:
+                if float(rec.get('SL_Confermato_TR') or 0.0) < sl_conf_ref:
+                    rec['SL_Confermato_TR'] = sl_conf_ref
+                    mod = True
+                if float(rec.get('Stop_Loss') or 0.0) < sl_conf_ref:
+                    rec['Stop_Loss'] = sl_conf_ref
+                    mod = True
+            if rec.get('Data_Conferma_SL') != oggi:
+                rec['Data_Conferma_SL'] = oggi
+                mod = True
+
     if mod:
         _save_j(SHADOW_FILE, sh_list)
     return mod
@@ -1439,17 +1478,21 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
         # Allineamento automatico continuo con le posizioni del portafoglio reale
         sync_upd = bool(dedup_init_mod)
         sh_pulita = []
+        mappa_reali_sync = {}  # bivio_id -> (Entry, Taglia_EUR, Currency) per tenere al centesimo i gemelli START
         for r_p in sh_list:
             is_pr = _is_operazione_portafoglio_reale(r_p)
             tk_p = str(r_p.get('Ticker', '')).strip().upper()
-            has_bivio = bool(str(r_p.get('Bivio_ID') or '').strip())
+            bid_p = str(r_p.get('Bivio_ID') or '').strip()
+            has_bivio = bool(bid_p)
+            # Un Bivio_ID che termina con '_START' è un allineamento iniziale solo Spot (non un bivio vendita su PAC)
+            has_bivio_vendita = has_bivio and (not bid_p.endswith('_START'))
             # Rimuove eventuali vecchi alert SL generati erroneamente su titoli PAC (preservando quelli tracciati per un Bivio)
-            if is_pr and tk_p in pac_tickers and (not has_bivio) and (r_p.get('Stato') == 'Attivo' or str(r_p.get('Esito_Reale', '')) == 'Da Gestire'):
+            if is_pr and tk_p in pac_tickers and (not has_bivio_vendita) and (r_p.get('Stato') == 'Attivo' or str(r_p.get('Esito_Reale', '')) == 'Da Gestire'):
                 sync_upd = True
                 continue
             if is_pr and r_p.get('Stato') == 'Attivo':
-                # Chiude come Venduto Reale se il titolo non è più nel portafoglio (per i bivi verifica port_map_all, inclusi PAC)
-                mappa_ref = port_map_all if has_bivio else port_map_spot
+                # Chiude come Venduto Reale se il titolo non è più nel portafoglio (per i bivi vendita verifica port_map_all, inclusi PAC)
+                mappa_ref = port_map_all if has_bivio_vendita else port_map_spot
                 if tk_p not in mappa_ref:
                     r_p['Stato'] = 'Chiuso (Venduto Reale)'
                     r_p['Esito_Reale'] = 'Venduto Reale'
@@ -1459,17 +1502,39 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 else:
                     pos_ref = mappa_ref[tk_p]
                     _, q_spot_ref = _ripartizione_pac_spot_tracker(pos_ref)
-                    q_reale = q_spot_ref if (q_spot_ref > 1e-6 and not has_bivio) else float(pos_ref.get('Quantita', 0) or 0)
+                    q_reale = q_spot_ref if (q_spot_ref > 1e-6 and not has_bivio_vendita) else float(pos_ref.get('Quantita', 0) or 0)
                     pmc_reale = round(float(pos_ref.get('Prezzo_Medio', r_p.get('Entry', 0)) or 0), 2)
                     taglia_reale = round(q_reale * pmc_reale, 2)
-                    if pmc_reale > 0 and (abs(pmc_reale - float(r_p.get('Entry', 0))) > 0.01 or abs(taglia_reale - float(r_p.get('Taglia_EUR', 0))) > 1.0):
+                    if pmc_reale > 0 and (abs(pmc_reale - float(r_p.get('Entry', 0))) > 0.01 or abs(taglia_reale - float(r_p.get('Taglia_EUR', 0))) > 0.01):
                         r_p['Entry'] = pmc_reale
                         r_p['Taglia_EUR'] = taglia_reale
                         sync_upd = True
                     if not r_p.get('Origine'):
                         r_p['Origine'] = 'Portafoglio Reale'
                         sync_upd = True
+                    if bid_p and bid_p.endswith('_START'):
+                        mappa_reali_sync[bid_p] = (
+                            round(float(r_p.get('Entry') or pmc_reale), 2),
+                            round(float(r_p.get('Taglia_EUR') or taglia_reale), 2),
+                            r_p.get('Currency') or ('EUR' if any(tk_p.endswith(s) for s in _SUFFISSI_EUR) else 'USD'),
+                        )
             sh_pulita.append(r_p)
+        # Allinea al centesimo Entry, Taglia_EUR e Currency sui gemelli 'ALLINEAMENTO_START' attivi
+        if mappa_reali_sync:
+            for r_s in sh_pulita:
+                if (not _is_operazione_portafoglio_reale(r_s)) and str(r_s.get('Stato') or '') == 'Attivo':
+                    bid_s = str(r_s.get('Bivio_ID') or '').strip()
+                    if bid_s in mappa_reali_sync and _inferisci_tipo_segnale_sistema(r_s) == 'ALLINEAMENTO_START':
+                        en_ref, tg_ref, cur_ref = mappa_reali_sync[bid_s]
+                        if (
+                            abs(float(r_s.get('Entry') or 0) - en_ref) > 0.005
+                            or abs(float(r_s.get('Taglia_EUR') or 0) - tg_ref) > 0.005
+                            or r_s.get('Currency') != cur_ref
+                        ):
+                            r_s['Entry'] = en_ref
+                            r_s['Taglia_EUR'] = tg_ref
+                            r_s['Currency'] = cur_ref
+                            sync_upd = True
         sh_list = sh_pulita
         if sync_upd:
             _save_j(SHADOW_FILE, sh_list)
@@ -1740,9 +1805,15 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                     step_tr = 1
                                     sh_list[idx_s]['Stop_Loss'] = sl_r
                                     sh_list[idx_s]['Step_Trailing'] = 1
-                                    if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
-                                        sh_list[idx_s]['Avviso_SL_Tipo'] = 'PAREGGIO'
-                                        sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (pareggio)."
+                                    if is_port_reale:
+                                        if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
+                                            sh_list[idx_s]['Avviso_SL_Tipo'] = 'PAREGGIO'
+                                            sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (pareggio)."
+                                    else:
+                                        # Record virtuale 'Metodo Sistema': aggiornamento silenzioso senza banner manuale
+                                        sh_list[idx_s]['SL_Confermato_TR'] = sl_r
+                                        sh_list[idx_s]['Avviso_SL'] = ''
+                                        sh_list[idx_s]['Avviso_SL_Tipo'] = ''
                                     upd = True
                                 if tg_r > 0 and hi >= tg_r:
                                     nuovo_sl, dist_mx_tr, mot_tr = _calcola_trailing_stop_adattivo_grafico(
@@ -1761,9 +1832,15 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                         sh_list[idx_s]['Step_Trailing'] = 2
                                         sh_list[idx_s]['Avviso_SL_Motivo_Grafico'] = mot_tr
                                         sh_list[idx_s]['Avviso_SL_Dist_Max_Pct'] = dist_mx_tr
-                                        if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
-                                            sh_list[idx_s]['Avviso_SL_Tipo'] = 'TRAILING'
-                                            sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} ({mot_tr})."
+                                        if is_port_reale:
+                                            if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
+                                                sh_list[idx_s]['Avviso_SL_Tipo'] = 'TRAILING'
+                                                sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} ({mot_tr})."
+                                        else:
+                                            # Record virtuale 'Metodo Sistema': aggiornamento silenzioso senza banner manuale
+                                            sh_list[idx_s]['SL_Confermato_TR'] = sl_r
+                                            sh_list[idx_s]['Avviso_SL'] = ''
+                                            sh_list[idx_s]['Avviso_SL_Tipo'] = ''
                                         upd = True
                                 if sl_r > 0 and lo <= sl_r:
                                     # Unificazione regole Home vs Tracker:
@@ -1933,7 +2010,8 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 if filtro_vista == '💼 Solo Portafoglio Reale' and not v['is_port']:
                     continue
                 r = v['rec']
-                if v['stato'] == 'Attivo' and str(r.get('Avviso_SL', '')).strip():
+                # Mostra il banner/pulsante manuale '✅ SL Aggiornato' esclusivamente sui record reali (mai su 'Metodo Sistema')
+                if v['is_port'] and v['stato'] == 'Attivo' and str(r.get('Avviso_SL', '')).strip():
                     avvisi_sl.append((v['idx'], v['tk'], str(r.get('Avviso_SL'))))
                 pnls.append(v['pct'])
                 netti.append(v['netto'])
