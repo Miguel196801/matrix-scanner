@@ -1178,6 +1178,12 @@ def _rileva_distribuzione_sma20(df, vol_ratio):
     # Richiede debolezza concreta (sotto SMA 20 oppure volumi in vendita oggi)
     if prezzo > sma20 and not (vol_ratio >= 1.30 and prezzo < float(df["Open"].iloc[-1])):
         return None
+    # Filtro anti-falso allarme: evita segnalazioni ribassiste se le ultime 2+ sedute sono in rimbalzo verde consecutivo
+    if n >= 3:
+        c0, c1, c2 = float(df["Close"].iloc[-1]), float(df["Close"].iloc[-2]), float(df["Close"].iloc[-3])
+        o0, o1 = float(df["Open"].iloc[-1]), float(df["Open"].iloc[-2])
+        if (c0 > c1 and c1 > c2) or (c0 > o0 and c1 > o1 and c0 >= c1):
+            return None
 
     atr = float(df["ATR_14"].iloc[-1]) if pd.notna(df["ATR_14"].iloc[-1]) else prezzo * 0.02
     stop = max_20 + 0.25 * atr

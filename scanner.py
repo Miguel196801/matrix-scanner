@@ -4867,76 +4867,121 @@ def _scarica_ohlc_grafico_cached(ticker, period, interval):
         return pd.DataFrame()
 
 
-@st.dialog("📈 Grafico a Schermo Intero", width="large")
-def _apri_dialog_grafico_fullscreen(
+def _apri_grafico_fullscreen_dedicato(
     ticker,
     prezzo_medio_eur=None,
     default_tf_label=TIMEFRAME_GRAFICO_DEFAULT,
     pattern_info=None,
-    eurusd_rate=1.12,
     sma_short=50,
     sma_long=200,
-    key_prefix="dlg",
+    ritorno="terminale",
 ):
+    """Salva i parametri del grafico e apre la schermata dedicata 100% schermo intero (senza popup)."""
+    tf_init = default_tf_label if default_tf_label in TIMEFRAME_GRAFICO_OPZIONI else TIMEFRAME_GRAFICO_DEFAULT
+    st.session_state["grafico_full_cfg"] = {
+        "ticker": str(ticker or "").strip().upper(),
+        "prezzo_medio_eur": prezzo_medio_eur,
+        "pattern_info": pattern_info,
+        "sma_short": int(sma_short or 50),
+        "sma_long": int(sma_long or 200),
+        "ritorno": str(ritorno or "terminale"),
+    }
+    st.session_state["sel_vista_full_chart_tf"] = tf_init
+    st.session_state["vista_attiva"] = "grafico_full"
+    st.rerun()
+
+
+def render_vista_grafico_fullscreen():
     """
-    Apre qualsiasi grafico in finestra extra-large (96% larghezza schermo) con menu a tendina
-    Timeframe completo e legenda su una sola riga, senza far perdere il tab attivo alla chiusura.
+    Schermata dedicata a 100% schermo intero (da bordo a bordo, senza sidebar né popup)
+    per qualsiasi grafico aperto dal Tab Portafoglio o dalla Scheda Titolo, con menu a
+    tendina Timeframe unificato e pulsante '✖️ Chiudi Grafico'.
     """
-    tk_d = str(ticker or "").strip().upper()
-    tk_k = re.sub(r"[^A-Za-z0-9_]", "_", tk_d)
+    cfg = st.session_state.get("grafico_full_cfg") or {}
+    tk_d = str(cfg.get("ticker") or "").strip().upper()
+    if not tk_d:
+        st.session_state["vista_attiva"] = "terminale"
+        st.rerun()
+
     st.markdown(
         "<style>"
-        "div[data-testid='stDialog'] div[role='dialog'] { width: 96vw !important; max-width: 96vw !important; }"
-        "div[data-testid='stDialog'] div[role='dialog'] > div { padding-top: 0.65rem !important; padding-bottom: 0.75rem !important; }"
+        "section[data-testid='stSidebar'], button[data-testid='collapsedControl'] { display: none !important; }"
+        "[data-testid='stMainBlockContainer'], .block-container { max-width: 100% !important; width: 100% !important; padding: 3.2rem 1.25rem 1.0rem 1.25rem !important; }"
+        "div[data-testid='stHorizontalBlock'] { align-items: flex-start !important; }"
+        "div[data-testid='stHorizontalBlock'] [data-testid='stMarkdownContainer'], "
+        "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] { margin: 0 !important; }"
+        "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] button { height: 42px !important; min-height: 42px !important; padding: 0 0.75rem !important; font-size: 0.88rem !important; line-height: 1.2 !important; margin: 0 !important; }"
+        "div[class*='st-key-sel_vista_full_chart_tf'] [data-baseweb='select'] > div { min-height: 42px !important; height: 42px !important; align-items: center !important; }"
         "</style>",
         unsafe_allow_html=True,
     )
-    tf_init = default_tf_label if default_tf_label in TIMEFRAME_GRAFICO_OPZIONI else TIMEFRAME_GRAFICO_DEFAULT
-    c_dl, c_dr = st.columns([2.2, 1.0])
-    with c_dl:
-        st.markdown(
-            f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
-            f"border-radius:9px; height:40px; box-sizing:border-box; display:flex; align-items:center; "
-            f"padding:0 0.9rem; color:#F8FAFC; font-size:0.96rem; font-weight:700;'>"
-            f"📊 {tk_d} — Vista Ampia (premi ESC o ✖️ in alto a destra per chiudere)</div>",
-            unsafe_allow_html=True,
-        )
-    with c_dr:
+
+    eurusd_live = get_live_eurusd()
+    if st.session_state.get("sel_vista_full_chart_tf") not in TIMEFRAME_GRAFICO_OPZIONI:
+        st.session_state["sel_vista_full_chart_tf"] = TIMEFRAME_GRAFICO_DEFAULT
+
+    c_gl, c_gtf, c_gx = st.columns([2.5, 1.15, 0.85])
+    with c_gtf:
         tf_sel = st.selectbox(
             "Timeframe:",
             TIMEFRAME_GRAFICO_LISTA,
-            index=TIMEFRAME_GRAFICO_LISTA.index(tf_init),
+            index=TIMEFRAME_GRAFICO_DEFAULT_IDX,
             label_visibility="collapsed",
-            key=f"sel_tf_full_{key_prefix}_{tk_k}",
+            key="sel_vista_full_chart_tf",
         )
+    with c_gx:
+        if st.button("✖️ Chiudi Grafico", key="btn_vista_full_chiudi_grafico", use_container_width=True):
+            dest = str(cfg.get("ritorno") or "terminale")
+            st.session_state["vista_attiva"] = dest
+            st.rerun()
+
+    pmc_eur = cfg.get("prezzo_medio_eur")
+    pmc_tag = ""
+    if pmc_eur is not None:
+        try:
+            if float(pmc_eur) > 0:
+                pmc_tag = f" &nbsp;|&nbsp; <span style='color:#4ADE80;'>💼 PMC: €{float(pmc_eur):.2f}</span>"
+        except Exception:
+            pmc_tag = ""
+    with c_gl:
+        st.markdown(
+            f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
+            f"border-radius:10px; height:42px; box-sizing:border-box; display:flex; align-items:center; "
+            f"padding:0 1.0rem; margin:0; color:#F8FAFC; font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden;'>"
+            f"📈 Grafico&nbsp;<b>{tk_d}</b>&nbsp;— Schermo Intero{pmc_tag}</div>",
+            unsafe_allow_html=True,
+        )
+
     tf_cfg = TIMEFRAME_GRAFICO_OPZIONI[tf_sel]
+    pat_info = cfg.get("pattern_info")
     fig_d = genera_grafico_baleine(
         tk_d,
         tf_cfg["period"],
-        sma_short,
-        sma_long,
-        prezzo_medio_eur=prezzo_medio_eur,
+        int(cfg.get("sma_short") or 50),
+        int(cfg.get("sma_long") or 200),
+        prezzo_medio_eur=pmc_eur,
         timeframe=tf_cfg["tf"],
         interval=tf_cfg["interval"],
-        eurusd_rate=eurusd_rate,
-        height=640,
-        pattern_info=pattern_info,
+        eurusd_rate=eurusd_live,
+        height=620,
+        pattern_info=pat_info,
     )
     if fig_d:
-        if pattern_info:
-            fig_d = pattern_engine.aggiungi_livelli_pattern_al_grafico(fig_d, pattern_info)
-            _sym_d = "$" if str(pattern_info.get("currency", "USD")).upper() == "USD" else "€"
+        if pat_info:
+            fig_d = pattern_engine.aggiungi_livelli_pattern_al_grafico(fig_d, pat_info)
+            _sym_d = "$" if str(pat_info.get("currency", "USD")).upper() == "USD" else "€"
             st.caption(
-                f"**{pattern_info.get('badge')}** — {pattern_info.get('figura')} ({pattern_info.get('confidenza')}%) | "
-                f"⚡ Y: `{_sym_d}{pattern_info.get('trigger_y'):.2f}` | 🎯 Target: `{pattern_info.get('target_pct'):+.1f}%` (`{_sym_d}{pattern_info.get('target_price'):.2f}`) | "
-                f"🛑 Stop: `{_sym_d}{pattern_info.get('stop_price'):.2f}` | R/R `1:{pattern_info.get('rr'):.2f}`"
+                f"**{pat_info.get('badge')}** — {pat_info.get('figura')} ({pat_info.get('confidenza')}%) | "
+                f"⚡ Y: `{_sym_d}{pat_info.get('trigger_y'):.2f}` | 🎯 Target: `{pat_info.get('target_pct'):+.1f}%` (`{_sym_d}{pat_info.get('target_price'):.2f}`) | "
+                f"🛑 Stop: `{_sym_d}{pat_info.get('stop_price'):.2f}` | R/R `1:{pat_info.get('rr'):.2f}`"
             )
         fig_d = applica_controlli_grafico(fig_d, 9)
+        tk_k = re.sub(r"[^A-Za-z0-9_]", "_", tk_d)
         st.plotly_chart(
             fig_d,
             use_container_width=True,
             config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False},
-            key=f"chart_full_dlg_{key_prefix}_{tk_k}_{tf_cfg['tf']}",
+            key=f"chart_vista_full_{tk_k}_{tf_cfg['tf']}",
         )
     else:
         st.warning(f"Impossibile generare il grafico per {tk_d} sul timeframe selezionato.")
@@ -9507,6 +9552,9 @@ if st.session_state.get("vista_attiva", "home") == "home":
 elif st.session_state.get("vista_attiva") == "tabella_salute_full":
     render_vista_tabella_salute_fullscreen(impostazioni)
     st.stop()
+elif st.session_state.get("vista_attiva") == "grafico_full":
+    render_vista_grafico_fullscreen()
+    st.stop()
 
 # ==============================================================================
 # INTERFACCIA PRINCIPALE - TOP BAR TERMINALE COMPLETO
@@ -10109,15 +10157,14 @@ with tab_portafoglio:
                 tf_port_cfg = TIMEFRAME_GRAFICO_OPZIONI[tf_port_lbl]
                 _pat_live = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(str(sel_t).upper())
                 if _apri_full_port:
-                    _apri_dialog_grafico_fullscreen(
+                    _apri_grafico_fullscreen_dedicato(
                         sel_t,
                         prezzo_medio_eur=pmc_sel,
                         default_tf_label=tf_port_lbl,
                         pattern_info=_pat_live,
-                        eurusd_rate=eurusd_rate,
                         sma_short=sma_short,
                         sma_long=sma_long,
-                        key_prefix="port",
+                        ritorno="terminale",
                     )
                 fig_side = genera_grafico_baleine(
                     sel_t, tf_port_cfg["period"], sma_short, sma_long,
@@ -11127,15 +11174,14 @@ with tab_analisi:
                 if isinstance(_pat_s, dict) and str(_pat_s.get("ticker", "")).upper() == _tk_g_up:
                     _pat_an = _pat_s
             if _apri_full_an:
-                _apri_dialog_grafico_fullscreen(
+                _apri_grafico_fullscreen_dedicato(
                     st.session_state.grafico_ticker,
                     prezzo_medio_eur=st.session_state.grafico_prezzo_medio,
                     default_tf_label=tf_choice,
                     pattern_info=_pat_an,
-                    eurusd_rate=eurusd_rate,
                     sma_short=50,
                     sma_long=200,
-                    key_prefix="scheda",
+                    ritorno="terminale",
                 )
             fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_config['period'], 50, 200, prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_config['tf'], interval=tf_config['interval'], eurusd_rate=eurusd_rate, height=640, pattern_info=_pat_an)
             if fig:
