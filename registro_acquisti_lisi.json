@@ -1,0 +1,58 @@
+[
+    {
+        "Data": "2026-11-18 21:34",
+        "Ticker": "NKE",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 0.306254,
+        "Prezzo_EUR": 32.62,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 9.99,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 9.99
+    },
+    {
+        "Data": "2026-11-18 21:33",
+        "Ticker": "MU",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 0.192366,
+        "Prezzo_EUR": 608.39,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 117.03,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 117.03
+    },
+    {
+        "Data": "2026-11-18 21:31",
+        "Ticker": "NBIS",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 1.332787,
+        "Prezzo_EUR": 87.76,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 116.97,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 116.97
+    },
+    {
+        "Data": "2026-11-18 21:30",
+        "Ticker": "GOOGL",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 0.255955,
+        "Prezzo_EUR": 257.91,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 66.01,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 66.01
+    }
+]

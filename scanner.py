@@ -2578,39 +2578,131 @@ def registra_proposta(modulo, azione, ticker, dettaglio, stato="N/D"):
     except Exception as e:
         print(f"Errore log proposta: {e}")
 
-def _classifica_zona_spy_tom_nash(spy_drawdown_pct, vix_valore=None):
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_cnn_fear_greed_cached():
+    """
+    Scarica in cache (TTL 60 min) l'indice live CNN Fear & Greed (0-100) con header browser completi.
+    In caso di blocco HTTP (es. 418) o timeout restituisce None per attivare il fallback silenzioso su VIX.
+    """
+    try:
+        import urllib.request
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
+                "Referer": "https://edition.cnn.com/markets/fear-and-greed",
+                "Origin": "https://edition.cnn.com",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+        data = json.loads(raw) if raw else {}
+        fg = data.get("fear_and_greed") if isinstance(data, dict) else None
+        if isinstance(fg, dict) and fg.get("score") is not None:
+            sc = round(max(0.0, min(100.0, float(fg["score"]))), 1)
+            if sc <= 25.0:
+                rat_it = "Paura Estrema"
+            elif sc < 45.0:
+                rat_it = "Paura"
+            elif sc <= 55.0:
+                rat_it = "Neutro"
+            elif sc < 75.0:
+                rat_it = "Avidità"
+            else:
+                rat_it = "Avidità Estrema"
+            return {
+                "score": sc,
+                "rating": rat_it,
+                "fonte": "CNN",
+                "paura_estrema": bool(sc <= 25.0),
+            }
+    except Exception:
+        pass
+    return None
+
+
+def _stima_fear_greed_da_vix(vix_valore):
+    """
+    Fallback silenzioso su VIX quando l'endpoint CNN Fear & Greed non risponde:
+    stima uno score 0-100 coerente (VIX >= 28 -> <= 25 Paura Estrema; VIX 22-27.9 -> Paura).
+    """
+    if vix_valore is None:
+        return None
+    try:
+        v = float(vix_valore)
+        if math.isnan(v) or math.isinf(v) or v <= 0:
+            return None
+        sc = round(max(5.0, min(95.0, 85.0 - (v - 12.0) * 3.75)), 1)
+        if sc <= 25.0:
+            rat_it = "Paura Estrema"
+        elif sc < 45.0:
+            rat_it = "Paura"
+        elif sc <= 55.0:
+            rat_it = "Neutro"
+        elif sc < 75.0:
+            rat_it = "Avidità"
+        else:
+            rat_it = "Avidità Estrema"
+        return {
+            "score": sc,
+            "rating": rat_it,
+            "fonte": "VIX fallback",
+            "paura_estrema": bool(sc <= 25.0),
+        }
+    except Exception:
+        return None
+
+
+def _classifica_zona_spy_tom_nash(spy_drawdown_pct, vix_valore=None, fear_greed_score=None):
     """
     Classifica la fascia macro del Termometro SPY Drawdown a 52 settimane (filosofia Tom Nash):
-    - 'sconto': SPY tra -8.0% e -18.0% dai massimi 52w (e VIX <= 35) -> Modalità Sconto Istituzionale.
     - 'bear': SPY oltre -18.0% dai massimi 52w oppure VIX > 35 -> Prudenza Bear Market.
+    - 'sconto': SPY tra -8.0% e -18.0% (e VIX <= 35), oppure Paura Estrema (F&G <= 25) con SPY <= -5.0%
+      -> Modalità Sconto Istituzionale.
     - 'normale': nessuna correzione significativa.
     """
     dd = float(spy_drawdown_pct) if spy_drawdown_pct is not None else 0.0
     vix_alto = (vix_valore is not None and float(vix_valore) > 35.0)
     if dd <= -18.0 or vix_alto:
         return "bear"
-    if dd <= -8.0:
+    fg_paura_est = (fear_greed_score is not None and float(fear_greed_score) <= 25.0)
+    if dd <= -8.0 or (fg_paura_est and dd <= -5.0):
         return "sconto"
     return "normale"
 
+
 def render_banner_termometro_tom_nash(semaforo_header):
-    """Mostra il banner del Termometro Macro SPY Drawdown 52w quando attiva fascia Sconto o Bear Market."""
+    """Mostra il banner del Termometro Macro SPY Drawdown 52w + Fear & Greed (CNN o fallback VIX)."""
     if not isinstance(semaforo_header, dict):
         return
     zona = str(semaforo_header.get("zona_sconto_tom_nash") or "normale").lower()
     dd = semaforo_header.get("spy_drawdown_pct")
     vix_v = semaforo_header.get("vix")
-    if zona == "normale" or dd is None:
+    fg_sc = semaforo_header.get("fear_greed_score")
+    fg_rat = str(semaforo_header.get("fear_greed_rating") or "")
+    fg_src = str(semaforo_header.get("fear_greed_fonte") or "")
+    fg_paura_est = bool(semaforo_header.get("fear_greed_paura_estrema"))
+    fg_badge = ""
+    if fg_sc is not None:
+        fg_ico = "😨" if fg_paura_est else ("🟠" if float(fg_sc) < 45.0 else "🧭")
+        fg_badge = f" • {fg_ico} Fear &amp; Greed: <b>{float(fg_sc):.0f}/100 ({fg_rat})</b> [{fg_src}]"
+    if zona == "normale" and not fg_paura_est:
         return
-    dd_str = f"{float(dd):.1f}%".replace(".", ",")
+    if dd is None and not fg_paura_est:
+        return
+    dd_str = f"{float(dd):.1f}%".replace(".", ",") if dd is not None else "N/D"
     if zona == "sconto":
+        nota_fg = " • <b>Conferma anti-bolla: Paura Estrema attiva</b>" if fg_paura_est else ""
         st.markdown(
             f"<div style='background:#0F2436; border:1px solid #38BDF8; border-left:5px solid #38BDF8; "
             f"border-radius:10px; padding:0.75rem 1.1rem; margin-bottom:0.75rem; color:#E0F2FE; "
             f"font-size:0.93rem; line-height:1.45;'>"
-            f"<b>📉 MODALITÀ SCONTO ISTITUZIONALE (SPY {dd_str} dai massimi 52 settimane):</b> "
+            f"<b>📉 MODALITÀ SCONTO ISTITUZIONALE (SPY {dd_str} dai massimi 52 settimane{fg_badge}):</b> "
             f"il mercato prezza i tassi/dazi mentre gli utili restano forti — vietate vendite nel panico "
-            f"e sbloccato DCA mirato sui campioni fondamentali.</div>",
+            f"e sbloccato DCA mirato sui campioni fondamentali{nota_fg}.</div>",
             unsafe_allow_html=True,
         )
     elif zona == "bear":
@@ -2619,9 +2711,18 @@ def render_banner_termometro_tom_nash(semaforo_header):
             f"<div style='background:#2B1418; border:1px solid #F59E0B; border-left:5px solid #F59E0B; "
             f"border-radius:10px; padding:0.75rem 1.1rem; margin-bottom:0.75rem; color:#FEF3C7; "
             f"font-size:0.93rem; line-height:1.45;'>"
-            f"<b>🛡️ PRUDENZA BEAR MARKET (SPY {dd_str} dai massimi 52 settimane{vix_note}):</b> "
+            f"<b>🛡️ PRUDENZA BEAR MARKET (SPY {dd_str} dai massimi 52 settimane{vix_note}{fg_badge}):</b> "
             f"correzione profonda in corso — vietato svendere aziende sane nel panico, procedi solo "
             f"con piccoli accumuli DCA scaglionati e senza leva.</div>",
+            unsafe_allow_html=True,
+        )
+    elif fg_paura_est:
+        st.markdown(
+            f"<div style='background:#132032; border:1px solid #38BDF8; border-left:5px solid #F59E0B; "
+            f"border-radius:10px; padding:0.75rem 1.1rem; margin-bottom:0.75rem; color:#E0F2FE; "
+            f"font-size:0.93rem; line-height:1.45;'>"
+            f"<b>😨 PAURA ESTREMA SUL MERCATO (Fear &amp; Greed {float(fg_sc):.0f}/100 [{fg_src}] • SPY {dd_str} dai massimi 52w):</b> "
+            f"conferma oggettiva anti-bolla — stop alle vendite nel panico sui titoli con Scudo Tom Nash attivo.</div>",
             unsafe_allow_html=True,
         )
 
@@ -2631,7 +2732,7 @@ def calcola_semaforo_mercato():
         if spy.empty or len(spy) < 10:
             spy = yf.Ticker('SPY').history(period='1mo')
         if spy.empty or len(spy) < 10:
-            return {'stato': 'giallo', 'spy_prezzo': None, 'spy_sma10': None, 'spy_high_52w': None, 'spy_drawdown_pct': None, 'zona_sconto_tom_nash': 'normale', 'vix': None, 'messaggio': 'Dati SPY insufficienti'}
+            return {'stato': 'giallo', 'spy_prezzo': None, 'spy_sma10': None, 'spy_high_52w': None, 'spy_drawdown_pct': None, 'zona_sconto_tom_nash': 'normale', 'vix': None, 'fear_greed_score': None, 'fear_greed_rating': None, 'fear_greed_fonte': None, 'fear_greed_paura_estrema': False, 'messaggio': 'Dati SPY insufficienti'}
         spy['SMA10'] = spy['Close'].rolling(10).mean()
         spy_prezzo = float(spy['Close'].iloc[-1])
         spy_sma10 = float(spy['SMA10'].iloc[-1])
@@ -2646,6 +2747,12 @@ def calcola_semaforo_mercato():
                 vix_valore = float(vix['Close'].iloc[-1])
         except:
             pass
+        # Fear & Greed Index CNN (cache 60 min) con fallback silenzioso su VIX
+        fg_info = _get_cnn_fear_greed_cached() or _stima_fear_greed_da_vix(vix_valore)
+        fg_score = fg_info["score"] if isinstance(fg_info, dict) else None
+        fg_rating = fg_info["rating"] if isinstance(fg_info, dict) else None
+        fg_fonte = fg_info["fonte"] if isinstance(fg_info, dict) else None
+        fg_paura_est = bool(fg_info.get("paura_estrema")) if isinstance(fg_info, dict) else False
         if vix_valore is not None:
             if spy_prezzo > spy_sma10 and vix_valore < 18.5:
                 stato, messaggio = 'verde', '🟢 MERCATO RIALZISTA - Strategia Aggressiva'
@@ -2660,7 +2767,7 @@ def calcola_semaforo_mercato():
                 stato, messaggio = 'rosso', '🔴 SPY RIBASSISTA (VIX N/D)'
             else:
                 stato, messaggio = 'giallo', '🟡 SPY LATERALE (VIX N/D)'
-        zona_tn = _classifica_zona_spy_tom_nash(spy_drawdown_pct, vix_valore)
+        zona_tn = _classifica_zona_spy_tom_nash(spy_drawdown_pct, vix_valore, fear_greed_score=fg_score)
         return {
             'stato': stato,
             'spy_prezzo': round(spy_prezzo, 2),
@@ -2669,10 +2776,14 @@ def calcola_semaforo_mercato():
             'spy_drawdown_pct': spy_drawdown_pct,
             'zona_sconto_tom_nash': zona_tn,
             'vix': round(vix_valore, 2) if vix_valore else None,
+            'fear_greed_score': fg_score,
+            'fear_greed_rating': fg_rating,
+            'fear_greed_fonte': fg_fonte,
+            'fear_greed_paura_estrema': fg_paura_est,
             'messaggio': messaggio
         }
     except Exception as e:
-        return {'stato': 'giallo', 'spy_prezzo': None, 'spy_sma10': None, 'spy_high_52w': None, 'spy_drawdown_pct': None, 'zona_sconto_tom_nash': 'normale', 'vix': None, 'messaggio': f'Errore: {str(e)}'}
+        return {'stato': 'giallo', 'spy_prezzo': None, 'spy_sma10': None, 'spy_high_52w': None, 'spy_drawdown_pct': None, 'zona_sconto_tom_nash': 'normale', 'vix': None, 'fear_greed_score': None, 'fear_greed_rating': None, 'fear_greed_fonte': None, 'fear_greed_paura_estrema': False, 'messaggio': f'Errore: {str(e)}'}
 # ==============================================================================
 # MODULO 2: SIMULATORE DI ACQUISTO INTELLIGENTE
 # ==============================================================================
@@ -5886,10 +5997,13 @@ def _valuta_fondamentali_tom_nash(info_dict, s_score=50):
     Valuta in modo pulito e anti-dati sporchi i fondamentali secondo la filosofia Tom Nash
     usando esclusivamente info_dict già in cache (_get_info_cached, zero chiamate API extra):
     - Crescita reale: revenueGrowth >= +5% oppure earningsGrowth >= +5%.
-    - Bonus Sconto Multipli (anti-Value Trap): solo se crescita reale >= +5%, 0 < forwardPE < 65
-      e 0 < trailingPE < 250 -> +8 pt se sconto >= 20% (fwd <= 0.80*trail), +5 pt se >= 10%.
-    - Scudo Fondamentale Anti-Panico: attivo se crescita reale >= +5% e multiplo sano in compressione
-      (0 < forwardPE < 65 e forwardPE < trailingPE * 0.95) oppure crescita ricavi >= +15% con S-Score >= 65.
+    - Qualità Operativa Standard (anti-Value Trap): operatingMargins > 0 E
+      (earningsGrowth >= +5% OPPURE (operatingMargins >= +12% E S-Score >= 65)).
+    - Clausola Leader Tech/SaaS ad Alta Cassa (es. CRWD, PLTR, NOW):
+      freeCashflow > 0 E revenueGrowth >= +20% E marketCap >= $20B -> protegge con lo Scudo
+      senza far passare small-cap speculative o aziende che bruciano cassa.
+    - Bonus Sconto Multipli (+5 / +8 pt): solo con crescita reale, qualità operativa OK,
+      0 < forwardPE < 65 e 0 < trailingPE < 250.
     """
     info = info_dict if isinstance(info_dict, dict) else {}
 
@@ -5904,18 +6018,39 @@ def _valuta_fondamentali_tom_nash(info_dict, s_score=50):
 
     rev_g = _safe_float(info.get("revenueGrowth"))
     earn_g = _safe_float(info.get("earningsGrowth"))
+    op_m = _safe_float(info.get("operatingMargins"))
+    fcf = _safe_float(info.get("freeCashflow"))
+    mcap = _safe_float(info.get("marketCap"))
     trail_pe = _safe_float(info.get("trailingPE"))
     fwd_pe = _safe_float(info.get("forwardPE"))
 
     rev_g_pct = round(rev_g * 100.0, 1) if rev_g is not None else None
     earn_g_pct = round(earn_g * 100.0, 1) if earn_g is not None else None
+    op_m_pct = round(op_m * 100.0, 1) if op_m is not None else None
+    s_sc_int = int(s_score or 50)
     crescita_reale = bool((rev_g is not None and rev_g >= 0.05) or (earn_g is not None and earn_g >= 0.05))
 
-    # Bonus Sconto Multipli (anti-Value Trap: entrambi i P/E positivi e realistici + crescita reale)
+    # Filtro Qualità Operativa Standard + Clausola Leader Tech/SaaS ad Alta Cassa
+    qualita_operativa_std = bool(
+        (op_m is not None and op_m > 0.0)
+        and (
+            (earn_g is not None and earn_g >= 0.05)
+            or (op_m >= 0.12 and s_sc_int >= 65)
+        )
+    )
+    leader_saas_fcf = bool(
+        (fcf is not None and fcf > 0.0)
+        and (rev_g is not None and rev_g >= 0.20)
+        and (mcap is not None and mcap >= 20_000_000_000.0)
+    )
+    qualita_operativa_ok = bool(qualita_operativa_std or leader_saas_fcf)
+
+    # Bonus Sconto Multipli (anti-Value Trap: qualità operativa OK + entrambi i P/E positivi e realistici)
     bonus_multipli = 0
     badge_multipli = ""
     if (
         crescita_reale
+        and qualita_operativa_ok
         and fwd_pe is not None and 0.0 < fwd_pe < 65.0
         and trail_pe is not None and 0.0 < trail_pe < 250.0
     ):
@@ -5926,29 +6061,40 @@ def _valuta_fondamentali_tom_nash(info_dict, s_score=50):
         if bonus_multipli > 0:
             badge_multipli = f"💎 Sconto Multipli (Fwd P/E {fwd_pe:.1f}x vs {trail_pe:.1f}x)"
 
-    # Scudo Fondamentale Tom Nash (anti-dati sporchi su P/E negativi/estremi e micro-crescite)
+    # Scudo Fondamentale Tom Nash (qualità operativa verificata oppure Leader Tech/SaaS ad alta generazione FCF)
     multiplo_sano_compressione = bool(
         fwd_pe is not None and 0.0 < fwd_pe < 65.0
         and (trail_pe is None or trail_pe <= 0.0 or fwd_pe < trail_pe * 0.95)
     )
-    crescita_forte_sana = bool((rev_g is not None and rev_g >= 0.15) and int(s_score or 50) >= 65)
-    scudo_attivo = bool(crescita_reale and (multiplo_sano_compressione or crescita_forte_sana))
+    crescita_forte_sana = bool((rev_g is not None and rev_g >= 0.15) and s_sc_int >= 65)
+    scudo_attivo = bool(
+        (crescita_reale and qualita_operativa_std and (multiplo_sano_compressione or crescita_forte_sana))
+        or leader_saas_fcf
+    )
 
     parti_nota = []
     if rev_g_pct is not None and rev_g_pct >= 5.0:
         parti_nota.append(f"Fatturato {rev_g_pct:+.0f}%")
     elif earn_g_pct is not None and earn_g_pct >= 5.0:
         parti_nota.append(f"Utili {earn_g_pct:+.0f}%")
+    if op_m_pct is not None and op_m_pct > 0.0:
+        parti_nota.append(f"Margine Op. {op_m_pct:.0f}%")
+    elif leader_saas_fcf and fcf is not None:
+        parti_nota.append(f"FCF +${fcf / 1e9:.1f}B")
     if fwd_pe is not None and 0.0 < fwd_pe < 65.0:
         if trail_pe is not None and 0.0 < trail_pe < 250.0 and fwd_pe < trail_pe * 0.95:
             parti_nota.append(f"Forward P/E {fwd_pe:.1f}x in calo da {trail_pe:.1f}x")
         else:
             parti_nota.append(f"Forward P/E {fwd_pe:.1f}x")
-    nota_scudo = ", ".join(parti_nota) if parti_nota else f"S-Score {int(s_score or 50)}/100"
+    nota_scudo = ", ".join(parti_nota) if parti_nota else f"S-Score {s_sc_int}/100"
 
     return {
         "rev_growth_pct": rev_g_pct,
         "earn_growth_pct": earn_g_pct,
+        "op_margin_pct": op_m_pct,
+        "fcf_usd": round(fcf, 2) if fcf is not None else None,
+        "qualita_operativa_ok": qualita_operativa_ok,
+        "leader_saas_fcf": leader_saas_fcf,
         "trailing_pe": round(trail_pe, 1) if (trail_pe is not None and trail_pe > 0) else None,
         "forward_pe": round(fwd_pe, 1) if (fwd_pe is not None and fwd_pe > 0) else None,
         "bonus_multipli": bonus_multipli,

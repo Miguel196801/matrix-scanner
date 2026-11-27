@@ -1,0 +1,58 @@
+[
+    {
+        "Data": "2026-11-22 14:41",
+        "Ticker": "RZLV",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 34.90012,
+        "Prezzo_EUR": 3.53,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 123.2,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 123.2
+    },
+    {
+        "Data": "2026-11-22 14:41",
+        "Ticker": "NIO",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 10.8548,
+        "Prezzo_EUR": 3.85,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 41.79,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 41.79
+    },
+    {
+        "Data": "2026-11-22 14:40",
+        "Ticker": "NKE",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 1.172388,
+        "Prezzo_EUR": 35.3,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 41.39,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 41.39
+    },
+    {
+        "Data": "2026-11-22 14:39",
+        "Ticker": "AMC",
+        "Operazione": "Nuovo Acquisto",
+        "Motivo_Segnale": "Manuale / Storico",
+        "Tipo": "Spot",
+        "Quantita": 25.0,
+        "Prezzo_EUR": 2.89,
+        "Commissione_EUR": 1.0,
+        "Totale_EUR": 72.25,
+        "Fonte_Fondi": "🏦 Nuova Liquidità Versata",
+        "Quota_Da_Cassa_EUR": 0.0,
+        "Quota_Nuova_Liquidita_EUR": 72.25
+    }
+]
