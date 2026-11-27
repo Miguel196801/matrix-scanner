@@ -16,7 +16,8 @@
         "Stato_PAC": "⏸️ PAC Sospeso — Long",
         "Ultimo_Segnale": "🔴 BY: 18/09/2026 (-48.5%)",
         "Valore_Carico": 1487.77,
-        "Variazione_Abs": 1.49
+        "Variazione_Abs": 1.49,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "SOFI",
@@ -36,7 +37,8 @@
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🔴 BY: 27/10/2026 (-10.0%)",
         "Valore_Carico": 796.24,
-        "Variazione_Abs": 0.2
+        "Variazione_Abs": 0.2,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "ONDS",
@@ -56,7 +58,8 @@
         "Stato_PAC": "N/A",
         "Ultimo_Segnale": "N/D",
         "Valore_Carico": 674.89,
-        "Variazione_Abs": 0.22
+        "Variazione_Abs": 0.22,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "TTWO",
@@ -75,7 +78,8 @@
         "Stato_PAC": "N/A",
         "Ultimo_Segnale": "🟢 SELL: 16/11/2026 (-0.4%)",
         "Valore_Carico": 665.42,
-        "Variazione_Abs": 11.79
+        "Variazione_Abs": 11.79,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "VRT",
@@ -95,7 +99,8 @@
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🔴 BY: 29/10/2026 (-23.9%)",
         "Valore_Carico": 478.35,
-        "Variazione_Abs": 15.88
+        "Variazione_Abs": 15.88,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "SMCI",
@@ -113,7 +118,8 @@
         "Stato_PAC": "N/A",
         "Ultimo_Segnale": "🟢 SELL: 02/11/2026 (-17.8%)",
         "Valore_Carico": 431.28,
-        "Variazione_Abs": 3.11
+        "Variazione_Abs": 3.11,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "NVDA",
@@ -132,7 +138,8 @@
         "Variazione_Pct": -4.65,
         "Variazione_Abs": 7.56,
         "Stato_PAC": "N/A",
-        "Ultimo_Segnale": "🟢 SELL: 02/11/2026 (-23.1%)"
+        "Ultimo_Segnale": "🟢 SELL: 02/11/2026 (-23.1%)",
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "TTD",
@@ -152,7 +159,8 @@
         "Stato_PAC": "🔴 PAC SOSPESO",
         "Ultimo_Segnale": "🟢 BY: 29/10/2026 (+13.4%)",
         "Valore_Carico": 138.97,
-        "Variazione_Abs": 0.62
+        "Variazione_Abs": 0.62,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "APP",
@@ -171,7 +179,8 @@
         "Stato_PAC": "N/A",
         "Ultimo_Segnale": "🟢 BY: 07/11/2026 (+5.5%)",
         "Valore_Carico": 68.6,
-        "Variazione_Abs": 6.12
+        "Variazione_Abs": 6.12,
+        "Data_Acquisto": "2026-09-01"
     },
     {
         "Ticker": "CRWD",
@@ -194,6 +203,7 @@
         "Stato_PAC": "🟢 PAC ATTIVO",
         "Ultimo_Segnale": "🟢 BY: 06/11/2026 (+2.5%)",
         "Valore_Carico": 249.99,
-        "Variazione_Abs": 8.75
+        "Variazione_Abs": 8.75,
+        "Data_Acquisto": "2026-09-01"
     }
 ]

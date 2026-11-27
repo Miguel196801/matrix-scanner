@@ -632,18 +632,103 @@ def _costruisci_dict_avviso_protezione(rec, pos_reale):
     }
 
 
-def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=None):
+def _invia_notifica_telegram(utente, messaggio):
+    """
+    Invia una notifica push Telegram separata al singolo membro della famiglia leggendo
+    ESCLUSIVAMENTE da st.secrets (zero token o chat_id salvati nel codice o nei JSON su GitHub):
+    - TELEGRAM_BOT_TOKEN
+    - TELEGRAM_CHAT_ID_FABIO / TELEGRAM_CHAT_ID_LISI / TELEGRAM_CHAT_ID_ALESSIA
+    Se i secrets non sono configurati o la rete non risponde, fallisce silenziosamente (False).
+    """
+    try:
+        u_key = str(utente or '').strip().lower()
+        if not u_key or not str(messaggio or '').strip():
+            return False
+        sec = st.secrets
+        token = str(sec.get('TELEGRAM_BOT_TOKEN', '') or '').strip()
+        if not token and 'telegram' in sec:
+            try:
+                token = str(sec['telegram'].get('BOT_TOKEN', '') or '').strip()
+            except Exception:
+                token = ''
+        if not token:
+            return False
+
+        chiave_chat = f'TELEGRAM_CHAT_ID_{u_key.upper()}'
+        chat_id = str(sec.get(chiave_chat, '') or '').strip()
+        if not chat_id and 'telegram' in sec:
+            try:
+                chat_id = str(sec['telegram'].get(f'CHAT_ID_{u_key.upper()}', '') or '').strip()
+            except Exception:
+                chat_id = ''
+        if not chat_id:
+            return False
+
+        import requests
+        url = f'https://api.telegram.org/bot{token}/sendMessage'
+        payload = {
+            'chat_id': chat_id,
+            'text': str(messaggio),
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': True,
+        }
+        resp = requests.post(url, json=payload, timeout=6)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def _formatta_messaggio_telegram_sl(av_d, utente=''):
+    """Compone un messaggio push Telegram chiaro e guidato passo-passo per Trade Republic (senza sigle tecniche)."""
+    tk = str(av_d.get('ticker') or '').strip().upper()
+    pnl_s = f"{float(av_d.get('pnl_pct') or 0.0):+.1f}%".replace('.', ',')
+    sl_s = f"€ {float(av_d.get('sl_eur') or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    max_s = f"€ {float(av_d.get('max_eur') or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    nome_u = str(utente or '').strip().capitalize()
+    saluto = f"Ciao {nome_u}, " if nome_u else ""
+    if av_d.get('is_misto_pac_spot'):
+        q_sp = float(av_d.get('qta_spot') or 0.0)
+        q_lbl = f"{int(q_sp)}" if abs(q_sp - round(q_sp)) < 1e-4 else f"{q_sp:.2f}".replace('.', ',')
+        nota_misto = f" sulle sole <b>{q_lbl} azioni Spot</b> (lascia intatto il tuo PAC)"
+    else:
+        nota_misto = ''
+
+    if av_d.get('tipo_protezione') == 'TRAILING':
+        return (
+            f"🏆 <b>MATRIX PRO — PROTEGGI IL PROFITTO ({tk})</b>\n"
+            f"{saluto}<b>{tk}</b> è a <b>{pnl_s}</b> (massimo {max_s}): alziamo la rete di sicurezza!\n\n"
+            f"👉 <b>Trade Republic (30 secondi):</b>\n"
+            f"Apri <b>{tk}</b> → Vendi → Ordine Stop → imposta il prezzo a <b>{sl_s}</b> (-6% dal massimo){nota_misto}.\n"
+            f"Poi clicca <i>✅ Fatto, Stop Loss inserito</i> nell'app MATRIX."
+        )
+    return (
+        f"🛡️ <b>MATRIX PRO — METTI AL SICURO IL GUADAGNO ({tk})</b>\n"
+        f"{saluto}<b>{tk}</b> è a <b>{pnl_s}</b>: ora possiamo azzerare il rischio di perdita!\n\n"
+        f"👉 <b>Trade Republic (30 secondi):</b>\n"
+        f"Apri <b>{tk}</b> → Vendi → Ordine Stop → imposta il prezzo a <b>{sl_s}</b> (prezzo di carico){nota_misto}.\n"
+        f"Poi clicca <i>✅ Fatto, Stop Loss inserito</i> nell'app MATRIX."
+    )
+
+
+def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=None, utente=None):
     """
     Sincronizza automaticamente tutte le posizioni con quote Spot (q_spot > 0, escludendo al 100% i PAC puri
     attivi o sospesi Long) in regia_tracker*.json usando i dati OHLC già in memoria (zero chiamate API lente).
     Rileva i passaggi di protezione profitto (Pareggio al PMC o Trailing -6% dal massimo) applicando il filtro
-    anti-rumore su SL_Confermato_TR (+1% o +0,50 €).
+    anti-rumore su SL_Confermato_TR (+1% o +0,50 €) e invia 1 sola notifica push Telegram al telefono
+    del singolo utente interessato tramite SL_Notificato_Telegram.
     Restituisce la lista di avvisi pendenti pronti per la Home Page.
     """
     if not portafoglio:
         return []
     rate = float(eurusd_rate or 1.12)
     oggi = _oggi_italia_str()
+    utente_eff = str(
+        utente
+        or st.session_state.get('utente_corrente')
+        or st.session_state.get('utente_autenticato')
+        or 'fabio'
+    ).strip().lower()
     sh_list = _load_j(SHADOW_FILE, [])
     if not isinstance(sh_list, list):
         sh_list = []
@@ -706,6 +791,7 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
                 'Max_Price': max(pmc, p_live),
                 'Step_Trailing': 0,
                 'SL_Confermato_TR': 0.0,
+                'SL_Notificato_Telegram': 0.0,
                 'Avviso_SL': '',
                 'Avviso_SL_Tipo': '',
                 'Data_Ingresso': data_acq,
@@ -781,11 +867,20 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
                 rec['Avviso_SL'] = f"🛡️ {tk}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {pmc:.2f} (pareggio)."
                 upd = True
 
-        # Se esiste un avviso pendente ancora coerente col prezzo live, lo aggiunge alla lista Home
+        # Se esiste un avviso pendente ancora coerente col prezzo live, lo aggiunge alla lista Home e notifica su Telegram 1 sola volta
         if str(rec.get('Avviso_SL') or '').strip():
             sl_curr_val = float(rec.get('Stop_Loss') or pmc)
             if p_live > sl_curr_val * 0.995 and _sl_merita_nuovo_avviso(sl_curr_val, float(rec.get('SL_Confermato_TR') or 0.0)):
-                avvisi_home.append(_costruisci_dict_avviso_protezione(rec, pos))
+                av_d = _costruisci_dict_avviso_protezione(rec, pos)
+                avvisi_home.append(av_d)
+                # Notifica push Telegram dedicata al singolo utente solo per un nuovo livello SL non ancora notificato
+                sl_not_tg = float(rec.get('SL_Notificato_Telegram') or 0.0)
+                if _sl_merita_nuovo_avviso(sl_curr_val, sl_not_tg):
+                    msg_tg = _formatta_messaggio_telegram_sl(av_d, utente_eff)
+                    if _invia_notifica_telegram(utente_eff, msg_tg):
+                        rec['SL_Notificato_Telegram'] = round(sl_curr_val, 2)
+                        rec['Data_Notifica_Telegram'] = oggi
+                        upd = True
             else:
                 rec['Avviso_SL'] = ''
                 upd = True
@@ -867,6 +962,7 @@ def conferma_avviso_sl(ticker, nuovo_sl=None):
             rec['Avviso_SL'] = ''
             if sl_val > 0:
                 rec['SL_Confermato_TR'] = sl_val
+                rec['SL_Notificato_Telegram'] = max(float(rec.get('SL_Notificato_Telegram') or 0.0), sl_val)
             rec['Data_Conferma_SL'] = oggi
             mod = True
     if mod:

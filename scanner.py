@@ -1068,6 +1068,16 @@ def _sync_github_file(file_path, content_str, mode="push"):
 # Espone la funzione di sincronizzazione GitHub anche al modulo regia_tracker
 st.session_state["_sync_github_file_fn"] = _sync_github_file
 
+
+def _invia_notifica_telegram(utente, messaggio):
+    """Wrapper sicuro per notifiche push Telegram separate per membro Famiglia (legge solo da st.secrets)."""
+    try:
+        if "regia_tracker" in globals() and hasattr(regia_tracker, "_invia_notifica_telegram"):
+            return bool(regia_tracker._invia_notifica_telegram(utente, messaggio))
+    except Exception:
+        pass
+    return False
+
 OPZIONI_MOTIVO_ACQUISTO = [
     "DCA Binario 1 (Pullback Fase 2)",
     "DCA Binario 2 (Supporto)",
@@ -2661,14 +2671,290 @@ def calcola_semaforo_mercato():
 # ==============================================================================
 # MODULO 2: SIMULATORE DI ACQUISTO INTELLIGENTE
 # ==============================================================================
+def _calcola_profilo_target_simulazione(tk_target, portafoglio, eurusd_rate):
+    """
+    Calcola il profilo qualitativo (target_score 0-100) e il verdetto sintetico reale
+    del Pilota Automatico MATRIX sul titolo simulato (3 Scudi + Motori ufficiali + Fase).
+    """
+    tk = str(tk_target or "").strip().upper()
+    info = _get_info_cached(tk) if "_get_info_cached" in globals() else {}
+    hist = _get_single_ohlc_cached(tk, period="1y") if "_get_single_ohlc_cached" in globals() else None
+    metriche_scan = (st.session_state.get("dashboard_stats") or {}).get("metriche_scan") or {}
+    s_sc = int((metriche_scan.get(tk) or {}).get("S_Score") or calcola_s_score(info) or 50)
+    tn_tk = _valuta_fondamentali_tom_nash(info, s_score=s_sc)
+    fase_tk = rileva_fase_weinstein(hist) if (hist is not None and not hist.empty and len(hist) >= 50) else "N/D"
+    fase_u = str(fase_tk or "N/D").upper()
+
+    # Controllo 3 Scudi + Cooldown 21gg
+    cooldown_map = _get_tickers_cooldown_vendite(21) if "_get_tickers_cooldown_vendite" in globals() else {}
+    sem_m = st.session_state.get("semaforo_mercato")
+    if not isinstance(sem_m, dict) or not sem_m.get("stato"):
+        sem_m = calcola_semaforo_mercato() if "calcola_semaforo_mercato" in globals() else {"stato": "giallo"}
+    spy_st = str((sem_m or {}).get("stato", "giallo")).lower()
+    _, qqq_st, _ = _verifica_qqq_regime_verde() if "_verifica_qqq_regime_verde" in globals() else (False, "giallo", "")
+    regime_rosso = (spy_st == "rosso" or str(qqq_st).lower() == "rosso")
+
+    # Esposizione attuale in portafoglio (Scudo 3 > 22%)
+    val_tot_p = 0.0
+    val_tk_p = 0.0
+    for p in (portafoglio or []):
+        q_p = float(p.get("Quantita", 0) or 0)
+        att_p = float(p.get("Prezzo_Attuale_EUR") or p.get("Prezzo_Medio") or 0)
+        v_p = q_p * att_p
+        val_tot_p += v_p
+        if str(p.get("Ticker", "")).strip().upper() == tk:
+            val_tk_p += v_p
+    peso_tk = (val_tk_p / val_tot_p * 100.0) if val_tot_p > 0 else 0.0
+
+    # Trimestrali (Scudo 2 <= 10gg)
+    gg_ut = (metriche_scan.get(tk) or {}).get("Giorni_Utili")
+
+    # Verifica motori ufficiali MATRIX (Breakout Matrix / Radar IGNITION / Setup Palantir AI)
+    pat_alerts = st.session_state.get("pattern_alerts") or {}
+    buy_nuovo_list = (pat_alerts.get("buy_nuovo") or []) if isinstance(pat_alerts, dict) else []
+    al_pat = next((a for a in buy_nuovo_list if isinstance(a, dict) and str(a.get("ticker", "")).strip().upper() == tk), None)
+    if al_pat is None and isinstance(pat_alerts, dict):
+        al_per = (pat_alerts.get("per_ticker") or {}).get(tk)
+        if isinstance(al_per, dict):
+            al_pat = al_per
+    radar_rows = st.session_state.get("risultati_radar_ignition_80") or []
+    ha_ign = any(
+        isinstance(r_ig, dict)
+        and str(r_ig.get("Ticker", "")).strip().upper() == tk
+        and "ATTIVO" in str(r_ig.get("Stato", "")).upper()
+        for r_ig in radar_rows
+    )
+    pal_cands = st.session_state.get("ai_palantir_candidati") or []
+    ha_pal = any(isinstance(r_pl, dict) and str(r_pl.get("Ticker", "")).strip().upper() == tk for r_pl in pal_cands)
+
+    motori = []
+    base_sc = 0.0
+    sotto_trigger_y = False
+    esteso_trigger_y = False
+    if isinstance(al_pat, dict):
+        stato_tr = str(al_pat.get("stato_trigger", "")).upper()
+        dist_y = float(al_pat.get("dist_y_pct", -999.0) or -999.0)
+        if "PRE-BREAKOUT" in stato_tr or dist_y < 0.0:
+            sotto_trigger_y = True
+        elif dist_y > 3.5:
+            esteso_trigger_y = True
+        else:
+            motori.append("Breakout")
+            base_sc = max(base_sc, min(74.0, float(al_pat.get("confidenza") or 75.0) * 0.74))
+    if ha_ign:
+        motori.append("IGNITION")
+        base_sc = max(base_sc, 58.0)
+    if ha_pal:
+        motori.append("Palantir AI")
+        base_sc = max(base_sc, 62.0)
+
+    # Calcolo target_score (0-100) comparabile con Hold-Score per il Delta Qualitativo Fonte B
+    if motori:
+        sc_tot = (
+            base_sc
+            + (15.0 if len(motori) >= 2 else 0.0)
+            + (8.0 if s_sc >= 75 else (4.0 if s_sc >= 65 else 0.0))
+            + float(tn_tk.get("bonus_multipli") or 0)
+        )
+        target_score = int(max(0, min(100, round(sc_tot))))
+    else:
+        # Score qualitativo intrinseco (coerente con scala Hold-Score 0-100) quando non c'è breakout attivo
+        sc_q = min(40.0, max(0.0, (s_sc / 100.0) * 40.0))
+        if "FASE 2" in fase_u:
+            sc_q += 28.0
+        elif "CORREZIONE" in fase_u:
+            sc_q += 20.0
+        elif "FASE 1" in fase_u:
+            sc_q += 15.0
+        elif "FASE 3" in fase_u:
+            sc_q += 8.0
+        if tn_tk.get("scudo_tom_nash"):
+            sc_q += 12.0
+        sc_q += float(tn_tk.get("bonus_multipli") or 0)
+        target_score = int(max(0, min(100, round(sc_q))))
+
+    # Frase sintetica in due parole sul verdetto reale del Pilota Automatico MATRIX
+    approvato = False
+    if tk in cooldown_map:
+        verdetto = f"🤖 MATRIX resterebbe FERMO (Cooldown Anti Ping-Pong 21gg — venduto {cooldown_map[tk]} gg fa)."
+    elif peso_tk > 22.0:
+        verdetto = f"🤖 MATRIX resterebbe FERMO (Scudo Concentrazione attivo: {tk} pesa già {peso_tk:.1f}% > 22%)."
+    elif gg_ut is not None and 0 <= int(gg_ut) <= 10:
+        verdetto = f"🤖 MATRIX resterebbe FERMO (Trimestrale imminente tra {int(gg_ut)} giorni)."
+    elif regime_rosso:
+        if "FASE 4" in fase_u:
+            verdetto = f"🤖 MATRIX resterebbe FERMO (Regime SPY/QQQ ROSSO e {tk} in Fase 4)."
+        else:
+            verdetto = f"🤖 MATRIX resterebbe FERMO (Regime SPY/QQQ ROSSO)."
+    elif sotto_trigger_y:
+        verdetto = "🤖 MATRIX resterebbe FERMO (Sotto Trigger Y)."
+    elif esteso_trigger_y:
+        verdetto = "🤖 MATRIX resterebbe FERMO (Esteso oltre +3,5% dal Trigger Y)."
+    elif "FASE 4" in fase_u and not motori:
+        verdetto = f"🤖 MATRIX resterebbe FERMO ({tk} in Fase 4)."
+    elif motori:
+        approvato = True
+        mot_lbl = " + ".join(motori)
+        verdetto = f"🟢 MATRIX APPROVA L'INGRESSO ({mot_lbl} confermato · Super-Score {target_score}/100)."
+    else:
+        verdetto = f"🤖 MATRIX resterebbe FERMO (Nessun breakout confermato · {fase_tk})."
+
+    return {
+        "ticker": tk,
+        "target_score": target_score,
+        "s_score": s_sc,
+        "fase": fase_tk,
+        "approvato_matrix": approvato,
+        "verdetto_matrix": verdetto,
+        "regime_rosso": regime_rosso,
+    }
+
+
+def _raccogli_candidati_switch_simulazione(
+    portafoglio,
+    salute_map,
+    target_score,
+    tk_target="",
+    liq_libera=0.0,
+    esclusioni=None,
+    catalizzatori_set=None,
+):
+    """
+    Raccoglie tutti i candidati validi per finanziare un acquisto in piena coerenza con
+    _trova_riserva_liquidita_intelligente():
+    - Fonte A (Raccolto Profitti): P&L >= +35% oppure (P&L >= +25% con RSI > 72) -> parziale 50% netto >= 30 €
+      (o 100% solo se il 50% netto è < 30 €).
+    - Fonte B (Switch Qualitativo Spot): SOLO quote Spot (mai PAC anche se sospesi), P&L -3%..+12%,
+      no Fase 2 forte sopra SMA 50 con S-Score >= 70, no Scudo Tom Nash, no Insider SEC 90gg,
+      anzianità >= 45gg (se nota) e Delta Qualitativo (target_score - Hold-Score) >= +20 pt, netto >= 30 €.
+    Restituisce (lista_candidati_ordinata, totale_netto_eur).
+    """
+    tk_t = str(tk_target or "").strip().upper()
+    escl_s = {str(x).strip().upper() for x in (esclusioni or []) if str(x).strip()}
+    cat_s = {str(x).strip().upper() for x in (catalizzatori_set or []) if str(x).strip()}
+    df_m_sim = _costruisci_mappa_metriche_scan() if "_costruisci_mappa_metriche_scan" in globals() else {}
+    reg_acq_sim = carica_json(REGISTRO_ACQUISTI_FILE, default=[]) if "carica_json" in globals() else []
+    candidati = []
+
+    for pos in (portafoglio or []):
+        tk = str(pos.get("Ticker", "")).strip().upper()
+        if not tk or tk == tk_t or tk in escl_s or tk in cat_s:
+            continue
+        qta = float(pos.get("Quantita", 0) or 0)
+        pmc = float(pos.get("Prezzo_Medio", 0) or 0)
+        p_att = float(pos.get("Prezzo_Attuale_EUR") or 0)
+        if qta <= 0 or pmc <= 0:
+            continue
+        val_car = qta * pmc
+        val_att = (qta * p_att) if p_att > 0 else float(pos.get("Valore_Attuale", val_car) or val_car)
+        if val_att <= 0:
+            continue
+        pnl_pct = ((val_att / val_car) - 1.0) * 100.0 if val_car > 0 else float(pos.get("PnL_%", 0) or 0)
+
+        inf_s = dict((salute_map or {}).get(tk) or {})
+        fase_ext, sc_ext, rsi_ext, solo_pac_ext, _ = _estrai_info_posizione_vendibile(tk, pos, df_m_sim)
+        s_sc = int(inf_s.get("s_score") or sc_ext or 55)
+        fase_s = str(inf_s.get("fase") or fase_ext or "N/D").upper()
+        rsi_v = float(inf_s.get("rsi") if inf_s.get("rsi") is not None else (rsi_ext or 50.0))
+        sopra_50 = inf_s.get("sopra_sma50")
+        sec_b = int(inf_s.get("sec_buys") or 0)
+        if "scudo_tom_nash" in inf_s:
+            scudo_tn = bool(inf_s.get("scudo_tom_nash"))
+        else:
+            tn_loc = _valuta_fondamentali_tom_nash(_get_info_cached(tk), s_score=s_sc)
+            scudo_tn = bool(tn_loc.get("scudo_tom_nash"))
+            inf_s.update(tn_loc)
+        inf_s.setdefault("s_score", s_sc)
+        inf_s.setdefault("fase", fase_s)
+        inf_s.setdefault("sec_buys", sec_b)
+        hold_score = _calcola_hold_score_posizione(pos, inf_s)
+        q_pac_p, q_spot_p = _calcola_ripartizione_pac_spot(pos)
+
+        # Fonte A: Raccolto Profitti (>= +35% oppure >= +25% con RSI > 72) — preferisce parziale 50%
+        if pnl_pct >= 35.0 or (pnl_pct >= 25.0 and rsi_v > 72.0):
+            if q_spot_p <= 1e-6:
+                continue
+            frazione_base = min(1.0, q_spot_p / qta)
+            for perc_vend in (50, 100):
+                frac = frazione_base * (perc_vend / 100.0)
+                v_lordo = val_att * frac
+                gain_lordo = max(0.0, (val_att - val_car) * frac)
+                tasse_26 = round(gain_lordo * 0.26, 2)
+                netto_disp = round(max(0.0, v_lordo - tasse_26 - 2.0), 2)
+                if netto_disp >= 30.0:
+                    delta_q = (int(target_score) - hold_score) if target_score is not None else None
+                    candidati.append({
+                        "priorita": 1,
+                        "codice_fonte": "FONTE_A",
+                        "fonte": f"Fonte A (Raccolto {perc_vend}%)",
+                        "ticker": tk,
+                        "pct_vendita": perc_vend,
+                        "quantita": round(q_spot_p * (perc_vend / 100.0), 4),
+                        "pnl_pct": round(pnl_pct, 1),
+                        "hold_score": hold_score,
+                        "delta_qualita": delta_q,
+                        "lordo_eur": round(v_lordo, 2),
+                        "tasse_eur": tasse_26,
+                        "netto_eur": netto_disp,
+                        "motivo": f"Fonte A (Raccolto {perc_vend}%, {pnl_pct:+.1f}%) | netto € {netto_disp:,.2f} (-€ {tasse_26:,.2f} tasse, -€ 2 comm. TR)",
+                    })
+                    break
+            continue
+
+        # Fonte B: Rotazione Qualitativa — SOLO quote Spot (protezione assoluta PAC anche se sospesi)
+        if solo_pac_ext or q_spot_p <= 1e-6:
+            continue
+        gg_det = inf_s.get("giorni_detenzione")
+        if gg_det is None and "_calcola_giorni_detenzione_posizione" in globals():
+            gg_det = _calcola_giorni_detenzione_posizione(pos, reg_acq_sim)
+        if gg_det is None or gg_det < 45:
+            continue
+        if ("FASE 2" in fase_s) and (sopra_50 is not False) and s_sc >= 70:
+            continue
+        if sec_b > 0 or scudo_tn:
+            continue
+        delta_q = (int(target_score) - hold_score) if target_score is not None else 0
+        if target_score is not None and delta_q < 20:
+            continue
+        if -3.0 <= pnl_pct <= 12.0:
+            frazione_spot = min(1.0, q_spot_p / qta)
+            v_lordo = val_att * frazione_spot
+            gain_lordo = max(0.0, (val_att - val_car) * frazione_spot)
+            tasse_26 = round(gain_lordo * 0.26, 2)
+            netto_disp = round(max(0.0, v_lordo - tasse_26 - 2.0), 2)
+            if netto_disp >= 30.0:
+                nota_sp = f" — solo quota Spot ({q_spot_p:.2f} az.)" if q_pac_p > 1e-6 else ""
+                candidati.append({
+                    "priorita": 2,
+                    "codice_fonte": "FONTE_B",
+                    "fonte": "Fonte B (Switch Qualitativo Spot)",
+                    "ticker": tk,
+                    "pct_vendita": int(round(frazione_spot * 100.0)),
+                    "quantita": round(q_spot_p, 4),
+                    "pnl_pct": round(pnl_pct, 1),
+                    "hold_score": hold_score,
+                    "delta_qualita": delta_q,
+                    "lordo_eur": round(v_lordo, 2),
+                    "tasse_eur": tasse_26,
+                    "netto_eur": netto_disp,
+                    "motivo": f"Fonte B (Switch Spot {pnl_pct:+.1f}%, Hold-Score {hold_score}/100, Delta +{delta_q} pt{nota_sp}) | netto € {netto_disp:,.2f}",
+                })
+
+    candidati.sort(key=lambda x: (x["priorita"], x["hold_score"], -x["netto_eur"]))
+    tot_netto = round(sum(c["netto_eur"] for c in candidati), 2)
+    return candidati, tot_netto
+
+
 def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=None, catalizzatori_input=""):
     """
-    Simulatore di Acquisto allineato allo Scudo Tom Nash, alla protezione assoluta delle quote PAC
-    e alla cache del Market Data Hub (zero suggerimenti di vendita in perdita su aziende sane o PAC).
+    Simulatore di Acquisto allineato allo Scudo Tom Nash, alla protezione assoluta delle quote PAC,
+    al Delta Qualitativo Fonte B (>= +20 pt) di _trova_riserva_liquidita_intelligente() e al verdetto
+    reale del Pilota Automatico MATRIX sul titolo simulato.
     """
     scenari = {'vendita_gain': list(), 'vendita_loss': list(), 'hold_catalizzatore': list(), 'nuova_liquidita': True}
     if esclusioni_list is None:
         esclusioni_list = list()
+    escl_set = {str(x).strip().upper() for x in esclusioni_list if str(x).strip()}
     catalizzatori = dict()
     if catalizzatori_input:
         for item in catalizzatori_input.split(';'):
@@ -2684,9 +2970,10 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
                     try:
                         data_cat = datetime(int(anno), int(mese), int(giorno))
                         catalizzatori[ticker] = {'descrizione': resto.split('-')[0].strip() if '-' in resto else resto.strip(), 'data': data_cat}
-                    except:
+                    except Exception:
                         pass
     oggi = datetime.now()
+    cat_attivi_set = {tk_c for tk_c, d_c in catalizzatori.items() if d_c.get('data') and d_c['data'] >= oggi}
     salute_cache = st.session_state.get("home_salute_portafoglio") or {}
     try:
         tk_target = str(titolo or "").strip().upper()
@@ -2698,9 +2985,25 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
         prezzo_raw = float(hist['Close'].dropna().iloc[-1])
         prezzo_eur = prezzo_raw / eurusd_rate if currency == 'USD' else prezzo_raw
         quantita_acquistabile = importo / prezzo_eur if prezzo_eur > 0 else 0.0
+
+        # 1) Profilo qualitativo e verdetto reale del Pilota Automatico MATRIX sul titolo simulato
+        prof_target = _calcola_profilo_target_simulazione(tk_target, portafoglio, eurusd_rate)
+        target_score = prof_target["target_score"]
+
+        # 2) Candidati Switch Qualitativi unificati (Fonte A parziale + Fonte B Spot con Delta >= +20 pt)
+        candidati_ab, switch_netto_tot = _raccogli_candidati_switch_simulazione(
+            portafoglio=portafoglio,
+            salute_map=salute_cache,
+            target_score=target_score,
+            tk_target=tk_target,
+            esclusioni=escl_set,
+            catalizzatori_set=cat_attivi_set,
+        )
+        cand_ab_map = {c["ticker"]: c for c in candidati_ab}
+
         for pos in (portafoglio or []):
             ticker_pos = str(pos.get('Ticker', '')).strip().upper()
-            if not ticker_pos or ticker_pos in esclusioni_list:
+            if not ticker_pos or ticker_pos == tk_target or ticker_pos in escl_set:
                 continue
             try:
                 q_pac_p, q_spot_p = _calcola_ripartizione_pac_spot(pos)
@@ -2719,49 +3022,83 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
                 fase = str(inf_s.get("fase") or rileva_fase_weinstein(hist_pos) or "N/D")
                 sec_buys = int(inf_s.get("sec_buys") or 0)
                 tn_pos = _valuta_fondamentali_tom_nash(info_pos, s_score=s_score)
-                scudo_attivo = bool(tn_pos.get("scudo_tom_nash")) or (s_score >= 65) or (sec_buys > 0)
-                has_catalizzatore = (ticker_pos in catalizzatori and catalizzatori[ticker_pos]['data'] >= oggi)
+                scudo_tn = bool(tn_pos.get("scudo_tom_nash"))
+                has_catalizzatore = ticker_pos in cat_attivi_set
 
-                # Protezione assoluta delle posizioni PAC pure
+                # Protezione assoluta delle posizioni PAC pure (attive o sospese Long)
                 if q_spot_p <= 1e-6:
+                    stato_pac_lbl = "PAC Sospeso Long" if bool(pos.get("PAC_Sospeso", False)) else "PAC Attivo"
                     scenari['hold_catalizzatore'].append({
                         'ticker': ticker_pos,
-                        'messaggio': f"🛡️ PROTETTO (PAC): {ticker_pos} è un piano di accumulo fisso — mai toccare le quote PAC per finanziare acquisti Spot."
+                        'messaggio': f"🛡️ PROTETTO ({stato_pac_lbl}): {ticker_pos} è un piano di accumulo fisso — mai toccare le quote PAC per finanziare acquisti Spot."
                     })
                     continue
 
                 if has_catalizzatore:
-                    scenari['hold_catalizzatore'].append({'ticker': ticker_pos, 'messaggio': f"⚠️ {ticker_pos} ha un catalizzatore imminente. Non vendere."})
-                elif pnl_pct >= 35.0:
-                    val_spot = round(prezzo_eur_pos * q_spot_p * 0.5, 2)
-                    scenari['vendita_gain'].append({
-                        'ticker': ticker_pos, 'pnl_pct': round(pnl_pct, 2), 'trend_30gg': round(trend_30gg, 2),
-                        'quantita': round(q_spot_p * 0.5, 4), 'valore': val_spot,
-                        'messaggio': f"💰 PRESA PROFITTO PARZIALE (50% Spot): {ticker_pos} (+{pnl_pct:.1f}%) può liberare circa € {val_spot:.2f} lordi lasciando correre il resto."
-                    })
-                elif pnl_pct < 0 and scudo_attivo:
                     scenari['hold_catalizzatore'].append({
                         'ticker': ticker_pos,
-                        'messaggio': f"🛡️ SCUDO TOM NASH / AZIENDA SANA ({ticker_pos}, {pnl_pct:+.1f}%): {tn_pos.get('scudo_tom_nash_nota', '')} — vietato vendere in perdita sullo schermo rosso."
+                        'messaggio': f"🛡️ PROTETTO (Catalizzatore): {ticker_pos} ha un catalizzatore imminente — non vendere."
                     })
-                elif -3.0 <= pnl_pct <= 12.0 and ("FASE 2" not in fase.upper() or s_score < 70) and not tn_pos.get("scudo_tom_nash") and sec_buys == 0:
-                    val_spot = round(prezzo_eur_pos * q_spot_p, 2)
+                    continue
+
+                # Candidato Fonte A o Fonte B confermato dalle regole di _trova_riserva_liquidita_intelligente()
+                cand_ab = cand_ab_map.get(ticker_pos)
+                if cand_ab and cand_ab["codice_fonte"] == "FONTE_A":
+                    scenari['vendita_gain'].append({
+                        'ticker': ticker_pos, 'pnl_pct': cand_ab["pnl_pct"], 'trend_30gg': round(trend_30gg, 2),
+                        'quantita': cand_ab["quantita"], 'valore': cand_ab["netto_eur"], 'fonte': 'FONTE_A',
+                        'messaggio': (
+                            f"💰 FONTE A — RACCOLTO PROFITTI ({cand_ab['pct_vendita']}% Spot): {ticker_pos} ({cand_ab['pnl_pct']:+.1f}%) "
+                            f"libera circa € {cand_ab['netto_eur']:,.2f} netti (già al netto di € {cand_ab['tasse_eur']:,.2f} tasse 26% e € 2 comm. TR)."
+                        )
+                    })
+                elif cand_ab and cand_ab["codice_fonte"] == "FONTE_B":
+                    nota_sp_m = f" — solo quota Spot ({q_spot_p:.2f} az., quota PAC intoccata)" if q_pac_p > 1e-6 else ""
                     scenari['vendita_loss'].append({
-                        'ticker': ticker_pos, 'pnl_pct': round(pnl_pct, 2), 'kill_switch': ("FASE 4" in fase.upper()),
-                        'distanza_supporto': 0.0, 'quantita': round(q_spot_p, 4), 'valore': val_spot,
-                        'messaggio': f"🔄 CANDIDATO SWITCH SPOT: {ticker_pos} ({pnl_pct:+.1f}%, {fase}, S-Score {s_score}/100) — solo quota Spot ({q_spot_p:.2f} az., ~€ {val_spot:.2f})."
+                        'ticker': ticker_pos, 'pnl_pct': cand_ab["pnl_pct"], 'kill_switch': ("FASE 4" in fase.upper()),
+                        'distanza_supporto': 0.0, 'quantita': cand_ab["quantita"], 'valore': cand_ab["netto_eur"],
+                        'hold_score': cand_ab["hold_score"], 'delta_qualita': cand_ab["delta_qualita"],
+                        'messaggio': (
+                            f"🔄 FONTE B — SWITCH QUALITATIVO SPOT: {ticker_pos} ({cand_ab['pnl_pct']:+.1f}%, {fase}, "
+                            f"Hold-Score {cand_ab['hold_score']}/100, Delta +{cand_ab['delta_qualita']} pt vs {tk_target}){nota_sp_m} "
+                            f"→ libera circa € {cand_ab['netto_eur']:,.2f} netti."
+                        )
+                    })
+                elif scudo_tn or sec_buys > 0 or (pnl_pct < 0 and s_score >= 65):
+                    motivi_p = []
+                    if scudo_tn:
+                        motivi_p.append(f"Scudo Tom Nash ({tn_pos.get('scudo_tom_nash_nota', '')})")
+                    if sec_buys > 0:
+                        motivi_p.append(f"{sec_buys} acq. Insider SEC 90gg")
+                    if not motivi_p:
+                        motivi_p.append(f"Azienda sana (S-Score {s_score}/100)")
+                    scenari['hold_catalizzatore'].append({
+                        'ticker': ticker_pos,
+                        'messaggio': f"🛡️ PROTETTO ({ticker_pos}, {pnl_pct:+.1f}%): {' + '.join(motivi_p)} — non sacrificare questo titolo."
                     })
                 elif pnl_pct > 0:
                     scenari['vendita_gain'].append({
                         'ticker': ticker_pos, 'pnl_pct': round(pnl_pct, 2), 'trend_30gg': round(trend_30gg, 2),
-                        'quantita': q_spot_p, 'valore': round(prezzo_eur_pos * q_spot_p, 2),
-                        'messaggio': f"🟢 MANTIENI: {ticker_pos} (+{pnl_pct:.1f}%) è in salute ({fase}, S-Score {s_score}/100)."
+                        'quantita': q_spot_p, 'valore': round(prezzo_eur_pos * q_spot_p, 2), 'fonte': 'HOLD',
+                        'messaggio': f"🟢 MANTIENI: {ticker_pos} (+{pnl_pct:.1f}%) è in salute ({fase}, S-Score {s_score}/100) — nessun Delta sufficiente per ruotarlo."
                     })
             except Exception:
                 continue
-        if scenari['vendita_loss']:
+
+        if candidati_ab:
             scenari['nuova_liquidita'] = False
-        return {'titolo': tk_target, 'prezzo_eur': round(prezzo_eur, 2), 'quantita_acquistabile': round(quantita_acquistabile, 6), 'importo': importo, 'scenari': scenari}
+        return {
+            'titolo': tk_target,
+            'prezzo_eur': round(prezzo_eur, 2),
+            'quantita_acquistabile': round(quantita_acquistabile, 6),
+            'importo': importo,
+            'scenari': scenari,
+            'target_score': target_score,
+            'verdetto_matrix': prof_target["verdetto_matrix"],
+            'approvato_matrix': prof_target["approvato_matrix"],
+            'candidati_fonte_ab': candidati_ab,
+            'switch_netto_tot': switch_netto_tot,
+        }
     except Exception as e:
         return {'errore': str(e)}
 
@@ -7337,7 +7674,7 @@ def _esegui_cascata_home_cached(
     # Sincronizza gli avvisi di Protezione Profitto (solo quote Spot, mai PAC) riusando hub_ohlc a zero chiamate API extra
     try:
         if "regia_tracker" in globals() and hasattr(regia_tracker, "sincronizza_avvisi_protezione_spot"):
-            regia_tracker.sincronizza_avvisi_protezione_spot(port_loc, eurusd_rate=eurusd_live, ohlc_map=hub_ohlc)
+            regia_tracker.sincronizza_avvisi_protezione_spot(port_loc, eurusd_rate=eurusd_live, ohlc_map=hub_ohlc, utente=chiave_u)
     except Exception:
         pass
 
@@ -9708,64 +10045,48 @@ with tab_analisi:
             _cat_raw = str(catalizzatori_input) if "catalizzatori_input" in locals() else ""
             _cat_set = {x.split(":")[0].strip().upper() for x in _cat_raw.splitlines() if ":" in x}
             _port_src = portafoglio_attuale if "portafoglio_attuale" in locals() else st.session_state.get("portafoglio", [])
-            _df_m_sim = _costruisci_mappa_metriche_scan()
             _salute_sim = st.session_state.get("home_salute_portafoglio") or {}
-            _vendibili = []
-            _tot_vend_netto = 0.0
-            for _p_s in _port_src:
-                _tk_s = str(_p_s.get("Ticker", "")).strip().upper()
-                _va_s = float(_p_s.get("Valore_Attuale", 0.0) or 0.0)
-                _vc_s = float(_p_s.get("Valore_Carico") or (float(_p_s.get("Quantita", 0) or 0) * float(_p_s.get("Prezzo_Medio", 0) or 0)))
-                _pnl_s = _va_s - _vc_s
-                _pnl_pct_s = ((_va_s / _vc_s) - 1.0) * 100.0 if _vc_s > 0 else float(_p_s.get("PnL_%", 0.0) or 0.0)
-                if not _tk_s or _tk_s in _escl_set or _tk_s in _cat_set or _va_s <= 0:
-                    continue
-                _inf_sim = _salute_sim.get(_tk_s) or {}
-                _fase_s, _score_s, _rsi_s, _solo_pac_s, _ = _estrai_info_posizione_vendibile(_tk_s, _p_s, _df_m_sim)
-                _sec_sim = int(_inf_sim.get("sec_buys") or 0)
-                _tn_sim = bool(_inf_sim.get("scudo_tom_nash"))
-                _q_pac_s, _q_spot_s = _calcola_ripartizione_pac_spot(_p_s)
-                _q_tot_s = max(1e-6, float(_p_s.get("Quantita", 0) or 0))
+            _imp_req = float(sim_importo) if "sim_importo" in locals() else 200.0
+            _tk_req = str(sim_ticker).upper().strip() if "sim_ticker" in locals() else "TITOLO"
 
-                # Fonte A: Raccolto Profitti 50% (>= +35% oppure >= +25% con RSI > 72)
-                if _pnl_pct_s >= 35.0 or (_pnl_pct_s >= 25.0 and _rsi_s > 72.0):
-                    _vl_s = _va_s * 0.5
-                    _gl_s = max(0.0, _pnl_s * 0.5)
-                    _tassa_s = round(_gl_s * 0.26, 2)
-                    _netto_s = round(max(0.0, _vl_s - _tassa_s - 2.0), 2)
-                    if _netto_s >= 30.0:
-                        _motivo_s = f"Fonte A (Raccolto 50%, {_pnl_pct_s:+.1f}%) | netto €{_netto_s:.2f} (-€{_tassa_s:.2f} tasse, -€2 comm. TR)"
-                        _vendibili.append((1, -_netto_s, _tk_s, _netto_s, _motivo_s))
-                        _tot_vend_netto += _netto_s
-                    continue
+            # Allineamento 100% con _trova_riserva_liquidita_intelligente(): somma Fonte A parziale + Fonte B (Delta >= +20 pt)
+            _prof_sim = _calcola_profilo_target_simulazione(_tk_req, _port_src, eurusd_rate)
+            _cands_ab_sim, _tot_vend_netto = _raccogli_candidati_switch_simulazione(
+                portafoglio=_port_src,
+                salute_map=_salute_sim,
+                target_score=_prof_sim["target_score"],
+                tk_target=_tk_req,
+                liq_libera=_cassa_broker,
+                esclusioni=_escl_set,
+                catalizzatori_set=_cat_set,
+            )
+            _n_fa = sum(1 for c in _cands_ab_sim if c.get("codice_fonte") == "FONTE_A")
+            _n_fb = sum(1 for c in _cands_ab_sim if c.get("codice_fonte") == "FONTE_B")
+            if _n_fa > 0 and _n_fb > 0:
+                _lbl_cands_ab = f"{len(_cands_ab_sim)} candidati ({_n_fa} Fonte A + {_n_fb} Fonte B)"
+            else:
+                _lbl_cands_ab = f"{len(_cands_ab_sim)} candidati Fonte A/B"
 
-                # Fonte B: SOLO quote Spot (protezione assoluta PAC anche se sospesi), no Scudo Tom Nash, no SEC, no Fase 2 forte
-                if _solo_pac_s or _q_spot_s <= 1e-6 or _tn_sim or _sec_sim > 0:
-                    continue
-                if ("2" in _fase_s) and _score_s >= 70:
-                    continue
-                if -3.0 <= _pnl_pct_s <= 12.0:
-                    _fr_s = min(1.0, _q_spot_s / _q_tot_s)
-                    _vl_s = _va_s * _fr_s
-                    _gl_s = max(0.0, _pnl_s * _fr_s)
-                    _tassa_s = round(_gl_s * 0.26, 2)
-                    _netto_s = round(max(0.0, _vl_s - _tassa_s - 2.0), 2)
-                    if _netto_s >= 30.0:
-                        _nota_sp_s = f" — solo quota Spot ({_q_spot_s:.2f} az.)" if _q_pac_s > 1e-6 else ""
-                        _motivo_s = f"Fonte B (Switch Spot {_pnl_pct_s:+.1f}%{_nota_sp_s}) | netto €{_netto_s:.2f}"
-                        _vendibili.append((2, -_netto_s, _tk_s, _netto_s, _motivo_s))
-                        _tot_vend_netto += _netto_s
-            _vendibili.sort(key=lambda x: (x[0], x[1]))
             _liq_extra = float(st.session_state.get("liq_aggiuntiva_sim", 0.0) or 0.0)
             _cassa_tot = round(_cassa_broker + _liq_extra, 2)
             _tot_disponibile = round(_cassa_tot + _tot_vend_netto, 2)
-            _imp_req = float(sim_importo) if "sim_importo" in locals() else 200.0
-            _tk_req = str(sim_ticker).upper().strip() if "sim_ticker" in locals() else "TITOLO"
             _mancante = round(max(0.0, _imp_req - _tot_disponibile), 2)
             _c_r1, _c_r2, _c_r3 = st.columns(3)
             _c_r1.metric("💳 Cassa Broker + Extra", f"€ {_cassa_tot:,.2f}", f"Broker €{_cassa_broker:.2f} + Extra €{_liq_extra:.2f}")
-            _c_r2.metric("🔄 Switch Qualitativi (Netto)", f"€ {_tot_vend_netto:,.2f}", f"{len(_vendibili)} candidati Fonte A/B")
+            _c_r2.metric("🔄 Switch Qualitativi (Netto)", f"€ {_tot_vend_netto:,.2f}", _lbl_cands_ab)
             _c_r3.metric("🎯 Copertura Totale", f"€ {_tot_disponibile:,.2f}", "Pronto" if _mancante == 0 else f"Mancano € {_mancante:,.2f}", delta_color="normal" if _mancante == 0 else "inverse")
+            # Mini-banner immediato del verdetto Pilota Automatico MATRIX già nella prima card
+            if _prof_sim.get("approvato_matrix"):
+                _bg_vm, _brd_vm, _fg_vm = "#0B2219", "#10B981", "#D1FAE5"
+            else:
+                _bg_vm, _brd_vm, _fg_vm = "#2A1F0D", "#F59E0B", "#FEF3C7"
+            st.markdown(
+                f"<div style='background:{_bg_vm}; border:1px solid {_brd_vm}; border-left:4px solid {_brd_vm}; "
+                f"border-radius:8px; padding:0.55rem 0.90rem; margin:0.45rem 0 0.60rem 0; "
+                f"color:{_fg_vm}; font-size:0.89rem; font-weight:700; line-height:1.4;'>"
+                f"{_prof_sim['verdetto_matrix']}</div>",
+                unsafe_allow_html=True,
+            )
             if _mancante > 0:
                 _nome_sim_u = PROFILO_ATTIVO.get("nome", "Utente")
                 st.warning(f"🛡️ **{_nome_sim_u}, Portafoglio Intatto — per acquistare {_tk_req} da € {_imp_req:,.2f} mancano € {_mancante:,.2f}** (cassa € {_cassa_broker:,.2f} + extra € {_liq_extra:,.2f} + switch validi € {_tot_vend_netto:,.2f}): versa nuova liquidità dedicata oppure resta fermo.")
@@ -9780,11 +10101,11 @@ with tab_analisi:
                     _usa_e = min(_residuo, _liq_extra)
                     _piano_step.append(f"2️⃣ **Liquidità Aggiuntiva (Sidebar):** € {_usa_e:,.2f}")
                     _residuo = round(max(0.0, _residuo - _usa_e), 2)
-                for _pr, _va_o, _v_tk, _v_net, _v_mot in _vendibili:
+                for _cand_s in _cands_ab_sim:
                     if _residuo <= 0:
                         break
-                    _piano_step.append(f"🔄 **Vendi {_v_tk}** ({_v_mot}) -> incasso netto **€ {_v_net:,.2f}**")
-                    _residuo = round(max(0.0, _residuo - _v_net), 2)
+                    _piano_step.append(f"🔄 **Vendi {_cand_s['ticker']}** ({_cand_s['motivo']}) -> incasso netto **€ {_cand_s['netto_eur']:,.2f}**")
+                    _residuo = round(max(0.0, _residuo - _cand_s['netto_eur']), 2)
                 st.success(f"✅ **Acquisto {_tk_req} (€ {_imp_req:,.2f}) coperto!** Piano consigliato:\n\n" + "\n".join([f"- {s}" for s in _piano_step]))
         except Exception as _e_sim:
             st.caption(f"⚠️ Simulatore non disponibile al momento: {_e_sim}")
@@ -9800,39 +10121,55 @@ with tab_analisi:
             if 'errore' in risultato:
                 st.error(risultato['errore'])
             else:
-                st.markdown(f"**Titolo:** {risultato['titolo']} | **Prezzo:** €{risultato['prezzo_eur']:.2f} | **Quantità acquistabile:** {risultato['quantita_acquistabile']:.6f}")
+                st.markdown(f"**Titolo:** {risultato['titolo']} | **Prezzo:** €{risultato['prezzo_eur']:.2f} | **Quantità acquistabile:** {risultato['quantita_acquistabile']:.6f} | **Score Target:** {risultato.get('target_score', 'N/D')}/100")
                 st.markdown("---")
                 scenari = risultato['scenari']
                 if scenari['hold_catalizzatore']:
-                    st.markdown("### ⚠️ Titoli da NON Vendere (Catalizzatori Imminenti)")
+                    st.markdown("### 🛡️ Titoli Protetti (PAC / Scudo Tom Nash / Insider SEC)")
                     for item in scenari['hold_catalizzatore']:
-                        st.warning(item['messaggio'])
+                        st.info(item['messaggio'])
                 if scenari['vendita_gain']:
-                    st.markdown("### ⚠️ Scenario 1: Vendita Titoli in Gain")
+                    st.markdown("### 💰 Scenario 1: Raccolto Profitti Parziale (Fonte A) & Posizioni in Gain")
                     for item in scenari['vendita_gain']:
                         st.warning(item['messaggio'])
                 if scenari['vendita_loss']:
-                    st.markdown("### ✅ Scenario 2: Vendita Titoli in Loss/Kill Switch")
+                    st.markdown("### 🔄 Scenario 2: Switch Qualitativo Spot (Fonte B — Rotazione da Titoli Stagnanti)")
                     for item in scenari['vendita_loss']:
                         st.success(item['messaggio'])
                 if scenari['nuova_liquidita']:
-                    st.markdown("### 🎯 Scenario 3: Nuova Liquidità")
-                    st.success("**OPZIONE MIGLIORE.** Preservi il portafoglio esistente e mantieni i titoli in gain pronti a ripartire.")
+                    st.markdown("### 🎯 Scenario 3: Nuova Liquidità Dedicata")
+                    st.success("**OPZIONE MIGLIORE (Portafoglio Intatto).** Preservi tutte le posizioni sane, i PAC e i titoli protetti da Scudo Tom Nash.")
                 st.markdown("---")
                 st.markdown("### 🏁 CONSIGLIO FINALE DEL SISTEMA")
-                if scenari['nuova_liquidita'] and not scenari['vendita_loss'] and not scenari['hold_catalizzatore']:
-                    st.success(f"🎯 **Visti gli scenari, consigliamo l'acquisto di {risultato['titolo']} con NUOVA LIQUIDITÀ di {risultato['importo']}€.** I titoli in gain sono in fase di ripresa e non vanno toccati. Procedi con l'acquisto.")
-                elif scenari['vendita_loss'] or scenari['hold_catalizzatore']:
-                    loss_tickers = ", ".join([v['ticker'] for v in scenari['vendita_loss'][:2]])
-                    hold_tickers = ", ".join([v['ticker'] for v in scenari['hold_catalizzatore'][:2]])
-                    msg_parts = list()
-                    if hold_tickers:
-                        msg_parts.append(f"**NON VENDERE** {hold_tickers} (catalizzatore imminente).")
-                    if loss_tickers:
-                        msg_parts.append(f"Valuta prima di vendere {loss_tickers} per ottimizzazione fiscale.")
-                    st.warning(f"⚠️ {' '.join(msg_parts)} Se decidi di non vendere, procedi pure con la nuova liquidità.")
+                _verdetto_m = str(risultato.get('verdetto_matrix') or '').strip()
+                if not _verdetto_m:
+                    _p_fb = _calcola_profilo_target_simulazione(risultato['titolo'], st.session_state.get("portafoglio") or [], eurusd_rate)
+                    _verdetto_m = _p_fb["verdetto_matrix"]
+                    _approv_m = _p_fb["approvato_matrix"]
                 else:
-                    st.info("Valuta attentamente le opzioni sopra prima di procedere.")
+                    _approv_m = bool(risultato.get('approvato_matrix', False))
+
+                _cands_fin = risultato.get('candidati_fonte_ab') or []
+                _netto_fin = float(risultato.get('switch_netto_tot') or 0.0)
+                if _cands_fin:
+                    _nomi_ab = ", ".join([f"{c['ticker']} ({c['fonte']})" for c in _cands_fin[:3]])
+                    _consiglio_fin = (
+                        f"Sul fronte finanziamento: puoi liberare fino a **€ {_netto_fin:,.2f} netti** tramite Switch Qualitativo "
+                        f"({_nomi_ab}) oppure usare **nuova liquidità dedicata** di **€ {risultato['importo']:,.0f}**, "
+                        f"senza mai toccare i PAC né i titoli protetti da Scudo Tom Nash / Insider SEC."
+                    )
+                else:
+                    _consiglio_fin = (
+                        f"Sul fronte finanziamento: **Portafoglio Intatto** — nessun titolo sacrificabile "
+                        f"(tutti solidi, in PAC o protetti da Scudo Tom Nash / Insider SEC); se decidi di procedere, "
+                        f"usa **nuova liquidità dedicata** di **€ {risultato['importo']:,.0f}**."
+                    )
+
+                _box_finale = f"**{_verdetto_m}**\n\n{_consiglio_fin}"
+                if _approv_m:
+                    st.success(_box_finale)
+                else:
+                    st.warning(_box_finale)
 
         st.markdown("---")
         st.markdown('<div class="signal-history-box"><div class="signal-history-title">📊 STORICO SEGNALI MATRIX</div></div>', unsafe_allow_html=True)
