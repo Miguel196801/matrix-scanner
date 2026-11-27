@@ -4839,12 +4839,115 @@ def applica_controlli_grafico(fig, chart_id):
             pass
     return fig
 
+# Dizionario unico condiviso da tutti i grafici dell'app (Home, Portafoglio, Scheda Titolo, Scansione)
+TIMEFRAME_GRAFICO_OPZIONI = {
+    "1GG (1 giorno, 15min)": {"period": "5d", "interval": "15m", "tf": "15m"},
+    "5GG (5 giorni, 1h)": {"period": "1mo", "interval": "1h", "tf": "1h"},
+    "1M (1 mese)": {"period": "2y", "interval": "1d", "tf": "1M"},
+    "3M (3 mesi)": {"period": "2y", "interval": "1d", "tf": "3M"},
+    "6M (6 mesi)": {"period": "2y", "interval": "1d", "tf": "6M"},
+    "1A (1 anno)": {"period": "2y", "interval": "1d", "tf": "1A"},
+    "Da Inizio Anno": {"period": "2y", "interval": "1d", "tf": "YTD"},
+    "1d (Daily)": {"period": "2y", "interval": "1d", "tf": "1d"},
+    "1wk (Weekly)": {"period": "5y", "interval": "1wk", "tf": "1wk"},
+    "1mo (Monthly)": {"period": "max", "interval": "1mo", "tf": "1mo"},
+}
+TIMEFRAME_GRAFICO_LISTA = list(TIMEFRAME_GRAFICO_OPZIONI.keys())
+TIMEFRAME_GRAFICO_DEFAULT = "1d (Daily)"
+TIMEFRAME_GRAFICO_DEFAULT_IDX = TIMEFRAME_GRAFICO_LISTA.index(TIMEFRAME_GRAFICO_DEFAULT)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _scarica_ohlc_grafico_cached(ticker, period, interval):
+    """Micro-cache di 60s sui dati OHLC del grafico: azzera i tempi su cambio vista o apertura Schermo Intero."""
+    try:
+        df_c = yf.Ticker(str(ticker or "").strip().upper()).history(period=period, interval=interval)
+        return df_c if df_c is not None else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.dialog("📈 Grafico a Schermo Intero", width="large")
+def _apri_dialog_grafico_fullscreen(
+    ticker,
+    prezzo_medio_eur=None,
+    default_tf_label=TIMEFRAME_GRAFICO_DEFAULT,
+    pattern_info=None,
+    eurusd_rate=1.12,
+    sma_short=50,
+    sma_long=200,
+    key_prefix="dlg",
+):
+    """
+    Apre qualsiasi grafico in finestra extra-large (96% larghezza schermo) con menu a tendina
+    Timeframe completo e legenda su una sola riga, senza far perdere il tab attivo alla chiusura.
+    """
+    tk_d = str(ticker or "").strip().upper()
+    tk_k = re.sub(r"[^A-Za-z0-9_]", "_", tk_d)
+    st.markdown(
+        "<style>"
+        "div[data-testid='stDialog'] div[role='dialog'] { width: 96vw !important; max-width: 96vw !important; }"
+        "div[data-testid='stDialog'] div[role='dialog'] > div { padding-top: 0.65rem !important; padding-bottom: 0.75rem !important; }"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    tf_init = default_tf_label if default_tf_label in TIMEFRAME_GRAFICO_OPZIONI else TIMEFRAME_GRAFICO_DEFAULT
+    c_dl, c_dr = st.columns([2.2, 1.0])
+    with c_dl:
+        st.markdown(
+            f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
+            f"border-radius:9px; height:40px; box-sizing:border-box; display:flex; align-items:center; "
+            f"padding:0 0.9rem; color:#F8FAFC; font-size:0.96rem; font-weight:700;'>"
+            f"📊 {tk_d} — Vista Ampia (premi ESC o ✖️ in alto a destra per chiudere)</div>",
+            unsafe_allow_html=True,
+        )
+    with c_dr:
+        tf_sel = st.selectbox(
+            "Timeframe:",
+            TIMEFRAME_GRAFICO_LISTA,
+            index=TIMEFRAME_GRAFICO_LISTA.index(tf_init),
+            label_visibility="collapsed",
+            key=f"sel_tf_full_{key_prefix}_{tk_k}",
+        )
+    tf_cfg = TIMEFRAME_GRAFICO_OPZIONI[tf_sel]
+    fig_d = genera_grafico_baleine(
+        tk_d,
+        tf_cfg["period"],
+        sma_short,
+        sma_long,
+        prezzo_medio_eur=prezzo_medio_eur,
+        timeframe=tf_cfg["tf"],
+        interval=tf_cfg["interval"],
+        eurusd_rate=eurusd_rate,
+        height=640,
+        pattern_info=pattern_info,
+    )
+    if fig_d:
+        if pattern_info:
+            fig_d = pattern_engine.aggiungi_livelli_pattern_al_grafico(fig_d, pattern_info)
+            _sym_d = "$" if str(pattern_info.get("currency", "USD")).upper() == "USD" else "€"
+            st.caption(
+                f"**{pattern_info.get('badge')}** — {pattern_info.get('figura')} ({pattern_info.get('confidenza')}%) | "
+                f"⚡ Y: `{_sym_d}{pattern_info.get('trigger_y'):.2f}` | 🎯 Target: `{pattern_info.get('target_pct'):+.1f}%` (`{_sym_d}{pattern_info.get('target_price'):.2f}`) | "
+                f"🛑 Stop: `{_sym_d}{pattern_info.get('stop_price'):.2f}` | R/R `1:{pattern_info.get('rr'):.2f}`"
+            )
+        fig_d = applica_controlli_grafico(fig_d, 9)
+        st.plotly_chart(
+            fig_d,
+            use_container_width=True,
+            config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False},
+            key=f"chart_full_dlg_{key_prefix}_{tk_k}_{tf_cfg['tf']}",
+        )
+    else:
+        st.warning(f"Impossibile generare il grafico per {tk_d} sul timeframe selezionato.")
+
+
 def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur=None, timeframe='1d', interval='1d', eurusd_rate=1.12, height=640, pattern_info=None):
     tk_u = str(ticker or "").strip().upper()
-    df = yf.Ticker(tk_u).history(period=period, interval=interval)
-    if df.empty:
+    df_raw = _scarica_ohlc_grafico_cached(tk_u, period, interval)
+    if df_raw is None or df_raw.empty:
         return None
-    df = df.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
+    df = df_raw.dropna(subset=['Open', 'High', 'Low', 'Close']).copy()
     if len(df) < 2:
         return None
 
@@ -4922,7 +5025,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             low=df['Low'].where(is_up),
             close=df['Close'].where(is_up),
             name='Prezzo',
-            legendgroup='prezzo',
             showlegend=False,
             increasing_line_color="#10B981",
             increasing_fillcolor="#0B0E11",
@@ -4943,7 +5045,6 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
             low=df['Low'].where(~is_up),
             close=df['Close'].where(~is_up),
             name='Prezzo',
-            legendgroup='prezzo',
             showlegend=False,
             increasing_line_color="#EF4444",
             increasing_fillcolor="#0B0E11",
@@ -5122,16 +5223,16 @@ def genera_grafico_baleine(ticker, period, sma_short, sma_long, prezzo_medio_eur
         paper_bgcolor='#131722',
         plot_bgcolor='#0B0E11',
         font=dict(family='Inter, sans-serif', color='#D1D4DC', size=11),
-        margin=dict(l=4, r=46, t=66, b=54),
+        margin=dict(l=4, r=46, t=66, b=48),
         hovermode='x unified',
         legend=dict(
             font=dict(size=10),
             orientation="h",
+            traceorder="normal",
             yanchor="top",
-            y=-0.06,
+            y=-0.075,
             xanchor="left",
             x=0.0,
-            tracegroupgap=4,
             bgcolor='rgba(19, 23, 34, 0.0)',
         ),
     )
@@ -8363,6 +8464,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
         "div[data-testid='stHorizontalBlock'] [data-testid='stMarkdownContainer'], "
         "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] { margin: 0 !important; }"
         "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] button { height: 42px !important; min-height: 42px !important; padding: 0 0.75rem !important; font-size: 0.88rem !important; line-height: 1.2 !important; margin: 0 !important; }"
+        "div[class*='st-key-sel_full_chart_tf'] [data-baseweb='select'] > div { min-height: 42px !important; height: 42px !important; align-items: center !important; }"
         "div[class*='st-key-btn_full_chart_'] button { height: 32px !important; min-height: 32px !important; padding: 0 0.35rem !important; font-size: 0.78rem !important; border-radius: 7px !important; }"
         ".mx-salute-full-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
         ".mx-salute-full-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 13.5px; color: #F8FAFC; }"
@@ -8416,24 +8518,25 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
 
     # --- MODALITÀ GRAFICO FULL-SCREEN (aperta al clic su un ticker) ---
     if tk_chart:
-        tf_full = st.session_state.get("full_salute_chart_tf", "1d")
-        if tf_full not in ("1d", "1wk"):
-            tf_full = "1d"
+        tf_sel_init = st.session_state.get("sel_full_chart_tf", TIMEFRAME_GRAFICO_DEFAULT)
+        if tf_sel_init not in TIMEFRAME_GRAFICO_OPZIONI:
+            st.session_state["sel_full_chart_tf"] = TIMEFRAME_GRAFICO_DEFAULT
 
-        c_gl, c_gd, c_gw, c_gx = st.columns([2.5, 0.65, 0.65, 0.85])
-        with c_gd:
-            if st.button("📅 Daily", key="btn_full_tf_daily", type="primary" if tf_full == "1d" else "secondary", use_container_width=True):
-                st.session_state["full_salute_chart_tf"] = "1d"
-                st.rerun()
-        with c_gw:
-            if st.button("🗓️ Weekly", key="btn_full_tf_weekly", type="primary" if tf_full == "1wk" else "secondary", use_container_width=True):
-                st.session_state["full_salute_chart_tf"] = "1wk"
-                st.rerun()
+        c_gl, c_gtf, c_gx = st.columns([2.5, 1.15, 0.85])
+        with c_gtf:
+            tf_choice_full = st.selectbox(
+                "Timeframe:",
+                TIMEFRAME_GRAFICO_LISTA,
+                index=TIMEFRAME_GRAFICO_DEFAULT_IDX,
+                label_visibility="collapsed",
+                key="sel_full_chart_tf",
+            )
         with c_gx:
             if st.button("✖️ Chiudi Grafico", key="btn_full_chiudi_grafico", use_container_width=True):
                 st.session_state["full_salute_chart_ticker"] = None
                 st.rerun()
 
+        tf_cfg_full = TIMEFRAME_GRAFICO_OPZIONI[tf_choice_full]
         # Riepilogo sintetico del titolo nella fascia superiore (0 chiamate extra)
         righe_tmp = _costruisci_righe_tabella_salute(port_f, sal_f)
         rg_sel = next((r for r in righe_tmp if str(r.get("Ticker", "")).upper() == tk_chart), {})
@@ -8441,13 +8544,12 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
         pnl_s = str(rg_sel.get("P&L %", "—"))
         col_og_s = "#4ADE80" if "+" in oggi_s else ("#F87171" if "-" in oggi_s else "#E2E8F0")
         col_pl_s = "#4ADE80" if pnl_s.startswith("+") else ("#F87171" if pnl_s.startswith("-") else "#E2E8F0")
-        tf_lbl = "Daily" if tf_full == "1d" else "Weekly"
         with c_gl:
             st.markdown(
                 f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
                 f"border-radius:10px; height:42px; box-sizing:border-box; display:flex; align-items:center; "
                 f"padding:0 1.0rem; margin:0; color:#F8FAFC; font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden;'>"
-                f"📈 Grafico&nbsp;<b>{tk_chart}</b>&nbsp;({tf_lbl}) &nbsp;|&nbsp; "
+                f"📈 Grafico&nbsp;<b>{tk_chart}</b> &nbsp;|&nbsp; "
                 f"Oggi:&nbsp;<span style='color:{col_og_s};'>{oggi_s}</span> &nbsp;•&nbsp; "
                 f"P&amp;L:&nbsp;<span style='color:{col_pl_s};'>{pnl_s}</span></div>",
                 unsafe_allow_html=True,
@@ -8455,14 +8557,12 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
 
         pmc_g = next((p.get("Prezzo_Medio") for p in port_f if str(p.get("Ticker", "")).upper() == tk_chart), None)
         _pat_g = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(tk_chart)
-        per_g = "2y" if tf_full == "1d" else "5y"
-        int_g = "1d" if tf_full == "1d" else "1wk"
-        with st.spinner(f"Carico grafico {tk_chart} ({tf_lbl})..."):
+        with st.spinner(f"Carico grafico {tk_chart} ({tf_choice_full})..."):
             fig_g = genera_grafico_baleine(
-                tk_chart, per_g, 50, 200,
+                tk_chart, tf_cfg_full["period"], 50, 200,
                 prezzo_medio_eur=pmc_g,
-                timeframe=tf_full,
-                interval=int_g,
+                timeframe=tf_cfg_full["tf"],
+                interval=tf_cfg_full["interval"],
                 eurusd_rate=eurusd_live,
                 height=580,
                 pattern_info=_pat_g,
@@ -8481,7 +8581,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
                 fig_g,
                 use_container_width=True,
                 config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False},
-                key=f"full_salute_chart_{tk_chart}_{tf_full}",
+                key=f"full_salute_chart_{tk_chart}_{tf_cfg_full['tf']}",
             )
         else:
             st.warning(f"Impossibile caricare il grafico per {tk_chart} al momento.")
@@ -9799,19 +9899,23 @@ with tab_confronto:
                         except:
                             st.markdown(f"#### {t_curr}")
 
-                        tf_c_sel = st.session_state.get(f"tf_sel_conf_{t_curr}", "3M")
-                        # Carica sempre 2 anni di storico scorribile mantenendo la finestra iniziale sul timeframe scelto
-                        per_c = "2y"
+                        tf_c_lbl = st.selectbox(
+                            "Timeframe:",
+                            TIMEFRAME_GRAFICO_LISTA,
+                            index=TIMEFRAME_GRAFICO_DEFAULT_IDX,
+                            label_visibility="collapsed",
+                            key=f"sel_tf_conf_{t_curr}_{idx_c}_{j}",
+                        )
+                        tf_c_cfg = TIMEFRAME_GRAFICO_OPZIONI[tf_c_lbl]
                         fig_c = genera_grafico_baleine(
-                            t_curr, per_c, sma_short, sma_long,
+                            t_curr, tf_c_cfg["period"], sma_short, sma_long,
                             prezzo_medio_eur=port_lookup.get(t_curr),
-                            timeframe=tf_c_sel, interval="1d",
+                            timeframe=tf_c_cfg["tf"], interval=tf_c_cfg["interval"],
                             eurusd_rate=eurusd_rate, height=altezza_g
                         )
                         if fig_c:
                             fig_c = applica_controlli_grafico(fig_c, 1)
-                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"chart_conf_{t_curr}_{idx_c}_{j}")
-                            render_barra_intervalli_yahoo(t_curr, "conf", default_tf="3M")
+                            st.plotly_chart(fig_c, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"chart_conf_{t_curr}_{idx_c}_{j}_{tf_c_cfg['tf']}")
                         else:
                             st.warning(f"Dati grafico non disponibili per {t_curr}")
 
@@ -9982,25 +10086,44 @@ with tab_portafoglio:
                     st.session_state["sb_ticker_radio"] = val_p
                     st.session_state["txt_analisi_singola_tk"] = val_p
 
-            col_port_left, col_port_right = st.columns((0.65, 1.6)) if st.session_state.get('port_big_chart', False) else st.columns((1.25, 1))
+            col_port_left, col_port_right = st.columns((1.25, 1))
             with col_port_right:
-                _g_c1, _g_c2 = st.columns([2.2, 1])
+                _g_c1, _g_c2 = st.columns([2.0, 1.15])
                 with _g_c1:
                     st.markdown("#### 📈 Grafico Live Posizione")
                 with _g_c2:
-                    _is_big = st.session_state.get("port_big_chart", False)
-                    if st.button("🗗 Riduci" if _is_big else "⛶ Ingrandisci", key="btn_toggle_big_port", use_container_width=True):
-                        st.session_state.port_big_chart = not _is_big
-                        st.rerun()
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                sel_t = st.selectbox("Seleziona titolo:", _tickers_p, label_visibility="collapsed", key="sel_chart_port_side", on_change=_on_port_chart_change)
+                    _apri_full_port = st.button("⛶ Schermo Intero", key="btn_full_chart_port", use_container_width=True)
+                _sel_c1, _sel_c2 = st.columns([1.0, 1.15])
+                with _sel_c1:
+                    sel_t = st.selectbox("Seleziona titolo:", _tickers_p, label_visibility="collapsed", key="sel_chart_port_side", on_change=_on_port_chart_change)
+                with _sel_c2:
+                    tf_port_lbl = st.selectbox(
+                        "Timeframe:",
+                        TIMEFRAME_GRAFICO_LISTA,
+                        index=TIMEFRAME_GRAFICO_DEFAULT_IDX,
+                        label_visibility="collapsed",
+                        key="sel_tf_port_side",
+                    )
                 st.session_state.port_selected_chart = sel_t
                 pmc_sel = next((p['Prezzo_Medio'] for p in portafoglio if p['Ticker'] == sel_t), None)
-                tf_port_sel = st.session_state.get(f"tf_sel_port_{sel_t}", "3M")
-                # Carica sempre 2 anni di storico scorribile mantenendo la finestra iniziale sul timeframe scelto
-                per_port = "2y"
+                tf_port_cfg = TIMEFRAME_GRAFICO_OPZIONI[tf_port_lbl]
                 _pat_live = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(str(sel_t).upper())
-                fig_side = genera_grafico_baleine(sel_t, per_port, sma_short, sma_long, prezzo_medio_eur=pmc_sel, timeframe=tf_port_sel, interval="1d", eurusd_rate=eurusd_rate, height=780 if st.session_state.get('port_big_chart', False) else 580, pattern_info=_pat_live)
+                if _apri_full_port:
+                    _apri_dialog_grafico_fullscreen(
+                        sel_t,
+                        prezzo_medio_eur=pmc_sel,
+                        default_tf_label=tf_port_lbl,
+                        pattern_info=_pat_live,
+                        eurusd_rate=eurusd_rate,
+                        sma_short=sma_short,
+                        sma_long=sma_long,
+                        key_prefix="port",
+                    )
+                fig_side = genera_grafico_baleine(
+                    sel_t, tf_port_cfg["period"], sma_short, sma_long,
+                    prezzo_medio_eur=pmc_sel, timeframe=tf_port_cfg["tf"], interval=tf_port_cfg["interval"],
+                    eurusd_rate=eurusd_rate, height=580, pattern_info=_pat_live
+                )
                 if fig_side:
                     # Se il titolo ha un pattern attivo rilevato in scansione, traccia Trigger Y, Target e Stop
                     if _pat_live:
@@ -10012,8 +10135,7 @@ with tab_portafoglio:
                             f"🛑 Stop: `{_sym_live}{_pat_live.get('stop_price'):.2f}` | R/R `1:{_pat_live.get('rr'):.2f}`"
                         )
                     fig_side = applica_controlli_grafico(fig_side, 2)
-                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"port_side_live_chart_{sel_t}")
-                    render_barra_intervalli_yahoo(sel_t, "port", default_tf="3M")
+                    st.plotly_chart(fig_side, use_container_width=True, config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False}, key=f"port_side_live_chart_{sel_t}_{tf_port_cfg['tf']}")
             with col_port_left:
                 _hdr_c1, _hdr_c2, _hdr_c3 = st.columns((1.25, 0.95, 1.15))
                 with _hdr_c1:
@@ -10990,21 +11112,13 @@ with tab_analisi:
             st.session_state.grafico_prezzo_medio = next((p['Prezzo_Medio'] for p in port_att if p['Ticker'] == r['ticker']), None)
         if st.session_state.get('grafico_ticker'):
             st.markdown("---")
-            st.subheader(f"📊 {st.session_state.grafico_ticker}")
-            timeframe_options = {
-                "1GG (1 giorno, 15min)": {"period": "5d", "interval": "15m", "tf": "15m"},
-                "5GG (5 giorni, 1h)": {"period": "1mo", "interval": "1h", "tf": "1h"},
-                "1M (1 mese)": {"period": "2y", "interval": "1d", "tf": "1M"},
-                "3M (3 mesi)": {"period": "2y", "interval": "1d", "tf": "3M"},
-                "6M (6 mesi)": {"period": "2y", "interval": "1d", "tf": "6M"},
-                "1A (1 anno)": {"period": "2y", "interval": "1d", "tf": "1A"},
-                "Da Inizio Anno": {"period": "2y", "interval": "1d", "tf": "YTD"},
-                "1d (Daily)": {"period": "2y", "interval": "1d", "tf": "1d"},
-                "1wk (Weekly)": {"period": "5y", "interval": "1wk", "tf": "1wk"},
-                "1mo (Monthly)": {"period": "max", "interval": "1mo", "tf": "1mo"},
-            }
-            tf_choice = st.selectbox("Timeframe:", list(timeframe_options.keys()), index=7)
-            tf_config = timeframe_options[tf_choice]
+            _an_c1, _an_c2 = st.columns([2.6, 1.0])
+            with _an_c1:
+                st.subheader(f"📊 {st.session_state.grafico_ticker}")
+            with _an_c2:
+                _apri_full_an = st.button("⛶ Schermo Intero", key="btn_full_chart_scheda", use_container_width=True)
+            tf_choice = st.selectbox("Timeframe:", TIMEFRAME_GRAFICO_LISTA, index=TIMEFRAME_GRAFICO_DEFAULT_IDX, key="sel_tf_scheda_titolo")
+            tf_config = TIMEFRAME_GRAFICO_OPZIONI[tf_choice]
             # Recupera eventuale pattern attivo prima di generare il grafico così il range Y include Trigger Y, Target e Stop
             _tk_g_up = str(st.session_state.grafico_ticker).upper()
             _pat_an = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(_tk_g_up)
@@ -11012,6 +11126,17 @@ with tab_analisi:
                 _pat_s = st.session_state.get("pattern_singola_attivo")
                 if isinstance(_pat_s, dict) and str(_pat_s.get("ticker", "")).upper() == _tk_g_up:
                     _pat_an = _pat_s
+            if _apri_full_an:
+                _apri_dialog_grafico_fullscreen(
+                    st.session_state.grafico_ticker,
+                    prezzo_medio_eur=st.session_state.grafico_prezzo_medio,
+                    default_tf_label=tf_choice,
+                    pattern_info=_pat_an,
+                    eurusd_rate=eurusd_rate,
+                    sma_short=50,
+                    sma_long=200,
+                    key_prefix="scheda",
+                )
             fig = genera_grafico_baleine(st.session_state.grafico_ticker, tf_config['period'], 50, 200, prezzo_medio_eur=st.session_state.grafico_prezzo_medio, timeframe=tf_config['tf'], interval=tf_config['interval'], eurusd_rate=eurusd_rate, height=640, pattern_info=_pat_an)
             if fig:
                 # Se il titolo ha un pattern attivo (da scansione o da Analisi Singola), traccia Trigger Y, Target e Stop
