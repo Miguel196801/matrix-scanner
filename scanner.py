@@ -6669,9 +6669,12 @@ def esegui_scansione_completa_motore(
             if ticker in ticker_in_portafoglio:
                 if rsi_oggi >= 75:
                     pos = ticker_in_portafoglio[ticker]
+                    _, q_spot_tp = _calcola_ripartizione_pac_spot(pos)
                     gain_pct = ((prezzo_eur / pos['Prezzo_Medio']) - 1) * 100 if pos['Prezzo_Medio'] > 0 else 0
-                    take_profit_alerts.append({'ticker': ticker, 'rsi': round(rsi_oggi, 1), 'prezzo_attuale_eur': prezzo_eur, 'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot')})
-                    registra_proposta("SCANSIONE", "TAKE_PROFIT", ticker, f"RSI {rsi_oggi:.0f}, Gain +{gain_pct:.1f}%", stato="N/D")
+                    # Filtra solo quote Spot realmente in guadagno (mai PAC puri o posizioni in perdita)
+                    if q_spot_tp > 1e-6 and gain_pct > 0:
+                        take_profit_alerts.append({'ticker': ticker, 'rsi': round(rsi_oggi, 1), 'prezzo_attuale_eur': prezzo_eur, 'gain_pct': round(gain_pct, 1), 'tipo': pos.get('Tipo', 'Spot')})
+                        registra_proposta("SCANSIONE", "TAKE_PROFIT", ticker, f"RSI {rsi_oggi:.0f}, Gain +{gain_pct:.1f}%", stato="N/D")
             if ticker in ticker_in_portafoglio or s_score >= 60:
                 if s_score >= 60 and distanza_sma200_pct <= 5.0:
                     zona_interesse_alerts.append({'ticker': ticker, 'prezzo_attuale_eur': prezzo_eur, 'sma200_eur': round(sma200 / eurusd_rate if currency == 'USD' else sma200, 2), 'distanza_pct': round(distanza_sma200_pct, 1), 's_score': s_score})
@@ -10442,8 +10445,8 @@ with tab_portafoglio:
                                     <hr style="border-color: #2A2E39; margin: 0.5rem 0;">
                                     <h4 style="margin-top:0; color: #F23645;">🛡️ STOP LOSS DINAMICO: € {targets['sl']} ({targets['sl_down']}% dal prezzo attuale)</h4>
                                     <ul style="font-size: 0.9rem; color: #D1D4DC; margin-bottom: 0;">
-                                        <li>⚠️ Quando raggiungi Target 1 → sposta stop a € {prezzo_medio:.2f} (break-even)</li>
-                                        <li>⚠️ Quando raggiungi Target 2 → sposta stop a € {targets['t1']}</li>
+                                        <li>⚠️ Quando raggiungi Target 1 → sposta stop a € {prezzo_medio:.2f} (break-even / pareggio)</li>
+                                        <li>⚠️ Quando raggiungi Target 2 → attiva Trailing Stop Adattivo (2×ATR14 / SMA 20, mai sotto il PMC)</li>
                                         <li>⚠️ Quando raggiungi Target 3 → sposta stop a € {targets['t2']}</li>
                                     </ul>
                                 </div>

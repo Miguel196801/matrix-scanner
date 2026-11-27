@@ -188,9 +188,204 @@ def _inferisci_tipo_segnale_sistema(rec):
         return 'TOP1_BUY'
     if 'DCA' in seg:
         return 'DCA_B2' if '2' in seg else 'DCA_B1'
+    if 'CHIUSURA' in seg or 'SL' in seg or 'TRAILING' in seg:
+        return 'CHIUSURA_SL_AUTO'
     if 'BIVIO' in seg:
         return 'BIVIO_VENDITA'
     return 'MANUALE'
+
+
+def _is_protetto_anti_panico_tracker(tk):
+    """
+    Replica in regia_tracker.py la stessa identica regola Anti-Panico / Scudo Tom Nash
+    della Home Page Pilota Automatico (usando solo i dati già in st.session_state, 0 API extra).
+    Blocca esclusivamente le chiusure in perdita (Step_Trailing == 0, SL < Entry):
+    mai bloccare invece il Pareggio o il Trailing Stop in guadagno (Step_Trailing >= 1).
+    """
+    tk_u = str(tk or '').strip().upper()
+    try:
+        sem = st.session_state.get('semaforo_mercato') or {}
+    except Exception:
+        sem = {}
+    if isinstance(sem, dict):
+        zona_tn = str(sem.get('zona_sconto_tom_nash') or 'normale').lower()
+        if zona_tn in ('sconto', 'bear'):
+            return True, f"Termometro Macro ({zona_tn.upper()})"
+        if bool(sem.get('fear_greed_paura_estrema')):
+            return True, "Paura Estrema (Fear & Greed <= 25)"
+        st_spy = str(sem.get('stato') or '').lower()
+        if st_spy in ('rosso', 'giallo'):
+            return True, f"Mercato SPY {st_spy.upper()} (no vendite su correzione)"
+
+    try:
+        sal_map = st.session_state.get('home_salute_portafoglio') or {}
+    except Exception:
+        sal_map = {}
+    inf = sal_map.get(tk_u) if isinstance(sal_map, dict) else None
+    if isinstance(inf, dict):
+        if bool(inf.get('scudo_tom_nash')):
+            return True, "Scudo Fondamentale Tom Nash"
+        if int(inf.get('s_score') or 0) >= 65:
+            return True, f"S-Score sano ({int(inf.get('s_score') or 0)}/100)"
+        if inf.get('sopra_sma200') is True:
+            return True, "Trend sopra SMA 200"
+        if int(inf.get('sec_buys') or 0) > 0:
+            return True, f"Insider SEC 90gg ({int(inf.get('sec_buys') or 0)} acq.)"
+    return False, ""
+
+
+def _crea_copia_sistema_chiusura_sl(sh_list, rec_reale, st_chiusura, prezzo_uscita, data_uscita):
+    """
+    Crea (senza mai duplicare) 1 copia congelata Origine='Metodo Sistema' nel momento in cui
+    una posizione Portafoglio Reale viene chiusa automaticamente per SL o Trailing Stop.
+    Usa un Bivio_ID univoco condiviso col record reale e con il pulsante '⏭️ Tengo/Ignora'.
+    Restituisce True se ha aggiunto un nuovo record Metodo Sistema.
+    """
+    if not isinstance(sh_list, list) or not isinstance(rec_reale, dict):
+        return False
+    tk_u = str(rec_reale.get('Ticker') or '').strip().upper()
+    if not tk_u:
+        return False
+    dt_u = str(data_uscita or _oggi_italia_str())[:10]
+    p_u = round(float(prezzo_uscita or rec_reale.get('Prezzo_Uscita') or rec_reale.get('Stop_Loss') or 0), 2)
+    bivio_id = str(rec_reale.get('Bivio_ID') or '').strip()
+    if not bivio_id:
+        bivio_id = f"{tk_u}_{dt_u}_SL_AUTO"
+        rec_reale['Bivio_ID'] = bivio_id
+
+    for x in sh_list:
+        if not isinstance(x, dict) or _is_operazione_portafoglio_reale(x):
+            continue
+        if str(x.get('Bivio_ID') or '').strip() == bivio_id:
+            return False
+        if (
+            str(x.get('Ticker') or '').strip().upper() == tk_u
+            and str(x.get('Data_Uscita') or '')[:10] == dt_u
+            and abs(float(x.get('Prezzo_Uscita') or 0) - p_u) <= 0.02
+            and str(x.get('Stato') or '').startswith('Chiuso')
+        ):
+            rec_reale['Bivio_ID'] = str(x.get('Bivio_ID') or bivio_id)
+            return False
+
+    en_v = round(float(rec_reale.get('Entry') or p_u), 2)
+    sh_list.append({
+        'Ticker': tk_u,
+        'Segnale': f'🤖 {st_chiusura}',
+        'Tipo_Segnale': 'CHIUSURA_SL_AUTO',
+        'Origine': 'Metodo Sistema',
+        'Bivio_ID': bivio_id,
+        'Bivio_Motivo': str(st_chiusura),
+        'Pct_Vendita_Bivio': 100,
+        'Currency': rec_reale.get('Currency') or ('EUR' if any(tk_u.endswith(s) for s in _SUFFISSI_EUR) else 'USD'),
+        'Taglia_EUR': round(float(rec_reale.get('Taglia_EUR') or 200.0), 2),
+        'Entry': en_v,
+        'Stop_Loss': p_u,
+        'T1': round(float(rec_reale.get('T1') or en_v * 1.12), 2),
+        'Target': round(float(rec_reale.get('Target') or en_v * 1.20), 2),
+        'Max_Price': round(float(rec_reale.get('Max_Price') or max(en_v, p_u)), 2),
+        'Step_Trailing': int(rec_reale.get('Step_Trailing') or 0),
+        'Avviso_SL': '',
+        'Data_Ingresso': str(rec_reale.get('Data_Ingresso') or dt_u)[:10],
+        'Data_Uscita': dt_u,
+        'Prezzo_Uscita': p_u,
+        'Fonti': f'Chiusura Automatica Sistema ({st_chiusura})',
+        'Stato': str(st_chiusura),
+        'Esito_Reale': 'Chiusura Automatica',
+    })
+    return True
+
+
+def _deduplica_e_allinea_tracker_list(sh_list):
+    """
+    Pulisce automaticamente i duplicati in regia_tracker*.json (es. 3x NBIS/MU generati da
+    ri-sincronizzazioni su record 'Da Gestire') mantenendo 1 solo record per posizione reale
+    e retro-allineando 1 copia congelata Origine='Metodo Sistema' per ogni chiusura SL/Trailing.
+    Restituisce (lista_pulita, modificata: bool).
+    """
+    if not isinstance(sh_list, list):
+        return [], False
+    pulita = []
+    mod = False
+    # Indici di deduplicazione per Portafoglio Reale e Metodo Sistema
+    visti_reali_attivi = {}       # tk -> indice in pulita
+    visti_reali_chiusi = {}       # chiave -> indice in pulita
+    visti_sys = set()
+
+    def _punteggio_completezza(rec):
+        pts = 0
+        if float(rec.get('SL_Confermato_TR') or 0) > 0:
+            pts += 5
+        if str(rec.get('Bivio_ID') or '').strip():
+            pts += 3
+        if str(rec.get('Esito_Reale') or '') not in ('', 'Da Gestire', 'In Attesa'):
+            pts += 4
+        if float(rec.get('Max_Price') or 0) > float(rec.get('Entry') or 0):
+            pts += 2
+        if str(rec.get('Data_Uscita') or ''):
+            pts += 1
+        return pts
+
+    for r in sh_list:
+        if not isinstance(r, dict):
+            mod = True
+            continue
+        tk = str(r.get('Ticker') or '').strip().upper()
+        if not tk:
+            mod = True
+            continue
+        st_r = str(r.get('Stato') or 'Attivo')
+        dt_in = str(r.get('Data_Ingresso') or '')[:10]
+        en_r = round(float(r.get('Entry') or 0), 2)
+        is_pr = _is_operazione_portafoglio_reale(r)
+
+        if is_pr:
+            if st_r == 'Attivo':
+                if tk in visti_reali_attivi:
+                    idx_ex = visti_reali_attivi[tk]
+                    if _punteggio_completezza(r) > _punteggio_completezza(pulita[idx_ex]):
+                        pulita[idx_ex] = r
+                    mod = True
+                    continue
+                visti_reali_attivi[tk] = len(pulita)
+                pulita.append(r)
+            else:
+                # Per chiusure reali SL/Trailing ancora 'Da Gestire' o identiche su (tk, dt_in, entry, stato): 1 solo record
+                es_r = str(r.get('Esito_Reale') or '')
+                if es_r == 'Da Gestire' and st_r in ('Chiuso (SL)', 'Chiuso (Trailing)'):
+                    k_ch = (tk, 'DA_GESTIRE_SL')
+                else:
+                    k_ch = (tk, dt_in, en_r, st_r, str(r.get('Data_Uscita') or '')[:10])
+                if k_ch in visti_reali_chiusi:
+                    idx_ex = visti_reali_chiusi[k_ch]
+                    if _punteggio_completezza(r) > _punteggio_completezza(pulita[idx_ex]):
+                        pulita[idx_ex] = r
+                    mod = True
+                    continue
+                visti_reali_chiusi[k_ch] = len(pulita)
+                pulita.append(r)
+        else:
+            bid = str(r.get('Bivio_ID') or '').strip()
+            tp_s = _inferisci_tipo_segnale_sistema(r)
+            if bid:
+                k_sys = ('BIVIO', bid)
+            else:
+                k_sys = ('SYS', tk, tp_s, dt_in, st_r, str(r.get('Data_Uscita') or '')[:10])
+            if k_sys in visti_sys:
+                mod = True
+                continue
+            visti_sys.add(k_sys)
+            pulita.append(r)
+
+    # Retro-allineamento: per ogni chiusura automatica SL/Trailing del Portafoglio Reale priva di copia Metodo Sistema, la crea 1 sola volta
+    for r in list(pulita):
+        if _is_operazione_portafoglio_reale(r) and str(r.get('Stato') or '') in ('Chiuso (SL)', 'Chiuso (Trailing)'):
+            p_u = float(r.get('Prezzo_Uscita') or r.get('Stop_Loss') or r.get('Entry') or 0)
+            dt_u = str(r.get('Data_Uscita') or r.get('Data_Check_SL') or _oggi_italia_str())[:10]
+            if p_u > 0:
+                if _crea_copia_sistema_chiusura_sl(pulita, r, str(r.get('Stato')), p_u, dt_u):
+                    mod = True
+
+    return pulita, mod
 
 
 def registra_segnali_pilota_automatico(snapshot_dec, portafoglio=None, eurusd_rate=1.12, liq_libera=0.0, taglia_default=200.0):
@@ -445,12 +640,36 @@ def registra_bivio_tengo_vs_sistema(
         taglia_tot = 200.0
         taglia_bivio = round(200.0 * (pct_v / 100.0), 2)
 
-    # 1) RAMO SISTEMA CONGELATO (anti-duplicato tramite Bivio_ID)
-    esiste_sys_bivio = any(
-        isinstance(x, dict) and (not _is_operazione_portafoglio_reale(x)) and str(x.get('Bivio_ID') or '') == bivio_id
-        for x in sh_list
+    # 1) RAMO SISTEMA CONGELATO (anti-duplicato tramite Bivio_ID condiviso anche con chiusura SL/Trailing automatica)
+    bid_ref = str(rec_ref.get('Bivio_ID') or '').strip() if isinstance(rec_ref, dict) else ''
+    sys_esistente = next(
+        (
+            x for x in sh_list
+            if isinstance(x, dict)
+            and (not _is_operazione_portafoglio_reale(x))
+            and (
+                str(x.get('Bivio_ID') or '') == bivio_id
+                or (bid_ref and str(x.get('Bivio_ID') or '') == bid_ref)
+            )
+        ),
+        None,
     )
-    if not esiste_sys_bivio:
+    esiste_sys_bivio = sys_esistente is not None
+    if esiste_sys_bivio:
+        bivio_id = str(sys_esistente.get('Bivio_ID') or bivio_id)
+        sys_esistente['Esito_Reale'] = 'Ignorata (Tengo)'
+        sys_esistente['Bivio_Motivo'] = str(motivo)
+        # Se era un gemello 'ALLINEAMENTO_START' ancora Attivo, lo congela ora come Bivio Vendita al prezzo live
+        if str(sys_esistente.get('Stato') or '') == 'Attivo':
+            sys_esistente['Segnale'] = f'🤖 Bivio Vendita ({motivo})'
+            sys_esistente['Tipo_Segnale'] = 'BIVIO_VENDITA'
+            sys_esistente['Taglia_EUR'] = taglia_bivio
+            sys_esistente['Pct_Vendita_Bivio'] = pct_v
+            sys_esistente['Stato'] = 'Chiuso (Vendita Sistema)'
+            sys_esistente['Prezzo_Uscita'] = p_now
+            sys_esistente['Data_Uscita'] = oggi
+            sys_esistente['Fonti'] = f'Bivio Tengo vs Sistema — {motivo}'
+    else:
         sh_list.append({
             'Ticker': tk,
             'Segnale': f'🤖 Bivio Vendita ({motivo})',
@@ -895,7 +1114,8 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
     if not isinstance(sh_list, list):
         sh_list = []
 
-    upd = False
+    sh_list, dedup_mod = _deduplica_e_allinea_tracker_list(sh_list)
+    upd = bool(dedup_mod)
     avvisi_home = []
 
     for pos in (portafoglio or []):
@@ -921,7 +1141,7 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
         data_acq = str(pos.get('Data_Acquisto') or pos.get('data_acquisto') or oggi)[:10]
 
         df_ohlc = (ohlc_map or {}).get(tk) if isinstance(ohlc_map, dict) else None
-        # Trova o crea il record Portafoglio Reale attivo in regia_tracker*.json
+        # Trova il record Portafoglio Reale attivo in regia_tracker*.json
         rec = next(
             (
                 x for x in sh_list
@@ -932,6 +1152,24 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
             ),
             None,
         )
+        # Protezione anti-duplicato: se esiste già una chiusura SL/Trailing 'Da Gestire' o sulla stessa posizione reale, non ri-crea doppioni
+        if rec is None:
+            gia_chiuso_pendente = any(
+                isinstance(x, dict)
+                and _is_operazione_portafoglio_reale(x)
+                and str(x.get('Ticker') or '').strip().upper() == tk
+                and str(x.get('Stato') or '') in ('Chiuso (SL)', 'Chiuso (Trailing)')
+                and (
+                    str(x.get('Esito_Reale') or '') == 'Da Gestire'
+                    or (
+                        str(x.get('Data_Ingresso') or '')[:10] == data_acq
+                        and abs(float(x.get('Entry') or 0) - pmc) <= 0.02
+                    )
+                )
+                for x in sh_list
+            )
+            if gia_chiuso_pendente:
+                continue
         if rec is None:
             sl_pct = _calcola_sl_pct_da_ohlc(df_ohlc, fallback=0.08)
             t1_e = round(pmc * (1.0 + 1.5 * sl_pct), 2)
@@ -1060,7 +1298,7 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
                 rec['Avviso_SL'] = ''
                 upd = True
 
-        # Alert Telegram automatico Presa Profitto / Chiusura Gain (SOLO quote Spot, scaglioni 35% / 50% / 70%)
+        # Alert Telegram automatico Presa Profitto / Chiusura Gain (SOLO quote Spot, scaglioni 35% / 50% / 70%, soglia anti-briciole >= € 100 netti)
         pnl_pct_spot = ((p_live / pmc) - 1.0) * 100.0 if (pmc > 0 and p_live > 0) else 0.0
         scaglione_gain = 70 if pnl_pct_spot >= 70.0 else (50 if pnl_pct_spot >= 50.0 else (35 if pnl_pct_spot >= 35.0 else 0))
         gain_not_prev = int(rec.get('Gain_Notificato_Telegram') or 0)
@@ -1072,26 +1310,27 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
             gain_netto_tot_g = round(max(0.0, gain_lordo_g - tasse_tot_g - 1.0), 2)
             netto_100_g = round(max(0.0, val_spot_g - tasse_tot_g - 1.0), 2)
             netto_50_g = round(max(0.0, (val_spot_g * 0.5) - (gain_lordo_g * 0.5 * 0.26) - 1.0), 2)
-            sl_prot_g = round(max(pmc, float(rec.get('Stop_Loss') or pmc)), 2)
-            if sl_prot_g >= p_live * 0.995:
-                sl_prot_g = round(max(pmc, p_live * 0.94), 2)
-            msg_gain_tg = _formatta_messaggio_telegram_gain(
-                tk=tk,
-                pnl_pct=pnl_pct_spot,
-                val_spot=val_spot_g,
-                gain_netto_tot=gain_netto_tot_g,
-                netto_50=netto_50_g,
-                netto_100=netto_100_g,
-                sl_prot=sl_prot_g,
-                is_misto=is_misto,
-                q_spot=q_spot,
-                scaglione=scaglione_gain,
-                utente=utente_eff,
-            )
-            if _invia_notifica_telegram(utente_eff, msg_gain_tg):
-                rec['Gain_Notificato_Telegram'] = scaglione_gain
-                rec['Data_Notifica_Gain_Telegram'] = oggi
-                upd = True
+            if netto_50_g >= 100.0 or netto_100_g >= 100.0:
+                sl_prot_g = round(max(pmc, float(rec.get('Stop_Loss') or pmc)), 2)
+                if sl_prot_g >= p_live * 0.995:
+                    sl_prot_g = round(max(pmc, p_live * 0.94), 2)
+                msg_gain_tg = _formatta_messaggio_telegram_gain(
+                    tk=tk,
+                    pnl_pct=pnl_pct_spot,
+                    val_spot=val_spot_g,
+                    gain_netto_tot=gain_netto_tot_g,
+                    netto_50=netto_50_g,
+                    netto_100=netto_100_g,
+                    sl_prot=sl_prot_g,
+                    is_misto=is_misto,
+                    q_spot=q_spot,
+                    scaglione=scaglione_gain,
+                    utente=utente_eff,
+                )
+                if _invia_notifica_telegram(utente_eff, msg_gain_tg):
+                    rec['Gain_Notificato_Telegram'] = scaglione_gain
+                    rec['Data_Notifica_Gain_Telegram'] = oggi
+                    upd = True
 
     if upd:
         _save_j(SHADOW_FILE, sh_list)
@@ -1191,13 +1430,14 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
 
     with st.expander('📊 Statistiche & Tracker Regia Reale (Gain Netto Tasse)', expanded=True):
         sh_list = _load_j(SHADOW_FILE, [])
+        sh_list, dedup_init_mod = _deduplica_e_allinea_tracker_list(sh_list)
         # Separa posizioni con quote Spot e PAC puri: lo Stop Loss si applica SOLO alle quote Spot (mai PAC attivi o sospesi)
         port_map_all = {str(p.get('Ticker', '')).strip().upper(): p for p in (port_ok or []) if float(p.get('Quantita', 0) or 0) > 0}
         pac_tickers = {tk for tk, pos in port_map_all.items() if _ripartizione_pac_spot_tracker(pos)[1] <= 1e-6}
         port_map_spot = {tk: pos for tk, pos in port_map_all.items() if tk not in pac_tickers}
 
         # Allineamento automatico continuo con le posizioni del portafoglio reale
-        sync_upd = False
+        sync_upd = bool(dedup_init_mod)
         sh_pulita = []
         for r_p in sh_list:
             is_pr = _is_operazione_portafoglio_reale(r_p)
@@ -1238,7 +1478,24 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
         c1.caption('Traccia automaticamente i segnali del Pilota Automatico, i bivi Tengo vs Sistema e le posizioni Spot reali.')
         if c3.button('💼 Sync Portafoglio Reale', key='btn_sync_port_regia', use_container_width=True, disabled=not bool(port_map_spot)):
             oggi_p = _oggi_italia_str()
-            att_port = {str(x.get('Ticker', '')).strip().upper() for x in sh_list if _is_operazione_portafoglio_reale(x) and x.get('Stato') == 'Attivo'}
+            # Protezione anti-duplicato: esclude ticker già Attivi o con chiusura SL/Trailing 'Da Gestire' / stessa posizione
+            att_port = {
+                str(x.get('Ticker', '')).strip().upper()
+                for x in sh_list
+                if _is_operazione_portafoglio_reale(x)
+                and (
+                    x.get('Stato') == 'Attivo'
+                    or (
+                        str(x.get('Stato') or '') in ('Chiuso (SL)', 'Chiuso (Trailing)')
+                        and str(x.get('Esito_Reale') or '') == 'Da Gestire'
+                    )
+                )
+            }
+            pos_chiuse_same = {
+                (str(x.get('Ticker', '')).strip().upper(), str(x.get('Data_Ingresso') or '')[:10], round(float(x.get('Entry') or 0), 2))
+                for x in sh_list
+                if _is_operazione_portafoglio_reale(x) and str(x.get('Stato') or '') in ('Chiuso (SL)', 'Chiuso (Trailing)')
+            }
             agg_p = 0
             # Importa esclusivamente posizioni di tipo Spot (esclude rigorosamente i PAC puri)
             for tk_m, pos_m in port_map_spot.items():
@@ -1248,27 +1505,44 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                     continue
                 q_m = float(pos_m.get('Quantita', 0) or 0)
                 pmc_m = round(float(pos_m.get('Prezzo_Medio', 0) or 0), 2)
-                if q_m <= 0 or pmc_m <= 0:
+                dt_acq_m = str(pos_m.get('Data_Acquisto') or oggi_p)[:10]
+                if q_m <= 0 or pmc_m <= 0 or (tk_m, dt_acq_m, pmc_m) in pos_chiuse_same:
                     continue
                 mp = _fetch_metriche_pro(tk_m, rate)
                 sl_pct_m = abs(mp['sl_pct']) / 100.0 if mp else 0.08
+                t1_e = round(pmc_m * (1.0 + 1.5 * sl_pct_m), 2)
+                t2_e = round(pmc_m * (1.0 + 2.5 * sl_pct_m), 2)
                 # Legge Prezzo_Attuale_EUR (chiave reale di portafoglio.json) con fallback legacy
                 p_oggi_m = round(float(pos_m.get('Prezzo_Attuale_EUR') or pos_m.get('Prezzo_Attuale') or pmc_m), 2)
-                if p_oggi_m > pmc_m * 1.03:
-                    sl_e = round(max(pmc_m, p_oggi_m * 0.94), 2)
-                    step_init = 2 if p_oggi_m >= pmc_m * (1.0 + 2.5 * sl_pct_m) else 1
+                cur_m = 'EUR' if any(tk_m.endswith(s) for s in _SUFFISSI_EUR) else 'USD'
+                conv_m = _fattore_cambio_ticker(tk_m, rate, cur_m)
+                if p_oggi_m >= t2_e:
+                    try:
+                        df_m = yf.Ticker(tk_m).history(period='3mo', interval='1d')
+                    except Exception:
+                        df_m = None
+                    sl_e, _, _ = _calcola_trailing_stop_adattivo_grafico(
+                        df_ohlc=df_m,
+                        mx_eur=max(pmc_m, p_oggi_m),
+                        p_live_eur=p_oggi_m,
+                        pmc_eur=pmc_m,
+                        t1_eur=t1_e,
+                        conv=conv_m,
+                    )
+                    step_init = 2
+                elif p_oggi_m >= t1_e:
+                    sl_e = pmc_m
+                    step_init = 1
                 else:
                     sl_e = round(pmc_m * (1.0 - sl_pct_m), 2)
                     step_init = 0
-                t1_e = round(pmc_m * (1.0 + 1.5 * sl_pct_m), 2)
-                t2_e = round(pmc_m * (1.0 + 2.5 * sl_pct_m), 2)
                 sh_list.append({
                     'Ticker': tk_m, 'Segnale': '💼 PORTAFOGLIO REALE', 'Origine': 'Portafoglio Reale',
                     'Tipo_Posizione': 'Spot', 'Taglia_EUR': round(q_m * pmc_m, 2),
-                    'Currency': 'EUR' if any(tk_m.endswith(s) for s in _SUFFISSI_EUR) else 'USD',
+                    'Currency': cur_m,
                     'Entry': pmc_m, 'Stop_Loss': sl_e, 'T1': t1_e, 'Target': t2_e,
                     'Max_Price': max(pmc_m, p_oggi_m), 'Step_Trailing': step_init, 'Avviso_SL': '',
-                    'Data_Ingresso': str(pos_m.get('Data_Acquisto') or oggi_p)[:10],
+                    'Data_Ingresso': dt_acq_m,
                     'Data_Check_SL': oggi_p,
                     'Fonti': 'Portafoglio Reale', 'Stato': 'Attivo', 'Esito_Reale': 'In Portafoglio'
                 })
@@ -1315,12 +1589,118 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 st.success(f'✅ Registrati {agg} ordini nel Tracker!')
                 st.rerun()
 
+        # Pulsante pratico di reset pulito: azzera il vecchio storico sporco e fa ripartire Sistema = Reale da oggi
+        if st.button(
+            '🔄 Azzera Storico e Riparti da Oggi (Allinea Sistema = Reale)',
+            key='btn_reset_allinea_tracker_oggi',
+            use_container_width=True,
+            disabled=not bool(port_map_spot),
+            help='Azzera tutti i vecchi record del profilo corrente e crea 1 record Portafoglio Reale + 1 gemello Metodo Sistema per ogni posizione Spot attiva da oggi.',
+        ):
+            oggi_rst = _oggi_italia_str()
+            nuova_sh = []
+            n_coppie = 0
+            for tk_m, pos_m in port_map_spot.items():
+                q_pac_m, q_spot_m = _ripartizione_pac_spot_tracker(pos_m)
+                if q_spot_m <= 1e-6:
+                    continue
+                pmc_m = round(float(pos_m.get('Prezzo_Medio') or 0), 2)
+                if pmc_m <= 0:
+                    continue
+                p_oggi_m = round(float(pos_m.get('Prezzo_Attuale_EUR') or pos_m.get('Prezzo_Attuale') or pmc_m), 2)
+                cur_m = 'EUR' if any(tk_m.endswith(s) for s in _SUFFISSI_EUR) else 'USD'
+                conv_m = _fattore_cambio_ticker(tk_m, rate, cur_m)
+                taglia_spot_m = round(q_spot_m * pmc_m, 2)
+                tipo_pos_m = 'PAC + Spot' if q_pac_m > 1e-6 else 'Spot'
+                try:
+                    df_m = yf.Ticker(tk_m).history(period='3mo', interval='1d')
+                except Exception:
+                    df_m = None
+                sl_pct_m = _calcola_sl_pct_da_ohlc(df_m, fallback=0.08)
+                t1_e = round(pmc_m * (1.0 + 1.5 * sl_pct_m), 2)
+                t2_e = round(pmc_m * (1.0 + 2.5 * sl_pct_m), 2)
+                mx_init = round(max(pmc_m, p_oggi_m), 2)
+                if p_oggi_m >= t2_e:
+                    sl_e, _, _ = _calcola_trailing_stop_adattivo_grafico(
+                        df_ohlc=df_m,
+                        mx_eur=mx_init,
+                        p_live_eur=p_oggi_m,
+                        pmc_eur=pmc_m,
+                        t1_eur=t1_e,
+                        conv=conv_m,
+                    )
+                    step_init = 2
+                elif p_oggi_m >= t1_e:
+                    sl_e = pmc_m
+                    step_init = 1
+                else:
+                    sl_e = round(pmc_m * (1.0 - sl_pct_m), 2)
+                    step_init = 0
+                bivio_id_rst = f"{tk_m}_{oggi_rst}_START"
+                # 1) Record Portafoglio Reale (allineato da oggi)
+                nuova_sh.append({
+                    'Ticker': tk_m,
+                    'Segnale': '💼 PORTAFOGLIO REALE',
+                    'Origine': 'Portafoglio Reale',
+                    'Tipo_Posizione': tipo_pos_m,
+                    'Quantita_Spot': round(q_spot_m, 6),
+                    'Quantita_PAC': round(q_pac_m, 6),
+                    'Bivio_ID': bivio_id_rst,
+                    'Currency': cur_m,
+                    'Taglia_EUR': taglia_spot_m,
+                    'Entry': pmc_m,
+                    'Stop_Loss': sl_e,
+                    'T1': t1_e,
+                    'Target': t2_e,
+                    'Max_Price': mx_init,
+                    'Step_Trailing': step_init,
+                    'SL_Confermato_TR': 0.0,
+                    'SL_Notificato_Telegram': 0.0,
+                    'Gain_Notificato_Telegram': 0,
+                    'Avviso_SL': '',
+                    'Avviso_SL_Tipo': '',
+                    'Data_Ingresso': oggi_rst,
+                    'Data_Check_SL': oggi_rst,
+                    'Fonti': 'Portafoglio Reale (Start Allineato)',
+                    'Stato': 'Attivo',
+                    'Esito_Reale': 'In Portafoglio',
+                })
+                # 2) Record gemello Metodo Sistema (stesso Bivio_ID, stessi livelli da oggi)
+                nuova_sh.append({
+                    'Ticker': tk_m,
+                    'Segnale': '🤖 PORTAFOGLIO SISTEMA (PARI)',
+                    'Tipo_Segnale': 'ALLINEAMENTO_START',
+                    'Origine': 'Metodo Sistema',
+                    'Tipo_Posizione': tipo_pos_m,
+                    'Bivio_ID': bivio_id_rst,
+                    'Currency': cur_m,
+                    'Taglia_EUR': taglia_spot_m,
+                    'Entry': pmc_m,
+                    'Stop_Loss': sl_e,
+                    'T1': t1_e,
+                    'Target': t2_e,
+                    'Max_Price': mx_init,
+                    'Step_Trailing': step_init,
+                    'Avviso_SL': '',
+                    'Data_Ingresso': oggi_rst,
+                    'Data_Check_SL': oggi_rst,
+                    'Fonti': 'Allineamento Iniziale (Sistema = Reale)',
+                    'Stato': 'Attivo',
+                    'Esito_Reale': 'In Corso (Pari)',
+                })
+                n_coppie += 1
+            _save_j(SHADOW_FILE, nuova_sh)
+            nota_pac_r = f" (esclusi {len(pac_tickers)} PAC puri)" if pac_tickers else ""
+            st.success(f'✅ Storico azzerato e allineato da oggi ({oggi_rst}): {n_coppie} coppie Sistema = Reale create{nota_pac_r}!')
+            st.rerun()
+
         if sh_list:
             # 1) Aggiornamento prezzi live + Trailing Stop/SL su TUTTI i record (con cache per ticker)
             upd = False
             hist_cache = {}
             prezzi_live_tk = {}
             valutati = []
+            nuovi_sys_chiusi = []
             for idx_s, r in enumerate(sh_list):
                 tk_r = str(r.get('Ticker', '')).strip().upper()
                 st_r = str(r.get('Stato', 'Attivo'))
@@ -1357,6 +1737,7 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                     upd = True
                                 if step_tr < 1 and t1_r > 0 and hi >= t1_r and sl_r < en_r:
                                     sl_r = round(en_r, 2)
+                                    step_tr = 1
                                     sh_list[idx_s]['Stop_Loss'] = sl_r
                                     sh_list[idx_s]['Step_Trailing'] = 1
                                     if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
@@ -1375,6 +1756,7 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                     )
                                     if nuovo_sl > sl_r:
                                         sl_r = nuovo_sl
+                                        step_tr = 2
                                         sh_list[idx_s]['Stop_Loss'] = sl_r
                                         sh_list[idx_s]['Step_Trailing'] = 2
                                         sh_list[idx_s]['Avviso_SL_Motivo_Grafico'] = mot_tr
@@ -1384,13 +1766,31 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                             sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} ({mot_tr})."
                                         upd = True
                                 if sl_r > 0 and lo <= sl_r:
-                                    st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
-                                    p_cur, upd = sl_r, True
-                                    sh_list[idx_s]['Stato'] = st_r
-                                    sh_list[idx_s]['Prezzo_Uscita'] = sl_r
-                                    sh_list[idx_s]['Data_Uscita'] = _oggi_italia_str()
-                                    sh_list[idx_s]['Esito_Reale'] = 'Da Gestire'
-                                    sh_list[idx_s]['Avviso_SL'] = ''
+                                    # Unificazione regole Home vs Tracker:
+                                    # - Pareggio / Trailing in profitto (step_tr >= 1): scatta SEMPRE su entrambi i portafogli.
+                                    # - SL in perdita (step_tr == 0, sl_r < en_r): bloccato se il titolo ha protezione Anti-Panico / Scudo Tom Nash.
+                                    chiudi_sl = True
+                                    if step_tr == 0 and sl_r < en_r:
+                                        prot_ap, mot_ap = _is_protetto_anti_panico_tracker(tk_r)
+                                        if prot_ap:
+                                            chiudi_sl = False
+                                            if sh_list[idx_s].get('Protezione_Anti_Panico') != mot_ap:
+                                                sh_list[idx_s]['Protezione_Anti_Panico'] = mot_ap
+                                                upd = True
+                                    if chiudi_sl:
+                                        dt_uscita_oggi = _oggi_italia_str()
+                                        st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
+                                        p_cur, upd = sl_r, True
+                                        sh_list[idx_s]['Stato'] = st_r
+                                        sh_list[idx_s]['Prezzo_Uscita'] = sl_r
+                                        sh_list[idx_s]['Data_Uscita'] = dt_uscita_oggi
+                                        sh_list[idx_s]['Esito_Reale'] = 'Da Gestire' if is_port_reale else 'Chiusura Automatica'
+                                        sh_list[idx_s]['Avviso_SL'] = ''
+                                        # Crea subito 1 copia congelata Origine='Metodo Sistema' (senza duplicati)
+                                        if is_port_reale:
+                                            tmp_chk = list(sh_list) + nuovi_sys_chiusi
+                                            if _crea_copia_sistema_chiusura_sl(tmp_chk, sh_list[idx_s], st_r, sl_r, dt_uscita_oggi):
+                                                nuovi_sys_chiusi.append(tmp_chk[-1])
                     except Exception:
                         pass
                 else:
@@ -1403,6 +1803,24 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                     't1': t1_r, 'tg': tg_r, 'p_cur': p_cur,
                     'dt': dt_r, 'pct': pct_v, 'netto': netto_v,
                 })
+
+            if nuovi_sys_chiusi:
+                for rec_ns in nuovi_sys_chiusi:
+                    idx_ns = len(sh_list)
+                    sh_list.append(rec_ns)
+                    en_ns = float(rec_ns.get('Entry') or 0)
+                    pu_ns = float(rec_ns.get('Prezzo_Uscita') or en_ns)
+                    tg_ns = float(rec_ns.get('Taglia_EUR') or 200.0)
+                    pct_ns, netto_ns = _calcola_netto_eur_trade(en_ns, pu_ns, tg_ns)
+                    valutati.append({
+                        'idx': idx_ns, 'rec': rec_ns, 'tk': str(rec_ns.get('Ticker') or ''),
+                        'stato': str(rec_ns.get('Stato') or 'Chiuso (SL)'),
+                        'is_port': False, 'en': en_ns, 'sl': float(rec_ns.get('Stop_Loss') or pu_ns),
+                        't1': float(rec_ns.get('T1') or en_ns), 'tg': float(rec_ns.get('Target') or en_ns),
+                        'p_cur': pu_ns, 'dt': str(rec_ns.get('Data_Ingresso') or '')[:10],
+                        'pct': pct_ns, 'netto': netto_ns,
+                    })
+                upd = True
 
             if upd:
                 _save_j(SHADOW_FILE, sh_list)
