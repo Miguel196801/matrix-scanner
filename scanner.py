@@ -8350,8 +8350,9 @@ def _costruisci_righe_tabella_salute(port_h, salute_map):
 def render_vista_tabella_salute_fullscreen(impostazioni):
     """
     Schermata dedicata a 100% schermo intero (da bordo a bordo, senza sidebar) della
-    Tabella Salute Portafoglio con caratteri normali e puliti (13.5px) e pulsante
-    '🔄 Aggiorna Prezzi Live' sempre visibile in cima.
+    Tabella Salute Portafoglio con caratteri normali e puliti (13.5px), pulsante
+    '🔄 Aggiorna Prezzi Live' in cima e barra rapida per aprire il grafico di ogni titolo
+    a tutto schermo senza ricaricare la pagina (0 ms di carico finché non cliccato).
     """
     # Nasconde temporaneamente la sidebar e lascia spazio libero sotto l'header Streamlit Cloud
     st.markdown(
@@ -8362,6 +8363,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
         "div[data-testid='stHorizontalBlock'] [data-testid='stMarkdownContainer'], "
         "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] { margin: 0 !important; }"
         "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] button { height: 42px !important; min-height: 42px !important; padding: 0 0.75rem !important; font-size: 0.88rem !important; line-height: 1.2 !important; margin: 0 !important; }"
+        "div[class*='st-key-btn_full_chart_'] button { height: 32px !important; min-height: 32px !important; padding: 0 0.35rem !important; font-size: 0.78rem !important; border-radius: 7px !important; }"
         ".mx-salute-full-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
         ".mx-salute-full-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 13.5px; color: #F8FAFC; }"
         ".mx-salute-full-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 9px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
@@ -8379,6 +8381,115 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
     port_f = st.session_state.get("portafoglio") or []
     sal_f = st.session_state.get("home_salute_portafoglio") or {}
 
+    def _render_barra_grafici_rapidi(lista_tickers, attivo=None):
+        """Renderizza una fila compatta di micro-pulsanti '📈 Ticker' sotto la tabella o sotto il grafico."""
+        if not lista_tickers:
+            return
+        st.markdown(
+            "<div style='margin-top:10px; margin-bottom:5px; color:#94A3B8; font-size:0.78rem; font-weight:600;'>"
+            "📈 Apri grafico rapido a schermo intero:</div>",
+            unsafe_allow_html=True,
+        )
+        per_riga = 10
+        for idx_r in range(0, len(lista_tickers), per_riga):
+            chunk = lista_tickers[idx_r:idx_r + per_riga]
+            n_col = max(len(chunk), min(8, per_riga))
+            cols_g = st.columns(n_col)
+            for idx_c, tk_c in enumerate(chunk):
+                tk_key = re.sub(r"[^A-Za-z0-9_]", "_", str(tk_c).upper())
+                is_att = (attivo is not None and str(attivo).upper() == str(tk_c).upper())
+                with cols_g[idx_c]:
+                    if st.button(
+                        f"📈 {tk_c}",
+                        key=f"btn_full_chart_{tk_key}",
+                        type="primary" if is_att else "secondary",
+                        use_container_width=True,
+                    ):
+                        st.session_state["full_salute_chart_ticker"] = str(tk_c).upper()
+                        st.rerun()
+
+    tk_chart = st.session_state.get("full_salute_chart_ticker")
+    tickers_port_f = [str(p.get("Ticker", "")).strip().upper() for p in port_f if p.get("Ticker")]
+    if tk_chart and tk_chart not in tickers_port_f:
+        tk_chart = None
+        st.session_state["full_salute_chart_ticker"] = None
+
+    # --- MODALITÀ GRAFICO FULL-SCREEN (aperta al clic su un ticker) ---
+    if tk_chart:
+        tf_full = st.session_state.get("full_salute_chart_tf", "1d")
+        if tf_full not in ("1d", "1wk"):
+            tf_full = "1d"
+
+        c_gl, c_gd, c_gw, c_gx = st.columns([2.5, 0.65, 0.65, 0.85])
+        with c_gd:
+            if st.button("📅 Daily", key="btn_full_tf_daily", type="primary" if tf_full == "1d" else "secondary", use_container_width=True):
+                st.session_state["full_salute_chart_tf"] = "1d"
+                st.rerun()
+        with c_gw:
+            if st.button("🗓️ Weekly", key="btn_full_tf_weekly", type="primary" if tf_full == "1wk" else "secondary", use_container_width=True):
+                st.session_state["full_salute_chart_tf"] = "1wk"
+                st.rerun()
+        with c_gx:
+            if st.button("✖️ Chiudi Grafico", key="btn_full_chiudi_grafico", use_container_width=True):
+                st.session_state["full_salute_chart_ticker"] = None
+                st.rerun()
+
+        # Riepilogo sintetico del titolo nella fascia superiore (0 chiamate extra)
+        righe_tmp = _costruisci_righe_tabella_salute(port_f, sal_f)
+        rg_sel = next((r for r in righe_tmp if str(r.get("Ticker", "")).upper() == tk_chart), {})
+        oggi_s = str(rg_sel.get("Oggi %", "—"))
+        pnl_s = str(rg_sel.get("P&L %", "—"))
+        col_og_s = "#4ADE80" if "+" in oggi_s else ("#F87171" if "-" in oggi_s else "#E2E8F0")
+        col_pl_s = "#4ADE80" if pnl_s.startswith("+") else ("#F87171" if pnl_s.startswith("-") else "#E2E8F0")
+        tf_lbl = "Daily" if tf_full == "1d" else "Weekly"
+        with c_gl:
+            st.markdown(
+                f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
+                f"border-radius:10px; height:42px; box-sizing:border-box; display:flex; align-items:center; "
+                f"padding:0 1.0rem; margin:0; color:#F8FAFC; font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden;'>"
+                f"📈 Grafico&nbsp;<b>{tk_chart}</b>&nbsp;({tf_lbl}) &nbsp;|&nbsp; "
+                f"Oggi:&nbsp;<span style='color:{col_og_s};'>{oggi_s}</span> &nbsp;•&nbsp; "
+                f"P&amp;L:&nbsp;<span style='color:{col_pl_s};'>{pnl_s}</span></div>",
+                unsafe_allow_html=True,
+            )
+
+        pmc_g = next((p.get("Prezzo_Medio") for p in port_f if str(p.get("Ticker", "")).upper() == tk_chart), None)
+        _pat_g = (st.session_state.get("pattern_alerts") or {}).get("per_ticker", {}).get(tk_chart)
+        per_g = "2y" if tf_full == "1d" else "5y"
+        int_g = "1d" if tf_full == "1d" else "1wk"
+        with st.spinner(f"Carico grafico {tk_chart} ({tf_lbl})..."):
+            fig_g = genera_grafico_baleine(
+                tk_chart, per_g, 50, 200,
+                prezzo_medio_eur=pmc_g,
+                timeframe=tf_full,
+                interval=int_g,
+                eurusd_rate=eurusd_live,
+                height=580,
+                pattern_info=_pat_g,
+            )
+        if fig_g:
+            if _pat_g:
+                fig_g = pattern_engine.aggiungi_livelli_pattern_al_grafico(fig_g, _pat_g)
+                _sym_g = "$" if str(_pat_g.get("currency", "USD")).upper() == "USD" else "€"
+                st.caption(
+                    f"**{_pat_g.get('badge')}** — {_pat_g.get('figura')} ({_pat_g.get('confidenza')}%) | "
+                    f"⚡ Y: `{_sym_g}{_pat_g.get('trigger_y'):.2f}` | 🎯 Target: `{_pat_g.get('target_pct'):+.1f}%` (`{_sym_g}{_pat_g.get('target_price'):.2f}`) | "
+                    f"🛑 Stop: `{_sym_g}{_pat_g.get('stop_price'):.2f}` | R/R `1:{_pat_g.get('rr'):.2f}`"
+                )
+            fig_g = applica_controlli_grafico(fig_g, 3)
+            st.plotly_chart(
+                fig_g,
+                use_container_width=True,
+                config={"scrollZoom": True, "displaylogo": False, "responsive": True, "displayModeBar": False},
+                key=f"full_salute_chart_{tk_chart}_{tf_full}",
+            )
+        else:
+            st.warning(f"Impossibile caricare il grafico per {tk_chart} al momento.")
+
+        _render_barra_grafici_rapidi(tickers_port_f, attivo=tk_chart)
+        return
+
+    # --- MODALITÀ TABELLA SALUTE FULL-SCREEN ---
     c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8])
     with c_top_m:
         if st.button("🔄 Aggiorna Prezzi Live", key="btn_full_aggiorna_prezzi_live", type="primary", use_container_width=True):
@@ -8392,6 +8503,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
                 st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
     with c_top_r:
         if st.button("✖️ Torna alla Home", key="btn_full_torna_home", use_container_width=True):
+            st.session_state["full_salute_chart_ticker"] = None
             st.session_state["vista_attiva"] = "home"
             st.rerun()
 
@@ -8460,6 +8572,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
         "</tbody></table></div>",
     ])
     st.markdown(tbl_html, unsafe_allow_html=True)
+    _render_barra_grafici_rapidi(tickers_port_f, attivo=None)
 
 
 def render_home_pilota_automatico(impostazioni, semaforo_header):
