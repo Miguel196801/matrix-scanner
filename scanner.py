@@ -8350,16 +8350,27 @@ def _costruisci_righe_tabella_salute(port_h, salute_map):
 if hasattr(st, "dialog"):
     @st.dialog("📊 Tabella Salute Portafoglio — Vista Grande", width="large")
     def _apri_vista_grande_tabella_salute(eurusd_live, chiave_u, nascondi_eur, liq_libera_h):
-        """Finestra ampia della Tabella Salute con pulsante live dedicato che aggiorna in-place senza chiudersi."""
-        # Allarga la modale fino al 92% della finestra su desktop per una lettura comodissima
+        """Finestra adattiva a tutto schermo (98vw) con caratteri grandi (15px) e pulsante live in-place."""
+        # Adatta la finestra automaticamente al 98% della larghezza dello schermo (desktop, tablet o smartphone)
         st.markdown(
-            "<style>div[role='dialog'] { width: 92vw !important; max-width: 1380px !important; }</style>",
+            "<style>"
+            "div[role='dialog'] { width: 98vw !important; max-width: 98vw !important; min-height: 88vh !important; margin: 1vh auto !important; }"
+            "div[data-testid='stDialog'] > div { padding: 0.45rem !important; }"
+            ".mx-salute-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
+            ".mx-salute-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 15px; color: #F8FAFC; }"
+            ".mx-salute-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 12px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
+            ".mx-salute-tbl tbody tr { background: #111622; border-bottom: 1px solid #1E293B; transition: background 0.12s; }"
+            ".mx-salute-tbl tbody tr:nth-child(even) { background: #0D121B; }"
+            ".mx-salute-tbl tbody tr:hover { background: #1B2538; }"
+            ".mx-salute-tbl tbody td { padding: 11px 12px; vertical-align: middle; white-space: nowrap; }"
+            ".mx-salute-tbl tbody td.mx-fase { white-space: normal; min-width: 210px; }"
+            "</style>",
             unsafe_allow_html=True,
         )
         port_dlg = st.session_state.get("portafoglio") or []
         sal_dlg = st.session_state.get("home_salute_portafoglio") or {}
 
-        c_dlg_l, c_dlg_r = st.columns([2.4, 1.1])
+        c_dlg_l, c_dlg_r = st.columns([2.6, 1.0])
         with c_dlg_r:
             if st.button("🔄 Aggiorna Prezzi Live", key="btn_dialog_aggiorna_prezzi_live", type="primary", use_container_width=True):
                 with st.spinner("Aggiorno quotazioni live..."):
@@ -8390,17 +8401,46 @@ if hasattr(st, "dialog"):
 
         with c_dlg_l:
             st.markdown(
-                f"<div style='background:#131722; border:1px solid #334155; border-radius:10px; padding:0.60rem 0.95rem; "
-                f"color:#F8FAFC; font-size:0.95rem; font-weight:700; line-height:1.45;'>"
+                f"<div style='background:#131722; border:1px solid #334155; border-radius:10px; padding:0.65rem 1.05rem; "
+                f"color:#F8FAFC; font-size:1.05rem; font-weight:700; line-height:1.45;'>"
                 f"💼 Totale: <b>{str_vt_d}</b> &nbsp;•&nbsp; "
                 f"📈 P&amp;L: <span style='color:{col_d};'>{str_pe_d} ({pnl_p_d:+.2f}%)</span> &nbsp;•&nbsp; "
-                f"<span style='color:#CBD5E1; font-size:0.84rem;'>🕒 {ora_dlg}</span></div>",
+                f"<span style='color:#CBD5E1; font-size:0.90rem;'>🕒 {ora_dlg}</span></div>",
                 unsafe_allow_html=True,
             )
 
+        # Costruisce la tabella HTML ad alto contrasto con testo grande (15px) e colori verde/rosso su Oggi % e P&L %
         righe_dlg = _costruisci_righe_tabella_salute(port_dlg, sal_dlg)
-        h_dlg = min(640, max(220, 38 * len(righe_dlg) + 42))
-        st.dataframe(pd.DataFrame(righe_dlg), use_container_width=True, hide_index=True, height=h_dlg)
+        trs_html = []
+        for rg in righe_dlg:
+            oggi_v = str(rg.get("Oggi %", ""))
+            col_og = "#4ADE80" if "+" in oggi_v else ("#F87171" if "-" in oggi_v else "#E2E8F0")
+            pnl_v = str(rg.get("P&L %", ""))
+            col_pl = "#4ADE80" if pnl_v.startswith("+") else ("#F87171" if pnl_v.startswith("-") else "#E2E8F0")
+            trs_html.append(
+                "<tr>"
+                f"<td style='font-size:16px; font-weight:800; color:#F8FAFC;'>{rg['Ticker']}</td>"
+                f"<td style='font-weight:700; color:{col_og};'>{oggi_v}</td>"
+                f"<td style='font-weight:700; color:{col_pl};'>{pnl_v}</td>"
+                f"<td style='font-weight:700; color:#E2E8F0;'>{rg['S-Score']}</td>"
+                f"<td style='color:#E0F2FE;'>{rg['Insider SEC (90gg)']}</td>"
+                f"<td style='font-weight:600;'>{rg['SMA 200']}</td>"
+                f"<td class='mx-fase' style='color:#E2E8F0;'>{rg['Fase Weinstein']}</td>"
+                f"<td style='font-weight:600; color:#CBD5E1;'>{rg['WinRate 60gg']}</td>"
+                f"<td style='font-weight:700; color:#F8FAFC;'>{rg['Tipo']}</td>"
+                "</tr>"
+            )
+        tbl_html = "".join([
+            "<div class='mx-salute-wrap'><table class='mx-salute-tbl'>",
+            "<thead><tr>",
+            "<th>Ticker</th><th>Oggi %</th><th>P&amp;L %</th><th>S-Score</th>",
+            "<th>Insider SEC (90gg)</th><th>SMA 200</th><th>Fase Weinstein</th>",
+            "<th>WinRate 60gg</th><th>Tipo</th>",
+            "</tr></thead><tbody>",
+            "".join(trs_html),
+            "</tbody></table></div>",
+        ])
+        st.markdown(tbl_html, unsafe_allow_html=True)
         st.caption("Chiudi con la ✖️ in alto a destra per tornare alla Home (i prezzi aggiornati restano salvati).")
 
 
