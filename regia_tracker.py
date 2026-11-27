@@ -710,6 +710,57 @@ def _formatta_messaggio_telegram_sl(av_d, utente=''):
     )
 
 
+def _formatta_messaggio_telegram_gain(
+    tk,
+    pnl_pct,
+    val_spot,
+    gain_netto_tot,
+    netto_50,
+    netto_100,
+    sl_prot,
+    is_misto,
+    q_spot,
+    scaglione,
+    utente='',
+):
+    """
+    Compone un alert Telegram chiaro per Presa Profitto / Chiusura Gain sulle sole quote Spot (mai PAC):
+    - Se il 50% netto >= € 100: consiglia raccolto parziale 50% + protezione del resto con Stop Loss.
+    - Se il 50% netto < € 100 (posizione piccola): consiglia chiusura intera o lasciar correre con Stop Loss.
+    """
+    def _eur_it(v):
+        return f"€ {float(v or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+
+    pnl_s = f"{float(pnl_pct or 0.0):+.1f}%".replace('.', ',')
+    nome_u = str(utente or '').strip().capitalize()
+    saluto = f"Ciao {nome_u}, " if nome_u else ""
+    if is_misto:
+        q_lbl = f"{int(q_spot)}" if abs(q_spot - round(q_spot)) < 1e-4 else f"{q_spot:.2f}".replace('.', ',')
+        nota_misto = f" (solo sulle <b>{q_lbl} azioni Spot</b> — lascia intatto il tuo PAC)"
+    else:
+        nota_misto = ""
+
+    if float(netto_50 or 0.0) >= 100.0:
+        consiglio = (
+            f"👉 <b>Azione consigliata:</b> valuta raccolto parziale <b>50% ({_eur_it(netto_50)} netti)</b> "
+            f"e proteggi il resto con Stop Loss a <b>{_eur_it(sl_prot)}</b> su Trade Republic."
+        )
+    else:
+        consiglio = (
+            f"👉 <b>Posizione piccola — 2 opzioni:</b> valuta chiusura intera per incassare "
+            f"<b>{_eur_it(netto_100)} netti</b> (guadagno netto {_eur_it(gain_netto_tot)}) "
+            f"oppure lascia correre proteggendo con Stop Loss a <b>{_eur_it(sl_prot)}</b>."
+        )
+
+    return (
+        f"💰 <b>MATRIX PRO — TRAGUARDO GAIN +{int(scaglione)}% ({tk})</b>\n"
+        f"{saluto}<b>{tk}</b> ha raggiunto <b>{pnl_s}</b>{nota_misto}!\n"
+        f"• Controvalore Spot: <b>{_eur_it(val_spot)}</b>\n"
+        f"• Guadagno netto stimato (post 26% tasse e € 1 TR): <b>{_eur_it(gain_netto_tot)}</b>\n\n"
+        f"{consiglio}"
+    )
+
+
 def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=None, utente=None):
     """
     Sincronizza automaticamente tutte le posizioni con quote Spot (q_spot > 0, escludendo al 100% i PAC puri
@@ -792,6 +843,7 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
                 'Step_Trailing': 0,
                 'SL_Confermato_TR': 0.0,
                 'SL_Notificato_Telegram': 0.0,
+                'Gain_Notificato_Telegram': 0,
                 'Avviso_SL': '',
                 'Avviso_SL_Tipo': '',
                 'Data_Ingresso': data_acq,
@@ -883,6 +935,39 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
                         upd = True
             else:
                 rec['Avviso_SL'] = ''
+                upd = True
+
+        # Alert Telegram automatico Presa Profitto / Chiusura Gain (SOLO quote Spot, scaglioni 35% / 50% / 70%)
+        pnl_pct_spot = ((p_live / pmc) - 1.0) * 100.0 if (pmc > 0 and p_live > 0) else 0.0
+        scaglione_gain = 70 if pnl_pct_spot >= 70.0 else (50 if pnl_pct_spot >= 50.0 else (35 if pnl_pct_spot >= 35.0 else 0))
+        gain_not_prev = int(rec.get('Gain_Notificato_Telegram') or 0)
+        if scaglione_gain > 0 and scaglione_gain > gain_not_prev:
+            val_spot_g = round(q_spot * p_live, 2)
+            carico_spot_g = round(q_spot * pmc, 2)
+            gain_lordo_g = max(0.0, val_spot_g - carico_spot_g)
+            tasse_tot_g = gain_lordo_g * 0.26
+            gain_netto_tot_g = round(max(0.0, gain_lordo_g - tasse_tot_g - 1.0), 2)
+            netto_100_g = round(max(0.0, val_spot_g - tasse_tot_g - 1.0), 2)
+            netto_50_g = round(max(0.0, (val_spot_g * 0.5) - (gain_lordo_g * 0.5 * 0.26) - 1.0), 2)
+            sl_prot_g = round(max(pmc, float(rec.get('Stop_Loss') or pmc)), 2)
+            if sl_prot_g >= p_live * 0.995:
+                sl_prot_g = round(max(pmc, p_live * 0.94), 2)
+            msg_gain_tg = _formatta_messaggio_telegram_gain(
+                tk=tk,
+                pnl_pct=pnl_pct_spot,
+                val_spot=val_spot_g,
+                gain_netto_tot=gain_netto_tot_g,
+                netto_50=netto_50_g,
+                netto_100=netto_100_g,
+                sl_prot=sl_prot_g,
+                is_misto=is_misto,
+                q_spot=q_spot,
+                scaglione=scaglione_gain,
+                utente=utente_eff,
+            )
+            if _invia_notifica_telegram(utente_eff, msg_gain_tg):
+                rec['Gain_Notificato_Telegram'] = scaglione_gain
+                rec['Data_Notifica_Gain_Telegram'] = oggi
                 upd = True
 
     if upd:

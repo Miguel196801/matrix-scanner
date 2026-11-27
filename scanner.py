@@ -5286,6 +5286,141 @@ def aggiorna_quotazioni_portafoglio(portafoglio, eurusd_rate):
     salva_ultimo_agg_prezzi()
     return risultati
 
+
+def _aggiorna_solo_prezzi_live_portafoglio(portafoglio, eurusd_rate, salute_map=None, chiave_u="fabio"):
+    """
+    Aggiorna in ~1-2 secondi solo i prezzi live/intraday e la variazione giornaliera (Oggi %)
+    delle posizioni in portafoglio con un unico mini-batch yf.download(period='5d', interval='1d'),
+    senza rilanciare la cascata 5 fasi né perdere la cache da 20 minuti.
+    Aggiorna in-place portafoglio, salute_map, cache snapshot e rilancia il check Stop Loss/Gain Spot.
+    """
+    if not portafoglio:
+        return portafoglio, (salute_map or {}), 0
+    tks = list(dict.fromkeys(
+        str(p.get("Ticker", "")).strip().upper()
+        for p in portafoglio
+        if isinstance(p, dict) and str(p.get("Ticker", "")).strip()
+    ))
+    if not tks:
+        return portafoglio, (salute_map or {}), 0
+
+    rate = float(eurusd_rate or get_live_eurusd() or 1.12)
+    suffissi_eur = (".MI", ".DE", ".PA", ".AS", ".F", ".MC", ".BR", ".VI", ".HE", ".LS")
+    prezzi_map = {}
+    try:
+        raw = yf.download(
+            tks if len(tks) > 1 else tks[0],
+            period="5d",
+            interval="1d",
+            group_by="ticker" if len(tks) > 1 else "column",
+            threads=True,
+            progress=False,
+            auto_adjust=False,
+        )
+        if raw is not None and not raw.empty:
+            for tk in tks:
+                try:
+                    if len(tks) == 1:
+                        sub = raw
+                    elif isinstance(raw.columns, pd.MultiIndex):
+                        if tk not in raw.columns.get_level_values(0):
+                            continue
+                        sub = raw[tk]
+                    else:
+                        continue
+                    closes = sub["Close"].dropna()
+                    if closes.empty:
+                        continue
+                    c_now = float(closes.iloc[-1])
+                    c_prev = float(closes.iloc[-2]) if len(closes) >= 2 else c_now
+                    if c_now > 0:
+                        prezzi_map[tk] = (c_now, c_prev)
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    sal_upd = dict(salute_map or {})
+    port_upd = []
+    aggiornati = 0
+    for pos in portafoglio:
+        p_new = dict(pos)
+        tk = str(p_new.get("Ticker", "")).strip().upper()
+        if tk in prezzi_map:
+            c_now, c_prev = prezzi_map[tk]
+            # Rileva valuta senza chiamate lente di rete (cache _get_info_cached o suffisso borsa europea)
+            cur = "EUR" if any(tk.endswith(s) for s in suffissi_eur) else "USD"
+            try:
+                inf_c = _get_info_cached(tk) if "_get_info_cached" in globals() else {}
+                if isinstance(inf_c, dict) and inf_c.get("currency"):
+                    cur = str(inf_c.get("currency")).strip().upper()
+            except Exception:
+                pass
+            p_eur = round(c_now / rate, 2) if cur == "USD" else round(c_now, 2)
+            p_usd = round(c_now, 2) if cur == "USD" else round(c_now * rate, 2)
+            var_pct = round(((c_now / c_prev) - 1.0) * 100.0, 2) if c_prev > 0 else 0.0
+            qta = float(p_new.get("Quantita", 0) or 0)
+            pmc = float(p_new.get("Prezzo_Medio", 0) or 0)
+            val_att = round(p_eur * qta, 2)
+            val_car = round(pmc * qta, 2)
+            pnl_eur = round(val_att - val_car, 2)
+            pnl_pct = round(((p_eur / pmc) - 1.0) * 100.0, 2) if pmc > 0 else 0.0
+            p_new["Prezzo_Attuale_EUR"] = p_eur
+            p_new["Prezzo_Attuale_USD"] = p_usd
+            p_new["Valore_Attuale"] = val_att
+            p_new["Valore_Carico"] = val_car
+            p_new["PnL_EUR"] = pnl_eur
+            p_new["PnL_%"] = pnl_pct
+            p_new["Variazione_Pct"] = var_pct
+            p_new["Variazione_Abs"] = round(abs(c_now - c_prev), 2)
+            p_new["Stato_PAC"] = _stato_pac_manuale(p_new)
+            if tk in sal_upd and isinstance(sal_upd[tk], dict):
+                sal_upd[tk] = dict(sal_upd[tk])
+                sal_upd[tk].update({
+                    "pnl_pct": pnl_pct,
+                    "pnl_eur": pnl_eur,
+                    "val_att": val_att,
+                    "val_car": val_car,
+                    "close_oggi": c_now,
+                    "close_ieri": c_prev,
+                    "var_pct_oggi": var_pct,
+                })
+            aggiornati += 1
+        port_upd.append(p_new)
+
+    if aggiornati > 0:
+        ora_it_live = _now_italia().strftime("%d/%m/%Y %H:%M")
+        salva_ultimo_agg_prezzi(ora_it_live)
+        st.session_state["portafoglio"] = port_upd
+        st.session_state["home_salute_portafoglio"] = sal_upd
+        snap_d = st.session_state.get("home_snapshot_decisionale")
+        if isinstance(snap_d, dict):
+            snap_d = dict(snap_d)
+            snap_d["calcolato_alle"] = ora_it_live
+            st.session_state["home_snapshot_decisionale"] = snap_d
+        # Aggiorna in-place anche lo snapshot in cache da 20 minuti così il rientro su mobile resta istantaneo e fresco
+        try:
+            cache_st = _get_home_snapshot_cache_store()
+            u_low = str(chiave_u or "fabio").strip().lower()
+            for ck, cval in list(cache_st.items()):
+                if isinstance(ck, tuple) and len(ck) >= 1 and ck[0] == u_low and isinstance(cval, tuple) and len(cval) == 2 and isinstance(cval[1], dict):
+                    cval[1]["portafoglio"] = port_upd
+                    cval[1]["home_salute_portafoglio"] = sal_upd
+                    if isinstance(cval[1].get("home_snapshot_decisionale"), dict):
+                        cval[1]["home_snapshot_decisionale"]["calcolato_alle"] = ora_it_live
+        except Exception:
+            pass
+        # Check istantaneo Stop Loss / Protezione Profitto & Gain Telegram sui nuovi prezzi live (zero API extra)
+        try:
+            if "regia_tracker" in globals() and hasattr(regia_tracker, "sincronizza_avvisi_protezione_spot"):
+                regia_tracker.sincronizza_avvisi_protezione_spot(
+                    port_upd, eurusd_rate=rate, ohlc_map=None, utente=str(chiave_u or "fabio").strip().lower()
+                )
+        except Exception:
+            pass
+
+    return port_upd, sal_upd, aggiornati
+
 def calcola_target(ticker_obj, prezzo_medio, prezzo_attuale):
     try:
         hist = ticker_obj.history(period='1y')
@@ -7567,6 +7702,286 @@ def _disegna_card_punto_periodico(portafoglio, modalita, etichetta_fin):
     ])
     st.markdown(_card_periodo_html, unsafe_allow_html=True)
 
+    # Pulsante manuale per testare/inviare su richiesta il Report Settimanale (Figure & Inversioni) su Telegram
+    try:
+        _chiave_u_btn = PROFILO_ATTIVO.get("chiave", "fabio")
+        if st.button(
+            "📨 Invia ora Report Settimanale su Telegram",
+            key=f"btn_invia_report_sabato_tg_{modalita}",
+            use_container_width=True,
+            help="Analizza Portafoglio + Watchlist (figure di inversione, breakout e riconquiste SMA 50/200) e invia il riepilogo al tuo Telegram.",
+        ):
+            _imp_btn = carica_json(IMPOSTAZIONI_FILE, default={}) if "carica_json" in globals() else {}
+            _wl_btn = str((_imp_btn if isinstance(_imp_btn, dict) else {}).get("lista_ticker_default") or "")
+            _wl_l_b = [t.strip().upper() for t in _wl_btn.replace("\n", ",").split(",") if t.strip()]
+            _pt_l_b = [str(p.get("Ticker", "")).strip().upper() for p in (portafoglio or []) if p.get("Ticker")]
+            _tks_b = tuple(sorted(list(set(_wl_l_b + _pt_l_b))))
+            _hub_b = _scarica_ohlc_batch_cached(_tks_b, period="1y") if _tks_b else {}
+            _pat_b = st.session_state.get("pattern_alerts") or {}
+            _sem_b = st.session_state.get("semaforo_mercato")
+            _ok_tg, _msg_tg = _invia_report_settimanale_sabato_telegram(
+                chiave_u=_chiave_u_btn,
+                portafoglio=portafoglio,
+                watchlist_str=_wl_btn,
+                hub_ohlc=_hub_b,
+                pattern_alerts=_pat_b,
+                semaforo_loc=_sem_b,
+                forza_invio=True,
+            )
+            if _ok_tg:
+                st.toast(f"✅ {_msg_tg}", icon="📨")
+                st.success(f"📨 {_msg_tg}")
+            else:
+                st.warning(f"⚠️ {_msg_tg}")
+    except Exception:
+        pass
+
+
+def _rileva_inversioni_extra_settimanali(ticker, df_ohlc):
+    """
+    Micro-detector di sola lettura su hub_ohlc (senza modificare pattern_engine.py):
+    1) Testa e Spalle Rovesciato (usando pattern_engine.trova_pivot già pubblico)
+    2) Riconquista SMA 200 o SMA 50 negli ultimi 5 giorni di borsa con volumi >= 1.2x media 20gg.
+    Restituisce lista di dizionari {ticker, figura, dettaglio, priorita}.
+    """
+    risultati = []
+    try:
+        if df_ohlc is None or df_ohlc.empty or len(df_ohlc) < 60:
+            return risultati
+        df = df_ohlc.dropna(subset=["Open", "High", "Low", "Close"]).copy()
+        if len(df) < 60:
+            return risultati
+        closes = df["Close"].astype(float)
+        opens = df["Open"].astype(float)
+        vols = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(0.0, index=df.index)
+        p_now = float(closes.iloc[-1])
+        if p_now <= 0:
+            return risultati
+
+        # 1) Riconquista SMA 200 / SMA 50 negli ultimi 5 giorni di borsa con volumi >= 1.2x media 20gg
+        vol_med_20 = vols.rolling(20).mean()
+        if len(df) >= 205:
+            sma200 = closes.rolling(200).mean()
+            s200_now = float(sma200.iloc[-1])
+            s200_5 = sma200.iloc[-6:-1]
+            c_5 = closes.iloc[-6:-1]
+            era_sotto_200 = bool((c_5 < s200_5).any())
+            if pd.notna(s200_now) and s200_now > 0 and p_now > s200_now and era_sotto_200:
+                vol_r_max = 0.0
+                for k_i in range(-5, 0):
+                    vm = float(vol_med_20.iloc[k_i]) if pd.notna(vol_med_20.iloc[k_i]) else 0.0
+                    if vm > 0 and float(closes.iloc[k_i]) >= float(opens.iloc[k_i]):
+                        vol_r_max = max(vol_r_max, float(vols.iloc[k_i]) / vm)
+                if vol_r_max >= 1.20:
+                    dist_200 = ((p_now / s200_now) - 1.0) * 100.0
+                    risultati.append({
+                        "ticker": ticker,
+                        "figura": "Riconquista SMA 200 + Volumi",
+                        "dettaglio": f"+{dist_200:.1f}% sopra SMA 200 (vol. {vol_r_max:.1f}x)",
+                        "priorita": 1,
+                    })
+        if not risultati and len(df) >= 60:
+            sma50 = closes.rolling(50).mean()
+            s50_now = float(sma50.iloc[-1])
+            s50_5 = sma50.iloc[-6:-1]
+            c_5 = closes.iloc[-6:-1]
+            era_sotto_50 = bool((c_5 < s50_5).any())
+            if pd.notna(s50_now) and s50_now > 0 and p_now > s50_now and era_sotto_50:
+                vol_r_max = 0.0
+                for k_i in range(-5, 0):
+                    vm = float(vol_med_20.iloc[k_i]) if pd.notna(vol_med_20.iloc[k_i]) else 0.0
+                    if vm > 0 and float(closes.iloc[k_i]) >= float(opens.iloc[k_i]):
+                        vol_r_max = max(vol_r_max, float(vols.iloc[k_i]) / vm)
+                if vol_r_max >= 1.20:
+                    dist_50 = ((p_now / s50_now) - 1.0) * 100.0
+                    risultati.append({
+                        "ticker": ticker,
+                        "figura": "Riconquista SMA 50 + Volumi",
+                        "dettaglio": f"+{dist_50:.1f}% sopra SMA 50 (vol. {vol_r_max:.1f}x)",
+                        "priorita": 2,
+                    })
+
+        # 2) Testa e Spalle Rovesciato (Inverted H&S) tramite pattern_engine.trova_pivot()
+        sub_ihs = df.tail(120).reset_index(drop=True)
+        if len(sub_ihs) >= 45 and hasattr(pattern_engine, "trova_pivot"):
+            _, piv_lows = pattern_engine.trova_pivot(sub_ihs, ordine=3)
+            if len(piv_lows) >= 3:
+                (i1, l1), (i2, l2), (i3, l3) = piv_lows[-3], piv_lows[-2], piv_lows[-1]
+                # Testa centrale almeno -4% sotto entrambe le spalle e spalle simmetriche entro ±8%
+                if l2 > 0 and l1 > 0 and l3 > 0:
+                    testa_bassa = (l2 <= l1 * 0.96) and (l2 <= l3 * 0.96)
+                    spalle_simm = abs(l1 - l3) / max(l1, l3) <= 0.08
+                    spalla_dx_recente = (len(sub_ihs) - 1 - i3) <= 22
+                    if testa_bassa and spalle_simm and spalla_dx_recente and i1 < i2 < i3:
+                        nk1 = float(sub_ihs["High"].iloc[i1 : i2 + 1].max())
+                        nk2 = float(sub_ihs["High"].iloc[i2 : i3 + 1].max())
+                        neckline = round(max(nk1, nk2), 2)
+                        if neckline > 0 and (neckline * 0.94 <= p_now <= neckline * 1.06):
+                            dist_nk = ((p_now / neckline) - 1.0) * 100.0
+                            stato_nk = "ROTTURA CONFERMATA" if dist_nk >= 0 else f"a {dist_nk:+.1f}% da neckline"
+                            risultati.append({
+                                "ticker": ticker,
+                                "figura": "Testa e Spalle Rovesciato",
+                                "dettaglio": f"Neckline {neckline:.2f} ({stato_nk})",
+                                "priorita": 1,
+                            })
+    except Exception:
+        pass
+    return risultati
+
+
+def _costruisci_messaggio_report_sabato(chiave_u, portafoglio, watchlist_tks, hub_ohlc, pattern_alerts, semaforo_loc=None):
+    """
+    Costruisce un unico messaggio HTML Telegram compatto (< 3.800 caratteri) con le figure
+    di inversione e cambiamento trend su Portafoglio e Watchlist per prepararsi al lunedì.
+    """
+    dt_it = _now_italia()
+    sett_iso = dt_it.strftime("%G-W%V")
+    nome_u = str(chiave_u or "Utente").strip().capitalize()
+
+    port_set = {str(p.get("Ticker", "")).strip().upper() for p in (portafoglio or []) if p.get("Ticker")}
+    wl_only = [tk for tk in dict.fromkeys(watchlist_tks or []) if tk and tk not in port_set]
+
+    # Contesto Macro SPY
+    sem = semaforo_loc if isinstance(semaforo_loc, dict) else (st.session_state.get("semaforo_mercato") or {})
+    dd_spy = sem.get("spy_drawdown_pct")
+    zona_tn = str(sem.get("zona_sconto_tom_nash") or "normale").upper()
+    st_spy = str(sem.get("stato") or "giallo").upper()
+    if dd_spy is not None:
+        dd_s = f"{float(dd_spy):.1f}%".replace(".", ",")
+        riga_macro = f"🌍 <b>Clima SPY:</b> {st_spy} (Drawdown 52w: {dd_s} • Fascia {zona_tn})"
+    else:
+        riga_macro = f"🌍 <b>Clima SPY:</b> {st_spy}"
+
+    righe_port = []
+    visti_port = set()
+    righe_wl = []
+    visti_wl = set()
+
+    # 1) Segnali già rilevati da pattern_engine.py (riuso 100% senza toccare i filtri)
+    if isinstance(pattern_alerts, dict):
+        # Portafoglio: mediazione / incremento / sell / sorvegliati
+        for cat_p, icona_p in (("buy_mediazione", "🟢"), ("buy_incremento", "🚀"), ("sell", "⚠️")):
+            for al in (pattern_alerts.get(cat_p) or []):
+                if not isinstance(al, dict):
+                    continue
+                tk = str(al.get("ticker", "")).strip().upper()
+                if tk in port_set and (tk, al.get("figura")) not in visti_port:
+                    visti_port.add((tk, al.get("figura")))
+                    fig_n = str(al.get("figura") or "Pattern")
+                    ty = float(al.get("trigger_y") or 0.0)
+                    dist_y = float(al.get("dist_y_pct") or 0.0)
+                    simb = "$" if str(al.get("currency", "USD")).upper() == "USD" else "€"
+                    righe_port.append(f"• {icona_p} <b>{tk}</b>: {fig_n} (Trigger {simb}{ty:.2f}, {dist_y:+.1f}%)")
+
+        # Watchlist: breakout confermati e sorvegliati speciali quasi pronti
+        for al in (pattern_alerts.get("buy_nuovo") or [])[:6]:
+            if not isinstance(al, dict):
+                continue
+            tk = str(al.get("ticker", "")).strip().upper()
+            if tk and tk not in port_set and tk not in visti_wl:
+                visti_wl.add(tk)
+                fig_n = str(al.get("figura") or "Breakout")
+                ty = float(al.get("trigger_y") or 0.0)
+                dist_y = float(al.get("dist_y_pct") or 0.0)
+                simb = "$" if str(al.get("currency", "USD")).upper() == "USD" else "€"
+                righe_wl.append(f"• 🚀 <b>{tk}</b>: {fig_n} (Trigger {simb}{ty:.2f}, {dist_y:+.1f}%)")
+        for sv in (pattern_alerts.get("sorvegliati_speciali") or [])[:6]:
+            if not isinstance(sv, dict):
+                continue
+            tk = str(sv.get("ticker", "")).strip().upper()
+            fig_n = str(sv.get("figura") or "Pre-Breakout")
+            ty = float(sv.get("trigger_y") or 0.0)
+            dist_y = float(sv.get("dist_y_pct") or 0.0)
+            simb = "$" if str(sv.get("currency", "USD")).upper() == "USD" else "€"
+            if tk in port_set and (tk, fig_n) not in visti_port:
+                visti_port.add((tk, fig_n))
+                righe_port.append(f"• 👀 <b>{tk}</b>: {fig_n} quasi pronto (Trigger {simb}{ty:.2f}, {dist_y:+.1f}%)")
+            elif tk and tk not in port_set and tk not in visti_wl:
+                visti_wl.add(tk)
+                righe_wl.append(f"• 👀 <b>{tk}</b>: {fig_n} (Trigger {simb}{ty:.2f}, {dist_y:+.1f}%)")
+
+    # 2) Micro-detector extra su hub_ohlc (Testa e Spalle Rovesciato + Riconquista SMA 50/200 + Volumi)
+    if isinstance(hub_ohlc, dict):
+        for tk_p in sorted(port_set):
+            for ex in _rileva_inversioni_extra_settimanali(tk_p, hub_ohlc.get(tk_p)):
+                if (tk_p, ex["figura"]) not in visti_port:
+                    visti_port.add((tk_p, ex["figura"]))
+                    righe_port.append(f"• 🔄 <b>{tk_p}</b>: {ex['figura']} ({ex['dettaglio']})")
+        extra_wl = []
+        for tk_w in wl_only:
+            if tk_w in visti_wl:
+                continue
+            for ex in _rileva_inversioni_extra_settimanali(tk_w, hub_ohlc.get(tk_w)):
+                extra_wl.append(ex)
+        extra_wl.sort(key=lambda x: (x["priorita"], x["ticker"]))
+        for ex in extra_wl[:8]:
+            if ex["ticker"] not in visti_wl:
+                visti_wl.add(ex["ticker"])
+                righe_wl.append(f"• 🔄 <b>{ex['ticker']}</b>: {ex['figura']} ({ex['dettaglio']})")
+
+    blocco_port = "\n".join(righe_port[:8]) if righe_port else "• Nessuna figura di inversione o rottura rilevata questa settimana sui tuoi titoli."
+    blocco_wl = "\n".join(righe_wl[:10]) if righe_wl else "• Nessuna figura di inversione o breakout pronta in Watchlist questa settimana."
+
+    msg = (
+        f"📅 <b>REPORT SABATO MATRIX PRO ({sett_iso})</b>\n"
+        f"Ciao {nome_u}, ecco la fotografia del fine settimana (mercati chiusi) per prepararti a lunedì:\n"
+        f"{riga_macro}\n\n"
+        f"💼 <b>SUL TUO PORTAFOGLIO:</b>\n{blocco_port}\n\n"
+        f"🔎 <b>WATCHLIST — FIGURE &amp; INVERSIONI:</b>\n{blocco_wl}\n\n"
+        f"<i>Analisi automatica MATRIX PRO (Portafoglio + Watchlist).</i>"
+    )
+    if len(msg) > 3800:
+        msg = msg[:3760].rstrip() + "\n…\n<i>Apri MATRIX PRO per i dettagli completi.</i>"
+    return msg
+
+
+def _invia_report_settimanale_sabato_telegram(
+    chiave_u,
+    portafoglio,
+    watchlist_str,
+    hub_ohlc,
+    pattern_alerts,
+    semaforo_loc=None,
+    forza_invio=False,
+):
+    """
+    Invia 1 solo Report Settimanale ogni sabato (fuso Europe/Rome) sul Telegram dell'utente attivo
+    salvando il flag anti-duplicato 'ultimo_report_sabato_tg': 'YYYY-Www' in impostazioni*.json (sync GitHub).
+    Se forza_invio=True consente l'invio immediato su richiesta dal box Weekend.
+    """
+    try:
+        dt_it = _now_italia()
+        sett_iso = dt_it.strftime("%G-W%V")
+        imp_disk = carica_json(IMPOSTAZIONI_FILE, default={})
+        if not isinstance(imp_disk, dict):
+            imp_disk = {}
+
+        if not forza_invio:
+            # Scatta automaticamente SOLO di sabato (weekday == 5) e 1 sola volta per settimana ISO
+            if dt_it.weekday() != 5:
+                return False, "Invio automatico attivo solo il sabato."
+            if str(imp_disk.get("ultimo_report_sabato_tg") or "") == sett_iso:
+                return False, f"Report {sett_iso} già inviato."
+
+        wl_list = [t.strip().upper() for t in str(watchlist_str or "").replace("\n", ",").split(",") if t.strip()]
+        msg = _costruisci_messaggio_report_sabato(
+            chiave_u=chiave_u,
+            portafoglio=portafoglio,
+            watchlist_tks=wl_list,
+            hub_ohlc=hub_ohlc,
+            pattern_alerts=pattern_alerts,
+            semaforo_loc=semaforo_loc,
+        )
+        ok = _invia_notifica_telegram(chiave_u, msg)
+        if ok:
+            imp_disk["ultimo_report_sabato_tg"] = sett_iso
+            salva_json(IMPOSTAZIONI_FILE, imp_disk)
+            return True, f"Report Settimanale ({sett_iso}) inviato su Telegram!"
+        return False, "Secrets Telegram non configurati per questo utente (o invio non riuscito)."
+    except Exception:
+        return False, "Invio Report Settimanale non riuscito."
+
 @st.cache_resource
 def _get_home_force_counter_store():
     """Archivio in memoria di processo per il contatore di refresh manuale Home di ciascun utente."""
@@ -7824,6 +8239,19 @@ def _esegui_cascata_home_cached(
                 eurusd_rate=eurusd_live,
                 liq_libera=liq_reale_alloc,
             )
+    except Exception:
+        pass
+    # Report Settimanale automatico del Sabato su Telegram (1 volta/settimana, flag YYYY-Www su impostazioni*.json/GitHub)
+    try:
+        _invia_report_settimanale_sabato_telegram(
+            chiave_u=chiave_u,
+            portafoglio=port_loc,
+            watchlist_str=wl_home,
+            hub_ohlc=hub_ohlc,
+            pattern_alerts=pat_alerts_snap,
+            semaforo_loc=semaforo_loc,
+            forza_invio=False,
+        )
     except Exception:
         pass
     cache_store[cache_key] = (time.monotonic(), snap_res)
@@ -8586,16 +9014,47 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     # 3b) Box periodico: "Il Punto della Settimana / Fine Mese & Radar Rotazione Balene"
     _render_box_punto_periodico_home(port_h)
 
-    # 4) Tabella Salute Portafoglio richiudibile con ordine colonne esatto:
-    # [Ticker | P&L % | S-Score | Insider SEC (90gg) | SMA 200 | Fase Weinstein | WinRate 60gg | Tipo]
+    # 4) Tabella Salute Portafoglio richiudibile con ordine colonne compatto:
+    # [Ticker | Oggi % | P&L % | S-Score | Insider SEC (90gg) | SMA 200 | Fase Weinstein | WinRate 60gg | Tipo]
     if port_h and salute_map:
-        with st.expander("📊 Tabella Salute Portafoglio (S-Score • Insider SEC • SMA 200 • Fase • WinRate 60gg)", expanded=False):
+        with st.expander("📊 Tabella Salute Portafoglio (Oggi % • P&L • S-Score • Insider SEC • SMA 200 • Fase)", expanded=False):
+            c_sal_l, c_sal_r = st.columns([2.4, 1.2])
+            with c_sal_l:
+                st.caption(f"🕒 Quotazioni aggiornate: **{_agg_ora_h}** — clicca il tasto a destra durante Wall Street (15:30–22:00) per aggiornare i prezzi in ~1 secondo.")
+            with c_sal_r:
+                if st.button("🔄 Aggiorna Prezzi Live", key="btn_home_aggiorna_prezzi_live", use_container_width=True):
+                    with st.spinner("Aggiorno quotazioni live..."):
+                        _, _, n_live = _aggiorna_solo_prezzi_live_portafoglio(
+                            port_h, eurusd_live, salute_map=salute_map, chiave_u=chiave_u
+                        )
+                    if n_live > 0:
+                        st.toast(f"⚡ Prezzi live aggiornati su {n_live} titoli!", icon="🔄")
+                    else:
+                        st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
+                    st.rerun()
+
             righe_sal = []
             for pos in port_h:
                 tk = str(pos.get("Ticker", "")).strip().upper()
                 inf = salute_map.get(tk) or {}
+                # Variazione giornaliera "Oggi %" (con indicatore verde/rosso immediato)
+                var_oggi = pos.get("Variazione_Pct")
+                if var_oggi is None:
+                    var_oggi = inf.get("var_pct_oggi")
+                if var_oggi is None:
+                    c_og_s = inf.get("close_oggi")
+                    c_ie_s = inf.get("close_ieri")
+                    if c_og_s is not None and c_ie_s is not None and float(c_ie_s) > 0:
+                        var_oggi = round(((float(c_og_s) / float(c_ie_s)) - 1.0) * 100.0, 2)
+                if var_oggi is not None:
+                    vo_f = float(var_oggi)
+                    ico_vo = "🟢" if vo_f > 0 else ("🔴" if vo_f < 0 else "⚪")
+                    oggi_lbl = f"{ico_vo} {vo_f:+.2f}%"
+                else:
+                    oggi_lbl = "⚪ N/D"
+
                 s200 = inf.get("sopra_sma200")
-                s200_lbl = "🟢 Sopra SMA 200" if s200 is True else ("🔴 Sotto SMA 200" if s200 is False else "⚪ N/D")
+                s200_lbl = "🟢 Sopra" if s200 is True else ("🔴 Sotto" if s200 is False else "⚪ N/D")
                 wr = inf.get("winrate_60g")
                 wr_lbl = f"{wr:.1f}%" if wr is not None else "N/D"
                 sec_lbl = _formatta_badge_sec_tabella(
@@ -8603,11 +9062,20 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                     inf.get("sec_valore_usd", 0.0),
                     inf.get("sec_ultimo_acquisto", ""),
                 )
-                tipo_sal_lbl = inf.get("tipo_dettaglio") or _formatta_badge_tipo_posizione(pos, con_dettaglio=True)
-                if bool(pos.get("PAC_Sospeso", False)) and _calcola_ripartizione_pac_spot(pos)[0] > 1e-6:
-                    tipo_sal_lbl = f"{tipo_sal_lbl} (⏸️ PAC Sospeso — Long)"
+                # Etichetta Tipo ultra-compatta anti-troncamento: PAC (🟢) / PAC (⏸️) / Spot / PAC+Spot
+                q_pac_t, q_spot_t = _calcola_ripartizione_pac_spot(pos)
+                pac_sosp_t = bool(pos.get("PAC_Sospeso", False))
+                ico_pac_t = "⏸️" if pac_sosp_t else "🟢"
+                if q_pac_t > 1e-6 and q_spot_t > 1e-6:
+                    tipo_sal_lbl = f"PAC+Spot ({ico_pac_t})"
+                elif q_pac_t > 1e-6:
+                    tipo_sal_lbl = f"PAC ({ico_pac_t})"
+                else:
+                    tipo_sal_lbl = "Spot"
+
                 righe_sal.append({
                     "Ticker": tk,
+                    "Oggi %": oggi_lbl,
                     "P&L %": f"{float(inf.get('pnl_pct', 0) or 0):+.2f}%",
                     "S-Score": f"{int(inf.get('s_score', 50) or 50)}/100",
                     "Insider SEC (90gg)": sec_lbl,
