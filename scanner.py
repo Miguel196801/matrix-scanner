@@ -8347,101 +8347,114 @@ def _costruisci_righe_tabella_salute(port_h, salute_map):
     return righe_sal
 
 
-if hasattr(st, "dialog"):
-    @st.dialog("📊 Tabella Salute Portafoglio — Vista Grande", width="large")
-    def _apri_vista_grande_tabella_salute(eurusd_live, chiave_u, nascondi_eur, liq_libera_h):
-        """Finestra adattiva a tutto schermo (98vw) con caratteri grandi (15px) e pulsante live in-place."""
-        # Adatta la finestra automaticamente al 98% della larghezza dello schermo (desktop, tablet o smartphone)
+def render_vista_tabella_salute_fullscreen(impostazioni):
+    """
+    Schermata dedicata a 100% schermo intero (da bordo a bordo, senza sidebar) della
+    Tabella Salute Portafoglio con caratteri normali e puliti (13.5px) e pulsante
+    '🔄 Aggiorna Prezzi Live' sempre visibile in cima.
+    """
+    # Nasconde temporaneamente la sidebar e azzera i margini laterali per riempire il 100% dello schermo
+    st.markdown(
+        "<style>"
+        "section[data-testid='stSidebar'], button[data-testid='collapsedControl'] { display: none !important; }"
+        ".block-container { max-width: 100% !important; width: 100% !important; padding: 0.75rem 1.25rem 1.2rem 1.25rem !important; }"
+        ".mx-salute-full-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
+        ".mx-salute-full-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 13.5px; color: #F8FAFC; }"
+        ".mx-salute-full-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 10px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
+        ".mx-salute-full-tbl tbody tr { background: #111622; border-bottom: 1px solid #1E293B; }"
+        ".mx-salute-full-tbl tbody tr:nth-child(even) { background: #0D121B; }"
+        ".mx-salute-full-tbl tbody tr:hover { background: #1B2538; }"
+        ".mx-salute-full-tbl tbody td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+
+    chiave_u = PROFILO_ATTIVO.get("chiave", "fabio")
+    eurusd_live = get_live_eurusd()
+    nascondi_eur = bool(st.session_state.get("nascondi_saldi", False))
+    port_f = st.session_state.get("portafoglio") or []
+    sal_f = st.session_state.get("home_salute_portafoglio") or {}
+
+    c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8])
+    with c_top_m:
+        if st.button("🔄 Aggiorna Prezzi Live", key="btn_full_aggiorna_prezzi_live", type="primary", use_container_width=True):
+            with st.spinner("Aggiorno quotazioni live..."):
+                port_f, sal_f, n_live = _aggiorna_solo_prezzi_live_portafoglio(
+                    port_f, eurusd_live, salute_map=sal_f, chiave_u=chiave_u
+                )
+            if n_live > 0:
+                st.toast(f"⚡ Prezzi live aggiornati su {n_live} titoli!", icon="🔄")
+            else:
+                st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
+    with c_top_r:
+        if st.button("✖️ Torna alla Home", key="btn_full_torna_home", use_container_width=True):
+            st.session_state["vista_attiva"] = "home"
+            st.rerun()
+
+    # Riepilogo live aggiornato
+    val_pos_f = 0.0
+    cap_inv_f = 0.0
+    for p_f in port_f:
+        q_f = float(p_f.get("Quantita", 0) or 0)
+        pmc_f = float(p_f.get("Prezzo_Medio", 0) or 0)
+        att_f = p_f.get("Prezzo_Attuale_EUR")
+        cap_inv_f += q_f * pmc_f
+        val_pos_f += q_f * float(att_f) if (att_f is not None and float(att_f or 0) > 0) else q_f * pmc_f
+    if chiave_u == "fabio":
+        liq_f = round(max(0.0, float(calcola_liquidita_totale() or 0.0)), 2)
+    else:
+        cap_v_f = float(impostazioni.get("capitale_versato")) if (isinstance(impostazioni, dict) and impostazioni.get("capitale_versato") is not None) else CAPITALE_VERSATO_DEFAULT
+        liq_f = round(max(0.0, cap_v_f - cap_inv_f), 2)
+    val_tot_f = round(val_pos_f + liq_f, 2)
+    pnl_e_f = val_pos_f - cap_inv_f
+    pnl_p_f = ((val_pos_f / cap_inv_f) - 1.0) * 100.0 if cap_inv_f > 0 else 0.0
+    col_f = "#4ADE80" if pnl_e_f >= 0 else "#F87171"
+    str_vt_f = "€ ••••" if nascondi_eur else f"€ {val_tot_f:,.2f}"
+    str_pe_f = "€ ••••" if nascondi_eur else f"€ {pnl_e_f:+,.2f}"
+    ora_f = (st.session_state.get("home_snapshot_decisionale") or {}).get("calcolato_alle") or _now_italia().strftime("%d/%m/%Y %H:%M")
+
+    with c_top_l:
         st.markdown(
-            "<style>"
-            "div[role='dialog'] { width: 98vw !important; max-width: 98vw !important; min-height: 88vh !important; margin: 1vh auto !important; }"
-            "div[data-testid='stDialog'] > div { padding: 0.45rem !important; }"
-            ".mx-salute-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
-            ".mx-salute-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 15px; color: #F8FAFC; }"
-            ".mx-salute-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 12px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
-            ".mx-salute-tbl tbody tr { background: #111622; border-bottom: 1px solid #1E293B; transition: background 0.12s; }"
-            ".mx-salute-tbl tbody tr:nth-child(even) { background: #0D121B; }"
-            ".mx-salute-tbl tbody tr:hover { background: #1B2538; }"
-            ".mx-salute-tbl tbody td { padding: 11px 12px; vertical-align: middle; white-space: nowrap; }"
-            ".mx-salute-tbl tbody td.mx-fase { white-space: normal; min-width: 210px; }"
-            "</style>",
+            f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
+            f"border-radius:10px; padding:0.55rem 1.0rem; color:#F8FAFC; font-size:0.96rem; font-weight:700; line-height:1.4;'>"
+            f"📊 Tabella Salute Portafoglio &nbsp;|&nbsp; "
+            f"💼 Totale: <b>{str_vt_f}</b> &nbsp;•&nbsp; "
+            f"📈 P&amp;L: <span style='color:{col_f};'>{str_pe_f} ({pnl_p_f:+.2f}%)</span> &nbsp;•&nbsp; "
+            f"<span style='color:#CBD5E1; font-size:0.84rem;'>🕒 {ora_f}</span></div>",
             unsafe_allow_html=True,
         )
-        port_dlg = st.session_state.get("portafoglio") or []
-        sal_dlg = st.session_state.get("home_salute_portafoglio") or {}
 
-        c_dlg_l, c_dlg_r = st.columns([2.6, 1.0])
-        with c_dlg_r:
-            if st.button("🔄 Aggiorna Prezzi Live", key="btn_dialog_aggiorna_prezzi_live", type="primary", use_container_width=True):
-                with st.spinner("Aggiorno quotazioni live..."):
-                    port_dlg, sal_dlg, n_live = _aggiorna_solo_prezzi_live_portafoglio(
-                        port_dlg, eurusd_live, salute_map=sal_dlg, chiave_u=chiave_u
-                    )
-                if n_live > 0:
-                    st.toast(f"⚡ Prezzi live aggiornati su {n_live} titoli!", icon="🔄")
-                else:
-                    st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
-
-        # Calcola riepilogo live aggiornato dopo l'eventuale click sul pulsante
-        val_pos_d = 0.0
-        cap_inv_d = 0.0
-        for p_d in port_dlg:
-            q_d = float(p_d.get("Quantita", 0) or 0)
-            pmc_d = float(p_d.get("Prezzo_Medio", 0) or 0)
-            att_d = p_d.get("Prezzo_Attuale_EUR")
-            cap_inv_d += q_d * pmc_d
-            val_pos_d += q_d * float(att_d) if (att_d is not None and float(att_d or 0) > 0) else q_d * pmc_d
-        val_tot_d = round(val_pos_d + float(liq_libera_h or 0.0), 2)
-        pnl_e_d = val_pos_d - cap_inv_d
-        pnl_p_d = ((val_pos_d / cap_inv_d) - 1.0) * 100.0 if cap_inv_d > 0 else 0.0
-        col_d = "#4ADE80" if pnl_e_d >= 0 else "#F87171"
-        str_vt_d = "€ ••••" if nascondi_eur else f"€ {val_tot_d:,.2f}"
-        str_pe_d = "€ ••••" if nascondi_eur else f"€ {pnl_e_d:+,.2f}"
-        ora_dlg = (st.session_state.get("home_snapshot_decisionale") or {}).get("calcolato_alle") or _now_italia().strftime("%d/%m/%Y %H:%M")
-
-        with c_dlg_l:
-            st.markdown(
-                f"<div style='background:#131722; border:1px solid #334155; border-radius:10px; padding:0.65rem 1.05rem; "
-                f"color:#F8FAFC; font-size:1.05rem; font-weight:700; line-height:1.45;'>"
-                f"💼 Totale: <b>{str_vt_d}</b> &nbsp;•&nbsp; "
-                f"📈 P&amp;L: <span style='color:{col_d};'>{str_pe_d} ({pnl_p_d:+.2f}%)</span> &nbsp;•&nbsp; "
-                f"<span style='color:#CBD5E1; font-size:0.90rem;'>🕒 {ora_dlg}</span></div>",
-                unsafe_allow_html=True,
-            )
-
-        # Costruisce la tabella HTML ad alto contrasto con testo grande (15px) e colori verde/rosso su Oggi % e P&L %
-        righe_dlg = _costruisci_righe_tabella_salute(port_dlg, sal_dlg)
-        trs_html = []
-        for rg in righe_dlg:
-            oggi_v = str(rg.get("Oggi %", ""))
-            col_og = "#4ADE80" if "+" in oggi_v else ("#F87171" if "-" in oggi_v else "#E2E8F0")
-            pnl_v = str(rg.get("P&L %", ""))
-            col_pl = "#4ADE80" if pnl_v.startswith("+") else ("#F87171" if pnl_v.startswith("-") else "#E2E8F0")
-            trs_html.append(
-                "<tr>"
-                f"<td style='font-size:16px; font-weight:800; color:#F8FAFC;'>{rg['Ticker']}</td>"
-                f"<td style='font-weight:700; color:{col_og};'>{oggi_v}</td>"
-                f"<td style='font-weight:700; color:{col_pl};'>{pnl_v}</td>"
-                f"<td style='font-weight:700; color:#E2E8F0;'>{rg['S-Score']}</td>"
-                f"<td style='color:#E0F2FE;'>{rg['Insider SEC (90gg)']}</td>"
-                f"<td style='font-weight:600;'>{rg['SMA 200']}</td>"
-                f"<td class='mx-fase' style='color:#E2E8F0;'>{rg['Fase Weinstein']}</td>"
-                f"<td style='font-weight:600; color:#CBD5E1;'>{rg['WinRate 60gg']}</td>"
-                f"<td style='font-weight:700; color:#F8FAFC;'>{rg['Tipo']}</td>"
-                "</tr>"
-            )
-        tbl_html = "".join([
-            "<div class='mx-salute-wrap'><table class='mx-salute-tbl'>",
-            "<thead><tr>",
-            "<th>Ticker</th><th>Oggi %</th><th>P&amp;L %</th><th>S-Score</th>",
-            "<th>Insider SEC (90gg)</th><th>SMA 200</th><th>Fase Weinstein</th>",
-            "<th>WinRate 60gg</th><th>Tipo</th>",
-            "</tr></thead><tbody>",
-            "".join(trs_html),
-            "</tbody></table></div>",
-        ])
-        st.markdown(tbl_html, unsafe_allow_html=True)
-        st.caption("Chiudi con la ✖️ in alto a destra per tornare alla Home (i prezzi aggiornati restano salvati).")
+    righe_f = _costruisci_righe_tabella_salute(port_f, sal_f)
+    trs_html = []
+    for rg in righe_f:
+        oggi_v = str(rg.get("Oggi %", ""))
+        col_og = "#4ADE80" if "+" in oggi_v else ("#F87171" if "-" in oggi_v else "#E2E8F0")
+        pnl_v = str(rg.get("P&L %", ""))
+        col_pl = "#4ADE80" if pnl_v.startswith("+") else ("#F87171" if pnl_v.startswith("-") else "#E2E8F0")
+        trs_html.append(
+            "<tr>"
+            f"<td style='font-weight:800; color:#F8FAFC;'>{rg['Ticker']}</td>"
+            f"<td style='font-weight:700; color:{col_og};'>{oggi_v}</td>"
+            f"<td style='font-weight:700; color:{col_pl};'>{pnl_v}</td>"
+            f"<td style='font-weight:600; color:#E2E8F0;'>{rg['S-Score']}</td>"
+            f"<td style='color:#E0F2FE;'>{rg['Insider SEC (90gg)']}</td>"
+            f"<td style='font-weight:600;'>{rg['SMA 200']}</td>"
+            f"<td style='color:#E2E8F0;'>{rg['Fase Weinstein']}</td>"
+            f"<td style='color:#CBD5E1;'>{rg['WinRate 60gg']}</td>"
+            f"<td style='font-weight:700; color:#F8FAFC;'>{rg['Tipo']}</td>"
+            "</tr>"
+        )
+    tbl_html = "".join([
+        "<div class='mx-salute-full-wrap'><table class='mx-salute-full-tbl'>",
+        "<thead><tr>",
+        "<th>Ticker</th><th>Oggi %</th><th>P&amp;L %</th><th>S-Score</th>",
+        "<th>Insider SEC (90gg)</th><th>SMA 200</th><th>Fase Weinstein</th>",
+        "<th>WinRate 60gg</th><th>Tipo</th>",
+        "</tr></thead><tbody>",
+        "".join(trs_html),
+        "</tbody></table></div>",
+    ])
+    st.markdown(tbl_html, unsafe_allow_html=True)
 
 
 def render_home_pilota_automatico(impostazioni, semaforo_header):
@@ -9225,9 +9238,10 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                         st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
                     st.rerun()
             with c_sal_r:
-                if hasattr(st, "dialog") and st.button("🔍 Vista Grande", key="btn_home_vista_grande_salute", use_container_width=True):
+                if st.button("🔍 Vista Grande", key="btn_home_vista_grande_salute", use_container_width=True):
                     st.session_state["home_tabella_salute_aperta"] = True
-                    _apri_vista_grande_tabella_salute(eurusd_live, chiave_u, nascondi_eur, liq_libera_h)
+                    st.session_state["vista_attiva"] = "tabella_salute_full"
+                    st.rerun()
 
             righe_sal = _costruisci_righe_tabella_salute(port_h, salute_map)
             st.dataframe(pd.DataFrame(righe_sal), use_container_width=True, hide_index=True)
@@ -9271,6 +9285,9 @@ if st.session_state.get("vista_attiva", "home") == "home":
     )
     render_box_account_sidebar()
     render_home_pilota_automatico(impostazioni, semaforo_header)
+    st.stop()
+elif st.session_state.get("vista_attiva") == "tabella_salute_full":
+    render_vista_tabella_salute_fullscreen(impostazioni)
     st.stop()
 
 # ==============================================================================
