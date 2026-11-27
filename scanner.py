@@ -8353,18 +8353,18 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
     Tabella Salute Portafoglio con caratteri normali e puliti (13.5px) e pulsante
     '🔄 Aggiorna Prezzi Live' sempre visibile in cima.
     """
-    # Nasconde temporaneamente la sidebar e azzera i margini laterali per riempire il 100% dello schermo
+    # Nasconde temporaneamente la sidebar e lascia spazio libero sotto l'header Streamlit Cloud
     st.markdown(
         "<style>"
         "section[data-testid='stSidebar'], button[data-testid='collapsedControl'] { display: none !important; }"
-        ".block-container { max-width: 100% !important; width: 100% !important; padding: 0.75rem 1.25rem 1.2rem 1.25rem !important; }"
+        "[data-testid='stMainBlockContainer'], .block-container { max-width: 100% !important; width: 100% !important; padding: 3.2rem 1.25rem 1.0rem 1.25rem !important; }"
         ".mx-salute-full-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
         ".mx-salute-full-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 13.5px; color: #F8FAFC; }"
-        ".mx-salute-full-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 10px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
+        ".mx-salute-full-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 9px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
         ".mx-salute-full-tbl tbody tr { background: #111622; border-bottom: 1px solid #1E293B; }"
         ".mx-salute-full-tbl tbody tr:nth-child(even) { background: #0D121B; }"
         ".mx-salute-full-tbl tbody tr:hover { background: #1B2538; }"
-        ".mx-salute-full-tbl tbody td { padding: 8px 12px; vertical-align: middle; white-space: nowrap; }"
+        ".mx-salute-full-tbl tbody td { padding: 7px 12px; vertical-align: middle; white-space: nowrap; }"
         "</style>",
         unsafe_allow_html=True,
     )
@@ -8375,7 +8375,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
     port_f = st.session_state.get("portafoglio") or []
     sal_f = st.session_state.get("home_salute_portafoglio") or {}
 
-    c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8])
+    c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8], vertical_alignment="center")
     with c_top_m:
         if st.button("🔄 Aggiorna Prezzi Live", key="btn_full_aggiorna_prezzi_live", type="primary", use_container_width=True):
             with st.spinner("Aggiorno quotazioni live..."):
