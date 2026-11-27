@@ -8358,6 +8358,10 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
         "<style>"
         "section[data-testid='stSidebar'], button[data-testid='collapsedControl'] { display: none !important; }"
         "[data-testid='stMainBlockContainer'], .block-container { max-width: 100% !important; width: 100% !important; padding: 3.2rem 1.25rem 1.0rem 1.25rem !important; }"
+        "div[data-testid='stHorizontalBlock'] { align-items: flex-start !important; }"
+        "div[data-testid='stHorizontalBlock'] [data-testid='stMarkdownContainer'], "
+        "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] { margin: 0 !important; }"
+        "div[data-testid='stHorizontalBlock'] div[data-testid='stButton'] button { height: 42px !important; min-height: 42px !important; padding: 0 0.75rem !important; font-size: 0.88rem !important; line-height: 1.2 !important; margin: 0 !important; }"
         ".mx-salute-full-wrap { width: 100%; overflow-x: auto; border: 1px solid #334155; border-radius: 10px; background: #0B0E11; margin-top: 8px; }"
         ".mx-salute-full-tbl { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 13.5px; color: #F8FAFC; }"
         ".mx-salute-full-tbl thead th { background: #1E293B; color: #CBD5E1; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 9px 12px; text-align: left; border-bottom: 2px solid #334155; white-space: nowrap; }"
@@ -8375,7 +8379,7 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
     port_f = st.session_state.get("portafoglio") or []
     sal_f = st.session_state.get("home_salute_portafoglio") or {}
 
-    c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8], vertical_alignment="center")
+    c_top_l, c_top_m, c_top_r = st.columns([2.8, 1.0, 0.8])
     with c_top_m:
         if st.button("🔄 Aggiorna Prezzi Live", key="btn_full_aggiorna_prezzi_live", type="primary", use_container_width=True):
             with st.spinner("Aggiorno quotazioni live..."):
@@ -8416,10 +8420,11 @@ def render_vista_tabella_salute_fullscreen(impostazioni):
     with c_top_l:
         st.markdown(
             f"<div style='background:#131722; border:1px solid #334155; border-left:4px solid #38BDF8; "
-            f"border-radius:10px; padding:0.55rem 1.0rem; color:#F8FAFC; font-size:0.96rem; font-weight:700; line-height:1.4;'>"
+            f"border-radius:10px; height:42px; box-sizing:border-box; display:flex; align-items:center; "
+            f"padding:0 1.0rem; margin:0; color:#F8FAFC; font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden;'>"
             f"📊 Tabella Salute Portafoglio &nbsp;|&nbsp; "
-            f"💼 Totale: <b>{str_vt_f}</b> &nbsp;•&nbsp; "
-            f"📈 P&amp;L: <span style='color:{col_f};'>{str_pe_f} ({pnl_p_f:+.2f}%)</span> &nbsp;•&nbsp; "
+            f"💼 Totale:&nbsp;<b>{str_vt_f}</b> &nbsp;•&nbsp; "
+            f"📈 P&amp;L:&nbsp;<span style='color:{col_f};'>{str_pe_f} ({pnl_p_f:+.2f}%)</span> &nbsp;•&nbsp; "
             f"<span style='color:#CBD5E1; font-size:0.84rem;'>🕒 {ora_f}</span></div>",
             unsafe_allow_html=True,
         )
