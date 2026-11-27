@@ -313,7 +313,7 @@ def _reset_sessione_utente():
         "risultati_radar_ignition_80", "insider_results",
         "insider_promossi_oggi", "ai_palantir_candidati",
         "home_anteprima_punto_attiva", "_home_hash_caricato",
-        "home_snapshot_decisionale",
+        "home_snapshot_decisionale", "home_tabella_salute_aperta",
     ]
     for k in chiavi_reset:
         st.session_state.pop(k, None)
@@ -9017,12 +9017,17 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     # 4) Tabella Salute Portafoglio richiudibile con ordine colonne compatto:
     # [Ticker | Oggi % | P&L % | S-Score | Insider SEC (90gg) | SMA 200 | Fase Weinstein | WinRate 60gg | Tipo]
     if port_h and salute_map:
-        with st.expander("📊 Tabella Salute Portafoglio (Oggi % • P&L • S-Score • Insider SEC • SMA 200 • Fase)", expanded=False):
+        with st.expander(
+            "📊 Tabella Salute Portafoglio (Oggi % • P&L • S-Score • Insider SEC • SMA 200 • Fase)",
+            expanded=bool(st.session_state.get("home_tabella_salute_aperta", False)),
+        ):
             c_sal_l, c_sal_r = st.columns([2.4, 1.2])
             with c_sal_l:
                 st.caption(f"🕒 Quotazioni aggiornate: **{_agg_ora_h}** — clicca il tasto a destra durante Wall Street (15:30–22:00) per aggiornare i prezzi in ~1 secondo.")
             with c_sal_r:
                 if st.button("🔄 Aggiorna Prezzi Live", key="btn_home_aggiorna_prezzi_live", use_container_width=True):
+                    # Mantiene aperta la Tabella Salute anche se sopra compaiono nuovi avvisi dopo il refresh live
+                    st.session_state["home_tabella_salute_aperta"] = True
                     with st.spinner("Aggiorno quotazioni live..."):
                         _, _, n_live = _aggiorna_solo_prezzi_live_portafoglio(
                             port_h, eurusd_live, salute_map=salute_map, chiave_u=chiave_u
