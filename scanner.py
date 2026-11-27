@@ -1248,6 +1248,9 @@ def _normalizza_tipo_operazione(val_tipo):
         return "PAC"
     return "Spot"
 
+# Soglia minima anti-briciole per il raccolto parziale 50% Fonte A (€ netti dopo tasse 26% e commissioni TR)
+SOGLIA_MIN_NETTO_FONTE_A = 100.0
+
 def _commissione_default_tr(lato="ACQUISTO", tipo_op="Spot"):
     """
     Restituisce la commissione Trade Republic predefinita in Euro:
@@ -1746,14 +1749,16 @@ def calcola_regia_acquisti(ign_l, fabio_l, std_l, tp_l, port_l, df_map, cassa_b,
         q_pac_p, q_spot_p = _calcola_ripartizione_pac_spot(po)
         q_tot_p = max(1e-6, float(po.get("Quantita", 0) or 0))
 
-        # Fonte A: Raccolto Profitti parziale 50% (gain >= +35% o >= +25% con RSI > 72)
+        # Fonte A: Raccolto Profitti parziale 50% Spot (gain >= +35% o >= +25% con RSI > 72) solo se netto >= € 100
         if pnl_pct >= 35.0 or (pnl_pct >= 25.0 and rsi > 72.0):
-            v_l = va * 0.5
-            g_l = max(0.0, pnl * 0.5)
-            net_a = round(v_l - (g_l * 0.26) - 2.0, 2)
-            if net_a >= 30.0:
-                tp_set.add(ptk)
-                pool.append((1, ptk, net_a, f"💰 Fonte A — Vendi 50% **{ptk}** ({pnl_pct:+.1f}%) → netto **€ {net_a:,.2f}**"))
+            if q_spot_p > 1e-6:
+                frac_a = min(1.0, q_spot_p / q_tot_p) * 0.5
+                v_l = va * frac_a
+                g_l = max(0.0, pnl * frac_a)
+                net_a = round(v_l - (g_l * 0.26) - 2.0, 2)
+                if net_a >= SOGLIA_MIN_NETTO_FONTE_A:
+                    tp_set.add(ptk)
+                    pool.append((1, ptk, net_a, f"💰 Fonte A — Vendi 50% **{ptk}** ({pnl_pct:+.1f}%) → netto **€ {net_a:,.2f}**"))
             continue
 
         # Fonte B: SOLO quote Spot (protezione assoluta PAC anche se sospesi), no Scudo Tom Nash, no Insider SEC, no Fase 2 forte
@@ -2870,35 +2875,32 @@ def _raccogli_candidati_switch_simulazione(
         hold_score = _calcola_hold_score_posizione(pos, inf_s)
         q_pac_p, q_spot_p = _calcola_ripartizione_pac_spot(pos)
 
-        # Fonte A: Raccolto Profitti (>= +35% oppure >= +25% con RSI > 72) — preferisce parziale 50%
+        # Fonte A: Raccolto Profitti parziale 50% Spot (>= +35% oppure >= +25% con RSI > 72) — soglia anti-briciole >= € 100 netti
         if pnl_pct >= 35.0 or (pnl_pct >= 25.0 and rsi_v > 72.0):
             if q_spot_p <= 1e-6:
                 continue
-            frazione_base = min(1.0, q_spot_p / qta)
-            for perc_vend in (50, 100):
-                frac = frazione_base * (perc_vend / 100.0)
-                v_lordo = val_att * frac
-                gain_lordo = max(0.0, (val_att - val_car) * frac)
-                tasse_26 = round(gain_lordo * 0.26, 2)
-                netto_disp = round(max(0.0, v_lordo - tasse_26 - 2.0), 2)
-                if netto_disp >= 30.0:
-                    delta_q = (int(target_score) - hold_score) if target_score is not None else None
-                    candidati.append({
-                        "priorita": 1,
-                        "codice_fonte": "FONTE_A",
-                        "fonte": f"Fonte A (Raccolto {perc_vend}%)",
-                        "ticker": tk,
-                        "pct_vendita": perc_vend,
-                        "quantita": round(q_spot_p * (perc_vend / 100.0), 4),
-                        "pnl_pct": round(pnl_pct, 1),
-                        "hold_score": hold_score,
-                        "delta_qualita": delta_q,
-                        "lordo_eur": round(v_lordo, 2),
-                        "tasse_eur": tasse_26,
-                        "netto_eur": netto_disp,
-                        "motivo": f"Fonte A (Raccolto {perc_vend}%, {pnl_pct:+.1f}%) | netto € {netto_disp:,.2f} (-€ {tasse_26:,.2f} tasse, -€ 2 comm. TR)",
-                    })
-                    break
+            frac = min(1.0, q_spot_p / qta) * 0.5
+            v_lordo = val_att * frac
+            gain_lordo = max(0.0, (val_att - val_car) * frac)
+            tasse_26 = round(gain_lordo * 0.26, 2)
+            netto_disp = round(max(0.0, v_lordo - tasse_26 - 2.0), 2)
+            if netto_disp >= SOGLIA_MIN_NETTO_FONTE_A:
+                delta_q = (int(target_score) - hold_score) if target_score is not None else None
+                candidati.append({
+                    "priorita": 1,
+                    "codice_fonte": "FONTE_A",
+                    "fonte": "Fonte A (Raccolto 50%)",
+                    "ticker": tk,
+                    "pct_vendita": 50,
+                    "quantita": round(q_spot_p * 0.5, 4),
+                    "pnl_pct": round(pnl_pct, 1),
+                    "hold_score": hold_score,
+                    "delta_qualita": delta_q,
+                    "lordo_eur": round(v_lordo, 2),
+                    "tasse_eur": tasse_26,
+                    "netto_eur": netto_disp,
+                    "motivo": f"Fonte A (Raccolto 50%, {pnl_pct:+.1f}%) | netto € {netto_disp:,.2f} (-€ {tasse_26:,.2f} tasse, -€ 2 comm. TR)",
+                })
             continue
 
         # Fonte B: Rotazione Qualitativa — SOLO quote Spot (protezione assoluta PAC anche se sospesi)
@@ -3077,10 +3079,17 @@ def simula_acquisto(titolo, importo, portafoglio, eurusd_rate, esclusioni_list=N
                         'messaggio': f"🛡️ PROTETTO ({ticker_pos}, {pnl_pct:+.1f}%): {' + '.join(motivi_p)} — non sacrificare questo titolo."
                     })
                 elif pnl_pct > 0:
+                    if pnl_pct >= 35.0:
+                        msg_hold_g = (
+                            f"🟢 MANTIENI (posizione piccola): {ticker_pos} (+{pnl_pct:.1f}%) — il 50% netto è sotto "
+                            f"€ {SOGLIA_MIN_NETTO_FONTE_A:.0f} (soglia anti-briciole), lascialo correre intero protetto dal Trailing Stop."
+                        )
+                    else:
+                        msg_hold_g = f"🟢 MANTIENI: {ticker_pos} (+{pnl_pct:.1f}%) è in salute ({fase}, S-Score {s_score}/100) — nessun Delta sufficiente per ruotarlo."
                     scenari['vendita_gain'].append({
                         'ticker': ticker_pos, 'pnl_pct': round(pnl_pct, 2), 'trend_30gg': round(trend_30gg, 2),
                         'quantita': q_spot_p, 'valore': round(prezzo_eur_pos * q_spot_p, 2), 'fonte': 'HOLD',
-                        'messaggio': f"🟢 MANTIENI: {ticker_pos} (+{pnl_pct:.1f}%) è in salute ({fase}, S-Score {s_score}/100) — nessun Delta sufficiente per ruotarlo."
+                        'messaggio': msg_hold_g,
                     })
             except Exception:
                 continue
@@ -6578,22 +6587,22 @@ def _trova_riserva_liquidita_intelligente(portafoglio, salute_map, target_score=
         scudo_tn = bool(inf.get("scudo_tom_nash"))
         hold_score = _calcola_hold_score_posizione(pos, inf)
 
-        # Fonte A: Raccolto Profitti (>= +35% oppure >= +25% in ipercomprato RSI > 72)
+        # Fonte A: Raccolto Profitti parziale 50% Spot (>= +35% oppure >= +25% con RSI > 72) — soglia anti-briciole >= € 100 netti
         if pnl_pct >= 35.0 or (pnl_pct >= 25.0 and rsi_v > 72.0):
-            # Preferisce vendita parziale 50% (lascia correre il resto); 100% solo se il 50% netto + cassa < 50 €
-            motivo_a = f"forte profitto ({pnl_pct:+.1f}%)" if pnl_pct >= 35.0 else f"profitto esteso ({pnl_pct:+.1f}%, RSI {rsi_v:.0f})"
-            for perc_vend in (50, 100):
-                frac = perc_vend / 100.0
+            _, q_spot_a = _calcola_ripartizione_pac_spot(pos)
+            if q_spot_a > 1e-6:
+                motivo_a = f"forte profitto ({pnl_pct:+.1f}%)" if pnl_pct >= 35.0 else f"profitto esteso ({pnl_pct:+.1f}%, RSI {rsi_v:.0f})"
+                frac = min(1.0, q_spot_a / qta) * 0.5
                 v_lordo = val_att * frac
                 gain_lordo = max(0.0, (val_att - val_car) * frac)
                 tasse_26 = gain_lordo * 0.26
                 netto_disp = round(v_lordo - tasse_26 - 2.0, 2)
-                if (netto_disp + cassa_agg) >= 50.0 and netto_disp >= 30.0:
+                if netto_disp >= SOGLIA_MIN_NETTO_FONTE_A:
                     candidati_ris.append({
                         "priorita": 1,
                         "fonte": "Fonte A (Raccolto Profitti)",
                         "ticker": tk,
-                        "pct_vendita": perc_vend,
+                        "pct_vendita": 50,
                         "pnl_pct": round(pnl_pct, 1),
                         "hold_score": hold_score,
                         "delta_qualita": (int(target_score) - hold_score) if target_score is not None else None,
@@ -6602,7 +6611,6 @@ def _trova_riserva_liquidita_intelligente(portafoglio, salute_map, target_score=
                         "netto_eur": netto_disp,
                         "motivo": motivo_a,
                     })
-                    break
             continue
 
         # Fonte B: Rotazione Qualitativa — SOLO quote Spot (protezione assoluta PAC!)
@@ -8092,14 +8100,24 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         pnl_p = ((att_p / pmc_p) - 1.0) * 100.0 if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_pct", 0) or 0)
         pnl_e = (att_p - pmc_p) * q_p if (att_p > 0 and pmc_p > 0) else float(info_s.get("pnl_eur", 0) or 0)
 
-        # Presa profitto su guadagni molto elevati (>= +35%)
+        # Presa profitto parziale 50% su guadagni molto elevati (>= +35%) solo se rispetta soglia anti-briciole (>= € 100 netti)
         if pnl_p >= 35.0:
-            str_gain_e = "€ ••••" if nascondi_eur else f"€ {pnl_e:+,.2f}"
-            prese_profitto.append(
-                f"💰 <b>CONSIDERA PRESA PROFITTO: {tk} ({pnl_p:+.1f}%)</b> ({str_gain_e}) — "
-                f"Puoi consolidare il guadagno oppure liberare liquidità per finanziare un nuovo segnale BUY."
-            )
-            _aggiungi_bivio_home(tk, att_p, "Presa Profitto >= +35%", "Presa Profitto", pct_b=50)
+            _, q_spot_h = _calcola_ripartizione_pac_spot(pos)
+            if q_spot_h > 1e-6 and q_p > 0:
+                val_att_h = att_p * q_p if att_p > 0 else float(info_s.get("val_att", 0) or 0)
+                val_car_h = pmc_p * q_p if pmc_p > 0 else float(info_s.get("val_car", 0) or 0)
+                frac_50_h = min(1.0, q_spot_h / q_p) * 0.5
+                v_l_50 = val_att_h * frac_50_h
+                g_l_50 = max(0.0, (val_att_h - val_car_h) * frac_50_h)
+                netto_50_h = round(v_l_50 - (g_l_50 * 0.26) - 2.0, 2)
+                if netto_50_h >= SOGLIA_MIN_NETTO_FONTE_A:
+                    str_gain_e = "€ ••••" if nascondi_eur else f"€ {pnl_e:+,.2f}"
+                    str_net50_e = "€ ••••" if nascondi_eur else f"€ {netto_50_h:,.2f}"
+                    prese_profitto.append(
+                        f"💰 <b>CONSIDERA PRESA PROFITTO: {tk} ({pnl_p:+.1f}%)</b> ({str_gain_e}) — "
+                        f"Puoi consolidare il 50% (~{str_net50_e} netti) oppure liberare liquidità per finanziare un nuovo segnale BUY."
+                    )
+                    _aggiungi_bivio_home(tk, att_p, "Presa Profitto >= +35%", "Presa Profitto", pct_b=50)
             continue
 
         # Chiave corretta "buys" per acquisti ufficiali SEC Form 4 (90gg)
