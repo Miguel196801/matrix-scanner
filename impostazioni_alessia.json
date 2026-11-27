@@ -5,8 +5,9 @@
     "insider_tickers": "BSX,",
     "tickers": "MT, ONDS, TTMI",
     "watchlist": "MT, ONDS, TTMI",
-    "capitale_versato": 0.0,
+    "capitale_versato": 278.63,
     "liquidita_totale": 0.0,
     "liquidita_aggiuntiva": 0.0,
-    "ultimo_agg_prezzi": "24/11/2026 05:59"
+    "ultimo_agg_prezzi": "24/11/2026 05:59",
+    "capitale_iniziale": 278.63
 }
