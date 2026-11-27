@@ -8289,6 +8289,121 @@ def _applica_snapshot_home_a_session_state(snapshot):
     st.session_state["scansione_completata"] = True
     st.session_state["home_cascata_eseguita"] = True
 
+def _costruisci_righe_tabella_salute(port_h, salute_map):
+    """Costruisce le righe formattate della Tabella Salute Portafoglio (usate sia nella Home sia nella Vista Grande)."""
+    righe_sal = []
+    for pos in (port_h or []):
+        tk = str(pos.get("Ticker", "")).strip().upper()
+        if not tk:
+            continue
+        inf = (salute_map or {}).get(tk) or {}
+        # Variazione giornaliera "Oggi %" (con indicatore verde/rosso immediato)
+        var_oggi = pos.get("Variazione_Pct")
+        if var_oggi is None:
+            var_oggi = inf.get("var_pct_oggi")
+        if var_oggi is None:
+            c_og_s = inf.get("close_oggi")
+            c_ie_s = inf.get("close_ieri")
+            if c_og_s is not None and c_ie_s is not None and float(c_ie_s) > 0:
+                var_oggi = round(((float(c_og_s) / float(c_ie_s)) - 1.0) * 100.0, 2)
+        if var_oggi is not None:
+            vo_f = float(var_oggi)
+            ico_vo = "🟢" if vo_f > 0 else ("🔴" if vo_f < 0 else "⚪")
+            oggi_lbl = f"{ico_vo} {vo_f:+.2f}%"
+        else:
+            oggi_lbl = "⚪ N/D"
+
+        s200 = inf.get("sopra_sma200")
+        s200_lbl = "🟢 Sopra" if s200 is True else ("🔴 Sotto" if s200 is False else "⚪ N/D")
+        wr = inf.get("winrate_60g")
+        wr_lbl = f"{wr:.1f}%" if wr is not None else "N/D"
+        sec_lbl = _formatta_badge_sec_tabella(
+            inf.get("sec_buys", 0),
+            inf.get("sec_valore_usd", 0.0),
+            inf.get("sec_ultimo_acquisto", ""),
+        )
+        # Etichetta Tipo ultra-compatta anti-troncamento: PAC (🟢) / PAC (⏸️) / Spot / PAC+Spot
+        q_pac_t, q_spot_t = _calcola_ripartizione_pac_spot(pos)
+        pac_sosp_t = bool(pos.get("PAC_Sospeso", False))
+        ico_pac_t = "⏸️" if pac_sosp_t else "🟢"
+        if q_pac_t > 1e-6 and q_spot_t > 1e-6:
+            tipo_sal_lbl = f"PAC+Spot ({ico_pac_t})"
+        elif q_pac_t > 1e-6:
+            tipo_sal_lbl = f"PAC ({ico_pac_t})"
+        else:
+            tipo_sal_lbl = "Spot"
+
+        righe_sal.append({
+            "Ticker": tk,
+            "Oggi %": oggi_lbl,
+            "P&L %": f"{float(inf.get('pnl_pct', 0) or 0):+.2f}%",
+            "S-Score": f"{int(inf.get('s_score', 50) or 50)}/100",
+            "Insider SEC (90gg)": sec_lbl,
+            "SMA 200": s200_lbl,
+            "Fase Weinstein": inf.get("fase", "N/D"),
+            "WinRate 60gg": wr_lbl,
+            "Tipo": tipo_sal_lbl,
+        })
+    return righe_sal
+
+
+if hasattr(st, "dialog"):
+    @st.dialog("📊 Tabella Salute Portafoglio — Vista Grande", width="large")
+    def _apri_vista_grande_tabella_salute(eurusd_live, chiave_u, nascondi_eur, liq_libera_h):
+        """Finestra ampia della Tabella Salute con pulsante live dedicato che aggiorna in-place senza chiudersi."""
+        # Allarga la modale fino al 92% della finestra su desktop per una lettura comodissima
+        st.markdown(
+            "<style>div[role='dialog'] { width: 92vw !important; max-width: 1380px !important; }</style>",
+            unsafe_allow_html=True,
+        )
+        port_dlg = st.session_state.get("portafoglio") or []
+        sal_dlg = st.session_state.get("home_salute_portafoglio") or {}
+
+        c_dlg_l, c_dlg_r = st.columns([2.4, 1.1])
+        with c_dlg_r:
+            if st.button("🔄 Aggiorna Prezzi Live", key="btn_dialog_aggiorna_prezzi_live", type="primary", use_container_width=True):
+                with st.spinner("Aggiorno quotazioni live..."):
+                    port_dlg, sal_dlg, n_live = _aggiorna_solo_prezzi_live_portafoglio(
+                        port_dlg, eurusd_live, salute_map=sal_dlg, chiave_u=chiave_u
+                    )
+                if n_live > 0:
+                    st.toast(f"⚡ Prezzi live aggiornati su {n_live} titoli!", icon="🔄")
+                else:
+                    st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
+
+        # Calcola riepilogo live aggiornato dopo l'eventuale click sul pulsante
+        val_pos_d = 0.0
+        cap_inv_d = 0.0
+        for p_d in port_dlg:
+            q_d = float(p_d.get("Quantita", 0) or 0)
+            pmc_d = float(p_d.get("Prezzo_Medio", 0) or 0)
+            att_d = p_d.get("Prezzo_Attuale_EUR")
+            cap_inv_d += q_d * pmc_d
+            val_pos_d += q_d * float(att_d) if (att_d is not None and float(att_d or 0) > 0) else q_d * pmc_d
+        val_tot_d = round(val_pos_d + float(liq_libera_h or 0.0), 2)
+        pnl_e_d = val_pos_d - cap_inv_d
+        pnl_p_d = ((val_pos_d / cap_inv_d) - 1.0) * 100.0 if cap_inv_d > 0 else 0.0
+        col_d = "#4ADE80" if pnl_e_d >= 0 else "#F87171"
+        str_vt_d = "€ ••••" if nascondi_eur else f"€ {val_tot_d:,.2f}"
+        str_pe_d = "€ ••••" if nascondi_eur else f"€ {pnl_e_d:+,.2f}"
+        ora_dlg = (st.session_state.get("home_snapshot_decisionale") or {}).get("calcolato_alle") or _now_italia().strftime("%d/%m/%Y %H:%M")
+
+        with c_dlg_l:
+            st.markdown(
+                f"<div style='background:#131722; border:1px solid #334155; border-radius:10px; padding:0.60rem 0.95rem; "
+                f"color:#F8FAFC; font-size:0.95rem; font-weight:700; line-height:1.45;'>"
+                f"💼 Totale: <b>{str_vt_d}</b> &nbsp;•&nbsp; "
+                f"📈 P&amp;L: <span style='color:{col_d};'>{str_pe_d} ({pnl_p_d:+.2f}%)</span> &nbsp;•&nbsp; "
+                f"<span style='color:#CBD5E1; font-size:0.84rem;'>🕒 {ora_dlg}</span></div>",
+                unsafe_allow_html=True,
+            )
+
+        righe_dlg = _costruisci_righe_tabella_salute(port_dlg, sal_dlg)
+        h_dlg = min(640, max(220, 38 * len(righe_dlg) + 42))
+        st.dataframe(pd.DataFrame(righe_dlg), use_container_width=True, hide_index=True, height=h_dlg)
+        st.caption("Chiudi con la ✖️ in alto a destra per tornare alla Home (i prezzi aggiornati restano salvati).")
+
+
 def render_home_pilota_automatico(impostazioni, semaforo_header):
     """
     Renderizza la '🏠 Home Page — Pilota Automatico' con cache istantanea (@st.cache_data ttl=1200):
@@ -8923,8 +9038,25 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         for idx_pr, av_p in enumerate(avvisi_protezione_home):
             tk_p = av_p["ticker"]
             pnl_s = f"{float(av_p.get('pnl_pct') or 0.0):+.1f}%".replace(".", ",")
-            sl_s = "€ ••••" if nascondi_eur else f"€ {float(av_p.get('sl_eur') or 0.0):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-            max_s = "€ ••••" if nascondi_eur else f"€ {float(av_p.get('max_eur') or 0.0):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            sl_f = float(av_p.get("sl_eur") or 0.0)
+            pmc_f = float(av_p.get("pmc_eur") or 0.0)
+            pr_f = float(av_p.get("prezzo_eur") or 0.0)
+            mx_f = float(av_p.get("max_eur") or 0.0)
+            sl_s = "€ ••••" if nascondi_eur else f"€ {sl_f:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            max_s = "€ ••••" if nascondi_eur else f"€ {mx_f:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            prezzo_s = "€ ••••" if nascondi_eur else f"€ {pr_f:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            pmc_s = "€ ••••" if nascondi_eur else f"€ {pmc_f:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+            dist_att_f = av_p.get("dist_da_attuale_pct")
+            if dist_att_f is None and pr_f > 0:
+                dist_att_f = round(((sl_f / pr_f) - 1.0) * 100.0, 1)
+            dist_att_s = f"{float(dist_att_f or 0.0):+.1f}%".replace(".", ",")
+
+            gain_bl_f = av_p.get("gain_blindato_pct")
+            if gain_bl_f is None and pmc_f > 0:
+                gain_bl_f = round(((sl_f / pmc_f) - 1.0) * 100.0, 1)
+            gain_bl_s = f"{float(gain_bl_f or 0.0):+.1f}%".replace(".", ",")
+
             if av_p.get("is_misto_pac_spot"):
                 q_sp_raw = float(av_p.get("qta_spot") or 0.0)
                 q_sp_lbl = f"{int(q_sp_raw)}" if abs(q_sp_raw - round(q_sp_raw)) < 1e-4 else f"{q_sp_raw:.2f}".replace(".", ",")
@@ -8937,11 +9069,16 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             )
 
             if av_p.get("tipo_protezione") == "TRAILING":
-                tit_prot = f"🏆 PROTEGGI IL PROFITTO ACCUMULATO — {tk_p} ({pnl_s}, massimo {max_s}): alziamo la rete di sicurezza per blindare il guadagno."
+                mot_gr_p = str(av_p.get("motivo_grafico") or "-6% dal massimo, calibrato sulla volatilità del titolo")
+                tit_prot = f"🏆 PROTEGGI IL PROFITTO ACCUMULATO — {tk_p} ({pnl_s}, massimo {max_s}): alziamo la rete di sicurezza calibrata sul grafico del titolo."
                 corpo_prot = (
                     f"👉 <b>Cosa fare su Trade Republic (30 secondi):</b> Apri <b>{tk_p}</b> → <b>Vendi</b> → "
-                    f"<b>Ordine Stop</b> → sposta il prezzo di protezione a <b>{sl_s}</b> (-6% dal massimo){nota_misto_p}{nota_racc_p}. "
-                    f"Così la maggior parte del guadagno resta al sicuro!"
+                    f"<b>Ordine Stop</b> → sposta il prezzo di protezione a <b>{sl_s}</b> ({mot_gr_p}){nota_misto_p}{nota_racc_p}. "
+                    f"Così lasci respirare il trend e la maggior parte del guadagno resta al sicuro!"
+                )
+                impatto_prot = (
+                    f"📊 <b>Se scatta lo Stop:</b> <b>{dist_att_s}</b> rispetto al prezzo attuale ({prezzo_s}) → "
+                    f"blindato un guadagno di <b style='color:#4ADE80;'>{gain_bl_s}</b> sul tuo prezzo di carico ({pmc_s})."
                 )
             else:
                 tit_prot = f"🛡️ METTI AL SICURO IL GUADAGNO — {tk_p} ({pnl_s}): ora possiamo azzerare il rischio di perdita."
@@ -8950,12 +9087,22 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                     f"<b>Ordine Stop</b> → imposta il prezzo a <b>{sl_s}</b> (il tuo prezzo di carico){nota_misto_p}{nota_racc_p}. "
                     f"Così se scende esci senza perdere un euro; se sale, lasci correre il guadagno!"
                 )
+                impatto_prot = (
+                    f"📊 <b>Se scatta lo Stop:</b> <b>{dist_att_s}</b> rispetto al prezzo attuale ({prezzo_s}) → "
+                    f"chiudi comunque a <b style='color:#4ADE80;'>0,0% (pareggio)</b> sul tuo prezzo di carico."
+                )
 
+            nota_notifica_prot = (
+                "📲 Una volta inserito, <b>Trade Republic</b> ti avviserà subito se lo Stop scatta; "
+                "<b>MATRIX</b> (e Telegram) ti avviseranno quando converrà alzare ancora la protezione o registrare la vendita."
+            )
             _card_prot_html = "".join([
                 "<div style='background:#0F2436; border:1px solid #38BDF8; border-left:5px solid #38BDF8; ",
                 "border-radius:12px; padding:1.05rem 1.25rem; margin-bottom:0.45rem; color:#E0F2FE;'>",
                 f"<div style='font-size:0.97rem; font-weight:800; color:#F8FAFC; line-height:1.45; margin-bottom:0.40rem;'>{tit_prot}</div>",
-                f"<div style='font-size:0.92rem; color:#E0F2FE; line-height:1.55;'>{corpo_prot}</div>",
+                f"<div style='font-size:0.92rem; color:#E0F2FE; line-height:1.55; margin-bottom:0.38rem;'>{corpo_prot}</div>",
+                f"<div style='font-size:0.89rem; color:#BAE6FD; line-height:1.45; padding-top:0.32rem; border-top:1px solid rgba(56,189,248,0.25);'>{impatto_prot}</div>",
+                f"<div style='font-size:0.84rem; color:#CBD5E1; line-height:1.42; margin-top:0.30rem;'>{nota_notifica_prot}</div>",
                 "</div>",
             ])
             st.markdown(_card_prot_html, unsafe_allow_html=True)
@@ -9021,10 +9168,10 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
             "📊 Tabella Salute Portafoglio (Oggi % • P&L • S-Score • Insider SEC • SMA 200 • Fase)",
             expanded=bool(st.session_state.get("home_tabella_salute_aperta", False)),
         ):
-            c_sal_l, c_sal_r = st.columns([2.4, 1.2])
+            c_sal_l, c_sal_m, c_sal_r = st.columns([2.0, 1.05, 0.95])
             with c_sal_l:
-                st.caption(f"🕒 Quotazioni aggiornate: **{_agg_ora_h}** — clicca il tasto a destra durante Wall Street (15:30–22:00) per aggiornare i prezzi in ~1 secondo.")
-            with c_sal_r:
+                st.caption(f"🕒 Quotazioni aggiornate: **{_agg_ora_h}** — aggiorna in ~1 secondo durante Wall Street (15:30–22:00).")
+            with c_sal_m:
                 if st.button("🔄 Aggiorna Prezzi Live", key="btn_home_aggiorna_prezzi_live", use_container_width=True):
                     # Mantiene aperta la Tabella Salute anche se sopra compaiono nuovi avvisi dopo il refresh live
                     st.session_state["home_tabella_salute_aperta"] = True
@@ -9037,58 +9184,12 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                     else:
                         st.toast("⚠️ Impossibile scaricare quotazioni live al momento.", icon="⚠️")
                     st.rerun()
+            with c_sal_r:
+                if hasattr(st, "dialog") and st.button("🔍 Vista Grande", key="btn_home_vista_grande_salute", use_container_width=True):
+                    st.session_state["home_tabella_salute_aperta"] = True
+                    _apri_vista_grande_tabella_salute(eurusd_live, chiave_u, nascondi_eur, liq_libera_h)
 
-            righe_sal = []
-            for pos in port_h:
-                tk = str(pos.get("Ticker", "")).strip().upper()
-                inf = salute_map.get(tk) or {}
-                # Variazione giornaliera "Oggi %" (con indicatore verde/rosso immediato)
-                var_oggi = pos.get("Variazione_Pct")
-                if var_oggi is None:
-                    var_oggi = inf.get("var_pct_oggi")
-                if var_oggi is None:
-                    c_og_s = inf.get("close_oggi")
-                    c_ie_s = inf.get("close_ieri")
-                    if c_og_s is not None and c_ie_s is not None and float(c_ie_s) > 0:
-                        var_oggi = round(((float(c_og_s) / float(c_ie_s)) - 1.0) * 100.0, 2)
-                if var_oggi is not None:
-                    vo_f = float(var_oggi)
-                    ico_vo = "🟢" if vo_f > 0 else ("🔴" if vo_f < 0 else "⚪")
-                    oggi_lbl = f"{ico_vo} {vo_f:+.2f}%"
-                else:
-                    oggi_lbl = "⚪ N/D"
-
-                s200 = inf.get("sopra_sma200")
-                s200_lbl = "🟢 Sopra" if s200 is True else ("🔴 Sotto" if s200 is False else "⚪ N/D")
-                wr = inf.get("winrate_60g")
-                wr_lbl = f"{wr:.1f}%" if wr is not None else "N/D"
-                sec_lbl = _formatta_badge_sec_tabella(
-                    inf.get("sec_buys", 0),
-                    inf.get("sec_valore_usd", 0.0),
-                    inf.get("sec_ultimo_acquisto", ""),
-                )
-                # Etichetta Tipo ultra-compatta anti-troncamento: PAC (🟢) / PAC (⏸️) / Spot / PAC+Spot
-                q_pac_t, q_spot_t = _calcola_ripartizione_pac_spot(pos)
-                pac_sosp_t = bool(pos.get("PAC_Sospeso", False))
-                ico_pac_t = "⏸️" if pac_sosp_t else "🟢"
-                if q_pac_t > 1e-6 and q_spot_t > 1e-6:
-                    tipo_sal_lbl = f"PAC+Spot ({ico_pac_t})"
-                elif q_pac_t > 1e-6:
-                    tipo_sal_lbl = f"PAC ({ico_pac_t})"
-                else:
-                    tipo_sal_lbl = "Spot"
-
-                righe_sal.append({
-                    "Ticker": tk,
-                    "Oggi %": oggi_lbl,
-                    "P&L %": f"{float(inf.get('pnl_pct', 0) or 0):+.2f}%",
-                    "S-Score": f"{int(inf.get('s_score', 50) or 50)}/100",
-                    "Insider SEC (90gg)": sec_lbl,
-                    "SMA 200": s200_lbl,
-                    "Fase Weinstein": inf.get("fase", "N/D"),
-                    "WinRate 60gg": wr_lbl,
-                    "Tipo": tipo_sal_lbl,
-                })
+            righe_sal = _costruisci_righe_tabella_salute(port_h, salute_map)
             st.dataframe(pd.DataFrame(righe_sal), use_container_width=True, hide_index=True)
 
     # 5) Pulsante ben visibile in fondo alla Home Page per passare al Terminale Completo

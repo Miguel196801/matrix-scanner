@@ -604,6 +604,89 @@ def _calcola_sl_pct_da_ohlc(df_ohlc, fallback=0.08):
         return fallback
 
 
+def _calcola_trailing_stop_adattivo_grafico(
+    df_ohlc,
+    mx_eur,
+    p_live_eur,
+    pmc_eur,
+    t1_eur,
+    conv=1.0,
+    dist_prec_pct=None,
+):
+    """
+    Calcola il Trailing Stop adattivo per i titoli in forte guadagno (Caso 2 / oltre T2)
+    combinando volatilità reale (2 x ATR14, clampata tra -6% e -11% dal massimo) e supporto
+    grafico della media mobile a 20 giorni (SMA 20 x 0.985), lasciando almeno -5% di respiro
+    dal prezzo attuale se possibile e restando sempre sopra il PMC (prezzo di carico).
+    Restituisce (sl_finale_eur, dist_dal_max_pct, motivo_grafico_str).
+    """
+    mx = float(mx_eur or p_live_eur or pmc_eur or 0.0)
+    pl = float(p_live_eur or mx or pmc_eur or 0.0)
+    pmc = float(pmc_eur or 0.0)
+    t1 = float(t1_eur or pmc)
+    cv = float(conv or 1.0) if float(conv or 1.0) > 0 else 1.0
+
+    dist_atr = float(dist_prec_pct) / 100.0 if (dist_prec_pct is not None and 5.5 <= float(dist_prec_pct) <= 12.0) else 0.08
+    sl_sma20 = None
+    ha_dati_graf = False
+
+    try:
+        if df_ohlc is not None and not df_ohlc.empty and len(df_ohlc) >= 15:
+            closes = df_ohlc['Close'].dropna()
+            highs = df_ohlc['High'].dropna()
+            lows = df_ohlc['Low'].dropna()
+            if len(closes) >= 15 and len(highs) >= 14 and len(lows) >= 14:
+                atr14_nat = float((highs - lows).tail(14).mean())
+                mx_nat = max(float(highs.tail(60).max()), mx * cv)
+                if mx_nat > 0 and atr14_nat > 0:
+                    dist_atr = max(0.06, min(0.11, (2.0 * atr14_nat) / mx_nat))
+                    ha_dati_graf = True
+                if len(closes) >= 20:
+                    sma20_nat = float(closes.rolling(20).mean().iloc[-1])
+                    if sma20_nat > 0:
+                        sl_sma20 = round((sma20_nat / cv) * 0.985, 2)
+    except Exception:
+        pass
+
+    sl_atr = round(mx * (1.0 - dist_atr), 2)
+    pavimento = round(max(pmc, t1), 2)
+    # Se il prezzo live è vicino o sotto T1, garantisce comunque il pavimento almeno al PMC
+    if pavimento >= pl * 0.995:
+        pavimento = pmc
+
+    scelto_sma = False
+    if sl_sma20 is not None and sl_sma20 >= pavimento:
+        # Sceglie il più alto tra sl_atr e sl_sma20 purché lasci almeno -5% di respiro dal prezzo attuale
+        cand_alto = max(sl_atr, sl_sma20)
+        cand_basso = min(sl_atr, sl_sma20)
+        if cand_alto <= pl * 0.95:
+            sl_fin = cand_alto
+            scelto_sma = (cand_alto == sl_sma20 and abs(sl_sma20 - sl_atr) > 0.05)
+        elif cand_basso <= pl * 0.95:
+            sl_fin = cand_basso
+            scelto_sma = (cand_basso == sl_sma20)
+        else:
+            sl_fin = cand_basso
+            scelto_sma = (cand_basso == sl_sma20)
+    else:
+        sl_fin = sl_atr
+
+    sl_fin = round(max(pavimento, sl_fin), 2)
+    # Su Trade Republic un Ordine Stop di vendita deve essere sempre sotto il prezzo di mercato attuale
+    if sl_fin >= pl * 0.995:
+        sl_fin = round(max(pmc, pl * (1.0 - dist_atr)), 2)
+
+    dist_max_eff = round(max(0.0, ((mx - sl_fin) / mx) * 100.0), 1) if mx > 0 else round(dist_atr * 100.0, 1)
+    dist_str = f"{dist_max_eff:.1f}".replace('.', ',')
+    if scelto_sma:
+        motivo = f"-{dist_str}% dal massimo, appena sotto il supporto della media a 20 giorni"
+    elif ha_dati_graf and sl_sma20 is not None:
+        motivo = f"-{dist_str}% dal massimo, calibrato sulla volatilità del titolo / supporto media 20 giorni"
+    else:
+        motivo = f"-{dist_str}% dal massimo, calibrato sulla volatilità del titolo"
+    return sl_fin, dist_max_eff, motivo
+
+
 def _costruisci_dict_avviso_protezione(rec, pos_reale):
     """Costruisce il dizionario strutturato per la card azzurra Protezione Profitto della Home Page."""
     tk = str(rec.get('Ticker') or '').strip().upper()
@@ -613,10 +696,16 @@ def _costruisci_dict_avviso_protezione(rec, pos_reale):
     sl_val = round(float(rec.get('Stop_Loss') or pmc), 2)
     mx_val = round(max(float(rec.get('Max_Price') or p_live), p_live, pmc), 2)
     pnl_pct = round(((p_live / pmc) - 1.0) * 100.0, 1) if (pmc > 0 and p_live > 0) else 0.0
+    dist_att_pct = round(((sl_val / p_live) - 1.0) * 100.0, 1) if p_live > 0 else 0.0
+    gain_blind_pct = round(((sl_val / pmc) - 1.0) * 100.0, 1) if pmc > 0 else 0.0
     step_tr = int(rec.get('Step_Trailing') or 0)
     tipo_prot = str(rec.get('Avviso_SL_Tipo') or '').strip().upper()
     if tipo_prot not in ('PAREGGIO', 'TRAILING'):
         tipo_prot = 'TRAILING' if (step_tr >= 2 or sl_val > pmc * 1.01) else 'PAREGGIO'
+    motivo_gr = str(rec.get('Avviso_SL_Motivo_Grafico') or '').strip()
+    if not motivo_gr and tipo_prot == 'TRAILING':
+        d_m = round(max(0.0, ((mx_val - sl_val) / mx_val) * 100.0), 1) if mx_val > 0 else 6.0
+        motivo_gr = f"-{str(d_m).replace('.', ',')}% dal massimo, calibrato sulla volatilità del titolo"
     return {
         'ticker': tk,
         'tipo_protezione': tipo_prot,
@@ -625,6 +714,9 @@ def _costruisci_dict_avviso_protezione(rec, pos_reale):
         'prezzo_eur': p_live,
         'max_eur': mx_val,
         'pnl_pct': pnl_pct,
+        'dist_da_attuale_pct': dist_att_pct,
+        'gain_blindato_pct': gain_blind_pct,
+        'motivo_grafico': motivo_gr,
         'is_misto_pac_spot': bool(q_pac > 1e-6 and q_spot > 1e-6),
         'qta_spot': round(q_spot, 4),
         'qta_pac': round(q_pac, 4),
@@ -680,10 +772,19 @@ def _invia_notifica_telegram(utente, messaggio):
 
 def _formatta_messaggio_telegram_sl(av_d, utente=''):
     """Compone un messaggio push Telegram chiaro e guidato passo-passo per Trade Republic (senza sigle tecniche)."""
+    def _eur_it(v):
+        return f"€ {float(v or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+
     tk = str(av_d.get('ticker') or '').strip().upper()
     pnl_s = f"{float(av_d.get('pnl_pct') or 0.0):+.1f}%".replace('.', ',')
-    sl_s = f"€ {float(av_d.get('sl_eur') or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
-    max_s = f"€ {float(av_d.get('max_eur') or 0.0):,.2f}".replace(',', '_').replace('.', ',').replace('_', '.')
+    sl_s = _eur_it(av_d.get('sl_eur'))
+    max_s = _eur_it(av_d.get('max_eur'))
+    prezzo_s = _eur_it(av_d.get('prezzo_eur'))
+    pmc_s = _eur_it(av_d.get('pmc_eur'))
+    dist_s = f"{float(av_d.get('dist_da_attuale_pct') or 0.0):+.1f}%".replace('.', ',')
+    gain_b_f = float(av_d.get('gain_blindato_pct') or 0.0)
+    gain_b_s = f"{gain_b_f:+.1f}%".replace('.', ',')
+    mot_g = str(av_d.get('motivo_grafico') or '-6% dal massimo')
     nome_u = str(utente or '').strip().capitalize()
     saluto = f"Ciao {nome_u}, " if nome_u else ""
     if av_d.get('is_misto_pac_spot'):
@@ -694,18 +795,28 @@ def _formatta_messaggio_telegram_sl(av_d, utente=''):
         nota_misto = ''
 
     if av_d.get('tipo_protezione') == 'TRAILING':
+        riga_impatto = (
+            f"📊 <b>Se scatta lo Stop:</b> <b>{dist_s}</b> rispetto al prezzo attuale ({prezzo_s}) → "
+            f"blindato un guadagno di <b>{gain_b_s}</b> sul tuo prezzo di carico ({pmc_s})."
+        )
         return (
             f"🏆 <b>MATRIX PRO — PROTEGGI IL PROFITTO ({tk})</b>\n"
-            f"{saluto}<b>{tk}</b> è a <b>{pnl_s}</b> (massimo {max_s}): alziamo la rete di sicurezza!\n\n"
+            f"{saluto}<b>{tk}</b> è a <b>{pnl_s}</b> (massimo {max_s}): alziamo la rete di sicurezza calibrata sul grafico del titolo!\n\n"
             f"👉 <b>Trade Republic (30 secondi):</b>\n"
-            f"Apri <b>{tk}</b> → Vendi → Ordine Stop → imposta il prezzo a <b>{sl_s}</b> (-6% dal massimo){nota_misto}.\n"
+            f"Apri <b>{tk}</b> → Vendi → Ordine Stop → imposta il prezzo a <b>{sl_s}</b> ({mot_g}){nota_misto}.\n"
+            f"{riga_impatto}\n"
             f"Poi clicca <i>✅ Fatto, Stop Loss inserito</i> nell'app MATRIX."
         )
+    riga_impatto_p = (
+        f"📊 <b>Se scatta lo Stop:</b> <b>{dist_s}</b> rispetto al prezzo attuale ({prezzo_s}) → "
+        f"chiudi comunque a <b>0,0% (pareggio)</b> sul tuo prezzo di carico."
+    )
     return (
         f"🛡️ <b>MATRIX PRO — METTI AL SICURO IL GUADAGNO ({tk})</b>\n"
         f"{saluto}<b>{tk}</b> è a <b>{pnl_s}</b>: ora possiamo azzerare il rischio di perdita!\n\n"
         f"👉 <b>Trade Republic (30 secondi):</b>\n"
         f"Apri <b>{tk}</b> → Vendi → Ordine Stop → imposta il prezzo a <b>{sl_s}</b> (prezzo di carico){nota_misto}.\n"
+        f"{riga_impatto_p}\n"
         f"Poi clicca <i>✅ Fatto, Stop Loss inserito</i> nell'app MATRIX."
     )
 
@@ -891,20 +1002,32 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
 
         # Valutazione Protezione Profitto: solo se il prezzo attuale è sopra il livello Stop da inserire su TR
         if t2_r > 0 and mx_r >= t2_r and p_live > pmc * 1.02:
-            nuovo_sl = round(max(pmc, t1_r, mx_r * 0.94), 2)
-            # Su Trade Republic un Ordine Stop di vendita deve essere inferiore al prezzo di mercato corrente
-            if nuovo_sl >= p_live * 0.995:
-                nuovo_sl = round(max(pmc, p_live * 0.94), 2)
-            if nuovo_sl > sl_r:
+            nuovo_sl, dist_mx_pct, mot_graf = _calcola_trailing_stop_adattivo_grafico(
+                df_ohlc=df_ohlc,
+                mx_eur=mx_r,
+                p_live_eur=p_live,
+                pmc_eur=pmc,
+                t1_eur=t1_r,
+                conv=conv,
+                dist_prec_pct=rec.get('Avviso_SL_Dist_Max_Pct'),
+            )
+            # Se l'utente non ha ancora confermato lo SL su TR, adotta subito il nuovo Trailing calibrato sul grafico;
+            # una volta confermato (sl_conf > 0), lo Stop Loss si alza soltanto e non scende mai.
+            aggiorna_sl_t2 = (nuovo_sl > sl_r) or (sl_conf <= 0 and df_ohlc is not None and abs(nuovo_sl - sl_r) >= 0.05)
+            if aggiorna_sl_t2:
                 rec['Stop_Loss'] = nuovo_sl
                 sl_r = nuovo_sl
+                upd = True
+            if rec.get('Avviso_SL_Motivo_Grafico') != mot_graf or rec.get('Avviso_SL_Dist_Max_Pct') != dist_mx_pct:
+                rec['Avviso_SL_Motivo_Grafico'] = mot_graf
+                rec['Avviso_SL_Dist_Max_Pct'] = dist_mx_pct
                 upd = True
             if step_tr < 2:
                 rec['Step_Trailing'] = 2
                 upd = True
             if p_live > sl_r and _sl_merita_nuovo_avviso(sl_r, sl_conf):
                 rec['Avviso_SL_Tipo'] = 'TRAILING'
-                rec['Avviso_SL'] = f"🏆 {tk}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (-6% dal massimo € {mx_r:.2f})."
+                rec['Avviso_SL'] = f"🏆 {tk}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} ({mot_graf})."
                 upd = True
         elif t1_r > 0 and mx_r >= t1_r and p_live > pmc * 1.005:
             if sl_r < pmc:
@@ -1241,14 +1364,24 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                                         sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (pareggio)."
                                     upd = True
                                 if tg_r > 0 and hi >= tg_r:
-                                    nuovo_sl = round(max(t1_r, mx_r * 0.94), 2)
+                                    nuovo_sl, dist_mx_tr, mot_tr = _calcola_trailing_stop_adattivo_grafico(
+                                        df_ohlc=hr,
+                                        mx_eur=mx_r,
+                                        p_live_eur=p_cur,
+                                        pmc_eur=en_r,
+                                        t1_eur=t1_r,
+                                        conv=conv_r,
+                                        dist_prec_pct=sh_list[idx_s].get('Avviso_SL_Dist_Max_Pct'),
+                                    )
                                     if nuovo_sl > sl_r:
                                         sl_r = nuovo_sl
                                         sh_list[idx_s]['Stop_Loss'] = sl_r
                                         sh_list[idx_s]['Step_Trailing'] = 2
+                                        sh_list[idx_s]['Avviso_SL_Motivo_Grafico'] = mot_tr
+                                        sh_list[idx_s]['Avviso_SL_Dist_Max_Pct'] = dist_mx_tr
                                         if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
                                             sh_list[idx_s]['Avviso_SL_Tipo'] = 'TRAILING'
-                                            sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (-6% dal massimo € {mx_r:.2f})."
+                                            sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} ({mot_tr})."
                                         upd = True
                                 if sl_r > 0 and lo <= sl_r:
                                     st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
