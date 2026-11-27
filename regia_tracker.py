@@ -1,11 +1,51 @@
-import json, os
-from datetime import datetime, timedelta
+import json, os, re
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import streamlit as st
 import yfinance as yf
 
 SHADOW_FILE = 'shadow_regia.json'
 SKIP_FILE = 'skip_regia.json'
+
+_SUFFISSI_EUR = ('.MI', '.DE', '.PA', '.AS', '.F', '.MC', '.BR', '.VI', '.HE', '.LS')
+
+
+def _oggi_italia_str():
+    """Restituisce la data odierna (YYYY-MM-DD) nel fuso orario italiano Europe/Rome."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo('Europe/Rome')).strftime('%Y-%m-%d')
+    except Exception:
+        return datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+
+
+def _fattore_cambio_ticker(tk, eurusd_rate, currency_hint=None):
+    """Restituisce 1.0 se il titolo è quotato in EUR, altrimenti il cambio EUR/USD."""
+    cur = str(currency_hint or '').strip().upper()
+    if cur == 'EUR':
+        return 1.0
+    tk_u = str(tk or '').strip().upper()
+    if any(tk_u.endswith(suf) for suf in _SUFFISSI_EUR):
+        return 1.0
+    return float(eurusd_rate or 1.12)
+
+
+def _normalizza_motivo_bivio(motivo):
+    """Genera un codice stabile dal motivo del bivio per costruire Bivio_ID univoci."""
+    txt = str(motivo or 'VENDITA').strip().upper()
+    slug = re.sub(r'[^A-Z0-9]+', '_', txt).strip('_')
+    return slug[:28] or 'VENDITA'
+
+
+def _calcola_netto_eur_trade(entry_eur, exit_o_cur_eur, taglia_eur):
+    """Calcola (pct, netto_eur) post tasse italiane 26% sulla sola plusvalenza."""
+    en = float(entry_eur or 0.0)
+    ex = float(exit_o_cur_eur or en)
+    tg = float(taglia_eur or 200.0)
+    pct = ((ex - en) / en) * 100.0 if en > 0 else 0.0
+    lordo = tg * (pct / 100.0)
+    netto = round(lordo - max(0.0, lordo * 0.26), 2)
+    return pct, netto
 
 def _risolvi_file_utente(path):
     """Risolve dinamicamente il file JSON in base all'utente autenticato in st.session_state."""
@@ -138,6 +178,702 @@ def _is_operazione_portafoglio_reale(rec):
     return ('PORTAFOGLIO REALE' in fonti) or ('PORTAFOGLIO REALE' in segnale)
 
 
+def _inferisci_tipo_segnale_sistema(rec):
+    """Restituisce il tipo normalizzato di un record Metodo Sistema per la protezione anti-duplicati."""
+    tp = str((rec or {}).get('Tipo_Segnale') or '').strip().upper()
+    if tp:
+        return tp
+    seg = str((rec or {}).get('Segnale') or '').strip().upper()
+    if 'TOP 1' in seg or 'TOP1' in seg:
+        return 'TOP1_BUY'
+    if 'DCA' in seg:
+        return 'DCA_B2' if '2' in seg else 'DCA_B1'
+    if 'BIVIO' in seg:
+        return 'BIVIO_VENDITA'
+    return 'MANUALE'
+
+
+def registra_segnali_pilota_automatico(snapshot_dec, portafoglio=None, eurusd_rate=1.12, liq_libera=0.0, taglia_default=200.0):
+    """
+    Registra automaticamente (senza duplicati) in regia_tracker*.json (Origine='Metodo Sistema')
+    i segnali operativi confermati emessi dal Pilota Automatico della Home Page:
+    - Top 1 BUY sbloccato (con cassa >= 40 € oppure Piano B valido Super-Score >= 85 & R/R >= 2.0)
+    - DCA Doppio Binario (quando non scatta un Top 1 BUY)
+    Restituisce il numero di nuovi segnali registrati.
+    """
+    if not isinstance(snapshot_dec, dict):
+        return 0
+    rate = float(eurusd_rate or 1.12)
+    liq = max(0.0, float(liq_libera or 0.0))
+    oggi = _oggi_italia_str()
+
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        sh_list = []
+
+    # Set anti-duplicati: blocca stesso (Ticker, Tipo_Segnale) se già Attivo o già registrato oggi
+    attivi_sys = set()
+    oggi_sys = set()
+    for r in sh_list:
+        if not isinstance(r, dict) or _is_operazione_portafoglio_reale(r):
+            continue
+        tk_e = str(r.get('Ticker') or '').strip().upper()
+        tp_e = _inferisci_tipo_segnale_sistema(r)
+        dt_e = str(r.get('Data_Ingresso') or '')[:10]
+        if not tk_e:
+            continue
+        if str(r.get('Stato') or '') == 'Attivo':
+            attivi_sys.add((tk_e, tp_e))
+        if dt_e == oggi:
+            oggi_sys.add((tk_e, tp_e))
+
+    aggiunti = 0
+    top1_emesso = False
+
+    # 1) TOP 1 BUY confermato dal Pilota Automatico (senza veto regime)
+    veto_msg = snapshot_dec.get('veto_regime_msg')
+    top1_cand = snapshot_dec.get('top1_cand')
+    riserva = snapshot_dec.get('riserva')
+    if (not veto_msg) and isinstance(top1_cand, dict) and top1_cand.get('ticker'):
+        sbloccato_cassa = liq >= 40.0
+        sbloccato_pb = (
+            (not sbloccato_cassa)
+            and int(top1_cand.get('super_score', 0) or 0) >= 85
+            and float(top1_cand.get('rr', 0) or 0) >= 2.0
+            and (bool(top1_cand.get('is_breakout_matrix')) or len(top1_cand.get('motori') or []) >= 2)
+        )
+        if sbloccato_cassa or sbloccato_pb:
+            top1_emesso = True
+            tk = str(top1_cand.get('ticker') or '').strip().upper()
+            tipo_sig = 'TOP1_BUY'
+            if tk and (tk, tipo_sig) not in attivi_sys and (tk, tipo_sig) not in oggi_sys:
+                cur = str(top1_cand.get('currency') or 'USD').strip().upper()
+                conv = _fattore_cambio_ticker(tk, rate, cur)
+                p_eur = float(top1_cand.get('prezzo_eur') or 0.0)
+                if p_eur <= 0:
+                    p_nat = float(top1_cand.get('prezzo_nat') or 0.0)
+                    p_eur = round(p_nat / conv, 2) if p_nat > 0 else 0.0
+                if p_eur > 0:
+                    p_eur = round(p_eur, 2)
+                    stop_nat = float(top1_cand.get('stop_price') or 0.0)
+                    targ_nat = float(top1_cand.get('target_price') or 0.0)
+                    sl_e = round(stop_nat / conv, 2) if stop_nat > 0 else 0.0
+                    t2_e = round(targ_nat / conv, 2) if targ_nat > 0 else 0.0
+                    if sl_e <= 0 or sl_e >= p_eur or t2_e <= p_eur:
+                        mp = _fetch_metriche_pro(tk, rate)
+                        if sl_e <= 0 or sl_e >= p_eur:
+                            sl_e = mp['sl_eur'] if (mp and 0.70 * p_eur <= mp['sl_eur'] < p_eur) else round(p_eur * 0.92, 2)
+                        if t2_e <= p_eur:
+                            t2_e = mp['t2_eur'] if (mp and mp['t2_eur'] > p_eur * 1.03) else round(p_eur * 1.20, 2)
+                    t1_e = round(p_eur + 0.60 * (t2_e - p_eur), 2) if t2_e > p_eur else round(p_eur * 1.12, 2)
+
+                    if sbloccato_cassa:
+                        taglia_e = round(min(liq, 500.0), 2)
+                    elif isinstance(riserva, dict) and float(riserva.get('netto_eur') or 0) > 0:
+                        taglia_e = round(min(float(riserva.get('netto_eur') or 0) + liq, 500.0), 2)
+                    else:
+                        taglia_e = round(max(150.0, float(taglia_default or 200.0)), 2)
+
+                    motori_lbl = ' + '.join([str(m) for m in (top1_cand.get('motori') or ['Breakout'])])
+                    sh_list.append({
+                        'Ticker': tk,
+                        'Segnale': f'🚀 TOP 1 PILOTA ({motori_lbl})',
+                        'Tipo_Segnale': tipo_sig,
+                        'Origine': 'Metodo Sistema',
+                        'Currency': cur,
+                        'Super_Score': int(top1_cand.get('super_score') or 0),
+                        'Taglia_EUR': taglia_e,
+                        'Entry': p_eur,
+                        'Stop_Loss': sl_e,
+                        'T1': t1_e,
+                        'Target': t2_e,
+                        'Max_Price': p_eur,
+                        'Step_Trailing': 0,
+                        'Avviso_SL': '',
+                        'Data_Ingresso': oggi,
+                        'Data_Check_SL': oggi,
+                        'Fonti': f'Pilota Automatico — {motori_lbl}',
+                        'Stato': 'Attivo',
+                        'Esito_Reale': 'In Attesa',
+                    })
+                    attivi_sys.add((tk, tipo_sig))
+                    oggi_sys.add((tk, tipo_sig))
+                    aggiunti += 1
+
+    # 2) DCA DOPPIO BINARIO (solo se non è scattato un ordine Top 1 BUY)
+    if not top1_emesso:
+        dca_cand = snapshot_dec.get('dca_cand') if liq >= 40.0 else snapshot_dec.get('dca_piano_b')
+        if isinstance(dca_cand, dict) and dca_cand.get('ticker'):
+            tk_d = str(dca_cand.get('ticker') or '').strip().upper()
+            bin_d = int(dca_cand.get('binario') or 1)
+            tipo_sig_d = f'DCA_B{bin_d}'
+            if tk_d and (tk_d, tipo_sig_d) not in attivi_sys and (tk_d, tipo_sig_d) not in oggi_sys:
+                p_eur_d = round(float(dca_cand.get('prezzo_eur') or 0.0), 2)
+                if p_eur_d > 0:
+                    cur_d = 'EUR' if any(tk_d.endswith(s) for s in _SUFFISSI_EUR) else 'USD'
+                    mp_d = _fetch_metriche_pro(tk_d, rate)
+                    if mp_d and 0.72 * p_eur_d <= mp_d['sl_eur'] < p_eur_d:
+                        sl_d = mp_d['sl_eur']
+                        t1_d = mp_d['t1_eur'] if mp_d['t1_eur'] > p_eur_d * 1.02 else round(p_eur_d * 1.12, 2)
+                        t2_d = mp_d['t2_eur'] if mp_d['t2_eur'] > t1_d else round(p_eur_d * 1.22, 2)
+                    else:
+                        sl_d = round(p_eur_d * 0.90, 2)
+                        t1_d = round(p_eur_d * 1.12, 2)
+                        t2_d = round(p_eur_d * 1.22, 2)
+                    taglia_d = round(float(dca_cand.get('importo_eur') or taglia_default or 200.0), 2)
+                    mot_d = str(dca_cand.get('motivo') or f'DCA Binario {bin_d}')
+                    sh_list.append({
+                        'Ticker': tk_d,
+                        'Segnale': f'🧮 DCA Binario {bin_d} (Pilota)',
+                        'Tipo_Segnale': tipo_sig_d,
+                        'Origine': 'Metodo Sistema',
+                        'Currency': cur_d,
+                        'Taglia_EUR': taglia_d,
+                        'Entry': p_eur_d,
+                        'Stop_Loss': sl_d,
+                        'T1': t1_d,
+                        'Target': t2_d,
+                        'Max_Price': p_eur_d,
+                        'Step_Trailing': 0,
+                        'Avviso_SL': '',
+                        'Data_Ingresso': oggi,
+                        'Data_Check_SL': oggi,
+                        'Fonti': f'Pilota Automatico — {mot_d}',
+                        'Stato': 'Attivo',
+                        'Esito_Reale': 'In Attesa',
+                    })
+                    attivi_sys.add((tk_d, tipo_sig_d))
+                    oggi_sys.add((tk_d, tipo_sig_d))
+                    aggiunti += 1
+
+    if aggiunti > 0:
+        _save_j(SHADOW_FILE, sh_list)
+    return aggiunti
+
+
+def is_bivio_registrato_oggi(ticker, motivo=''):
+    """Verifica se per il ticker (e motivo) è già stato registrato oggi un bivio Tengo vs Sistema."""
+    tk = str(ticker or '').strip().upper()
+    if not tk:
+        return False
+    oggi = _oggi_italia_str()
+    slug = _normalizza_motivo_bivio(motivo) if motivo else ''
+    bivio_atteso = f'{tk}_{oggi}_{slug}' if slug else ''
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        return False
+    for r in sh_list:
+        if not isinstance(r, dict) or _is_operazione_portafoglio_reale(r):
+            continue
+        if bivio_atteso and str(r.get('Bivio_ID') or '') == bivio_atteso:
+            return True
+        if (not bivio_atteso) and str(r.get('Ticker') or '').strip().upper() == tk:
+            if str(r.get('Tipo_Segnale') or '') == 'BIVIO_VENDITA' and str(r.get('Data_Uscita') or '')[:10] == oggi:
+                return True
+    return False
+
+
+def registra_bivio_tengo_vs_sistema(
+    ticker,
+    prezzo_attuale_eur,
+    portafoglio=None,
+    motivo='Vendita / Switch',
+    pct_vendita=100,
+    eurusd_rate=1.12,
+    record_reale_idx=None,
+):
+    """
+    Gestisce in modo atomico lo sdoppiamento in 2 rami quando l'utente clicca '⏭️ Tengo/Ignora'
+    su una proposta di vendita / take profit / switch / SL-Trailing del sistema:
+    1) RAMO METODO SISTEMA (congelato): crea un record chiuso al prezzo live del momento
+       (Origine='Metodo Sistema', Stato='Chiuso (Vendita Sistema)', Prezzo_Uscita=prezzo_attuale_eur).
+    2) RAMO PORTAFOGLIO REALE (aperto): mantiene/apre il record reale con il PMC originale intatto
+       e Data_Check_SL=oggi, così i due rami restano confrontabili 1-a-1 tramite Bivio_ID.
+    Restituisce (creato_bivio: bool, bivio_id: str).
+    """
+    tk = str(ticker or '').strip().upper()
+    p_now = round(float(prezzo_attuale_eur or 0.0), 2)
+    if not tk or p_now <= 0:
+        return False, ''
+
+    oggi = _oggi_italia_str()
+    slug = _normalizza_motivo_bivio(motivo)
+    bivio_id = f'{tk}_{oggi}_{slug}'
+    pct_v = max(1, min(100, int(round(float(pct_vendita or 100)))))
+
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        sh_list = []
+
+    port_src = portafoglio if portafoglio is not None else (st.session_state.get('portafoglio') or [])
+    pos_reale = next(
+        (p for p in (port_src or []) if isinstance(p, dict) and str(p.get('Ticker') or '').strip().upper() == tk),
+        None,
+    )
+
+    rec_ref = None
+    if record_reale_idx is not None and 0 <= int(record_reale_idx) < len(sh_list):
+        rec_ref = sh_list[int(record_reale_idx)]
+
+    # Recupera PMC originale, quantità, tipo posizione e data di ingresso senza mai snaturare il PMC reale
+    qta_tot = float((pos_reale or {}).get('Quantita') or 0.0)
+    pmc_orig = round(float((pos_reale or {}).get('Prezzo_Medio') or 0.0), 2)
+    if pmc_orig <= 0 and isinstance(rec_ref, dict):
+        pmc_orig = round(float(rec_ref.get('Entry') or 0.0), 2)
+    if pmc_orig <= 0:
+        pmc_orig = p_now
+
+    tipo_pos_raw = str((pos_reale or {}).get('Tipo') or (rec_ref or {}).get('Tipo_Posizione') or 'Spot').strip()
+    is_pac_puro = tipo_pos_raw.upper() == 'PAC'
+    cur_tk = str((rec_ref or {}).get('Currency') or ('EUR' if any(tk.endswith(s) for s in _SUFFISSI_EUR) else 'USD')).upper()
+
+    data_acq_orig = ''
+    if isinstance(rec_ref, dict) and rec_ref.get('Data_Ingresso'):
+        data_acq_orig = str(rec_ref.get('Data_Ingresso'))[:10]
+    elif isinstance(pos_reale, dict) and (pos_reale.get('Data_Acquisto') or pos_reale.get('data_acquisto')):
+        data_acq_orig = str(pos_reale.get('Data_Acquisto') or pos_reale.get('data_acquisto'))[:10]
+    if not data_acq_orig:
+        data_acq_orig = oggi
+
+    if qta_tot > 0 and pmc_orig > 0:
+        taglia_tot = round(qta_tot * pmc_orig, 2)
+        taglia_bivio = round(taglia_tot * (pct_v / 100.0), 2)
+    elif isinstance(rec_ref, dict) and float(rec_ref.get('Taglia_EUR') or 0) > 0:
+        taglia_tot = round(float(rec_ref.get('Taglia_EUR')), 2)
+        taglia_bivio = round(taglia_tot * (pct_v / 100.0), 2)
+    else:
+        taglia_tot = 200.0
+        taglia_bivio = round(200.0 * (pct_v / 100.0), 2)
+
+    # 1) RAMO SISTEMA CONGELATO (anti-duplicato tramite Bivio_ID)
+    esiste_sys_bivio = any(
+        isinstance(x, dict) and (not _is_operazione_portafoglio_reale(x)) and str(x.get('Bivio_ID') or '') == bivio_id
+        for x in sh_list
+    )
+    if not esiste_sys_bivio:
+        sh_list.append({
+            'Ticker': tk,
+            'Segnale': f'🤖 Bivio Vendita ({motivo})',
+            'Tipo_Segnale': 'BIVIO_VENDITA',
+            'Origine': 'Metodo Sistema',
+            'Bivio_ID': bivio_id,
+            'Bivio_Motivo': str(motivo),
+            'Pct_Vendita_Bivio': pct_v,
+            'Currency': cur_tk,
+            'Taglia_EUR': taglia_bivio,
+            'Entry': pmc_orig,
+            'Stop_Loss': p_now,
+            'T1': round(pmc_orig * 1.12, 2),
+            'Target': round(pmc_orig * 1.20, 2),
+            'Max_Price': round(max(pmc_orig, p_now), 2),
+            'Step_Trailing': 0,
+            'Avviso_SL': '',
+            'Data_Ingresso': data_acq_orig,
+            'Data_Uscita': oggi,
+            'Prezzo_Uscita': p_now,
+            'Fonti': f'Bivio Tengo vs Sistema — {motivo}',
+            'Stato': 'Chiuso (Vendita Sistema)',
+            'Esito_Reale': 'Ignorata (Tengo)',
+        })
+
+    # 2) RAMO PORTAFOGLIO REALE APERTO (preserva sempre PMC originale e Data_Ingresso)
+    if isinstance(rec_ref, dict) and _is_operazione_portafoglio_reale(rec_ref):
+        rec_ref['Origine'] = 'Portafoglio Reale'
+        rec_ref['Entry'] = pmc_orig
+        rec_ref['Stato'] = 'Attivo'
+        rec_ref['Esito_Reale'] = 'Tengo (vs Sistema)'
+        rec_ref['Bivio_ID'] = bivio_id
+        rec_ref['Bivio_Taglia_Ref'] = taglia_bivio
+        rec_ref['Data_Check_SL'] = oggi
+        rec_ref['Avviso_SL'] = ''
+        rec_ref.pop('Prezzo_Uscita', None)
+        if not is_pac_puro:
+            rec_ref['Stop_Loss'] = round(p_now * 0.90, 2)
+        else:
+            rec_ref['Stop_Loss'] = 0.0
+    else:
+        # Cerca un record Portafoglio Reale già attivo per lo stesso ticker
+        rec_att_port = next(
+            (
+                x for x in sh_list
+                if isinstance(x, dict)
+                and _is_operazione_portafoglio_reale(x)
+                and str(x.get('Ticker') or '').strip().upper() == tk
+                and str(x.get('Stato') or '') == 'Attivo'
+            ),
+            None,
+        )
+        if rec_att_port is not None:
+            rec_att_port['Entry'] = pmc_orig
+            rec_att_port['Taglia_EUR'] = taglia_tot
+            rec_att_port['Esito_Reale'] = 'Tengo (vs Sistema)'
+            rec_att_port['Bivio_ID'] = bivio_id
+            rec_att_port['Bivio_Taglia_Ref'] = taglia_bivio
+            rec_att_port['Data_Check_SL'] = oggi
+            rec_att_port['Avviso_SL'] = ''
+        else:
+            sh_list.append({
+                'Ticker': tk,
+                'Segnale': '💼 PORTAFOGLIO REALE',
+                'Origine': 'Portafoglio Reale',
+                'Tipo_Posizione': 'PAC' if is_pac_puro else tipo_pos_raw,
+                'Currency': cur_tk,
+                'Taglia_EUR': taglia_tot,
+                'Bivio_ID': bivio_id,
+                'Bivio_Taglia_Ref': taglia_bivio,
+                'Entry': pmc_orig,
+                'Stop_Loss': 0.0 if is_pac_puro else round(p_now * 0.90, 2),
+                'T1': round(pmc_orig * 1.12, 2),
+                'Target': round(pmc_orig * 1.20, 2),
+                'Max_Price': round(max(pmc_orig, p_now), 2),
+                'Step_Trailing': 0,
+                'Avviso_SL': '',
+                'Data_Ingresso': data_acq_orig,
+                'Data_Check_SL': oggi,
+                'Fonti': 'Portafoglio Reale (Bivio)',
+                'Stato': 'Attivo',
+                'Esito_Reale': 'Tengo (vs Sistema)',
+            })
+
+    _save_j(SHADOW_FILE, sh_list)
+    return (not esiste_sys_bivio), bivio_id
+
+
+def _ripartizione_pac_spot_tracker(pos):
+    """Restituisce (q_pac, q_spot) coerente con la ripartizione PAC/Spot di scanner.py."""
+    if not isinstance(pos, dict):
+        return 0.0, 0.0
+    q_tot = round(max(0.0, float(pos.get('Quantita', 0) or 0)), 6)
+    if q_tot <= 0:
+        return 0.0, 0.0
+    has_pac = pos.get('Quantita_PAC') is not None
+    has_spot = pos.get('Quantita_Spot') is not None
+    if has_pac or has_spot:
+        q_pac = round(max(0.0, float(pos.get('Quantita_PAC', 0) or 0)), 6)
+        q_spot = round(max(0.0, float(pos.get('Quantita_Spot', 0) or 0)), 6)
+        somma = round(q_pac + q_spot, 6)
+        if abs(somma - q_tot) > 1e-4:
+            if somma > 0:
+                q_pac = round(min(q_pac, q_tot), 6)
+                q_spot = round(max(0.0, q_tot - q_pac), 6)
+            else:
+                tp_s = str(pos.get('Tipo', 'Spot')).strip().upper()
+                return (q_tot, 0.0) if (tp_s.startswith('PAC') and 'SPOT' not in tp_s) else (0.0, q_tot)
+        return q_pac, q_spot
+    tp_s = str(pos.get('Tipo', 'Spot')).strip().upper()
+    if tp_s.startswith('PAC') and 'SPOT' not in tp_s:
+        return q_tot, 0.0
+    return 0.0, q_tot
+
+
+def _sl_merita_nuovo_avviso(nuovo_sl, sl_confermato_tr):
+    """
+    Filtro anti-rumore per gli avvisi Stop Loss:
+    - Se l'utente non ha mai confermato uno SL su Trade Republic (<= 0): emette l'avviso.
+    - Altrimenti ri-avvisa solo se il nuovo prezzo di protezione sale di almeno +1% oppure +0,50 €.
+    """
+    ns = float(nuovo_sl or 0.0)
+    sc = float(sl_confermato_tr or 0.0)
+    if ns <= 0:
+        return False
+    if sc <= 0:
+        return True
+    return (ns >= sc * 1.01) or ((ns - sc) >= 0.50)
+
+
+def _calcola_sl_pct_da_ohlc(df_ohlc, fallback=0.08):
+    """Calcola lo stop percentuale tecnico (4.5%..10.5%) dai dati OHLC già in memoria (zero API extra)."""
+    try:
+        if df_ohlc is None or df_ohlc.empty or len(df_ohlc) < 15:
+            return fallback
+        closes = df_ohlc['Close'].dropna()
+        if len(closes) < 15:
+            return fallback
+        p_cur = float(closes.iloc[-1])
+        if p_cur <= 0:
+            return fallback
+        sma20 = float(closes.rolling(20).mean().iloc[-1]) if len(closes) >= 20 else p_cur * 0.95
+        atr14 = float((df_ohlc['High'] - df_ohlc['Low']).tail(14).mean())
+        sl_atr = p_cur - (2.0 * atr14)
+        sl_sma = sma20 * 0.985
+        candidati = [x for x in (sl_sma, sl_atr) if 0.895 * p_cur <= x <= 0.955 * p_cur]
+        sl_p = max(candidati) if candidati else max(p_cur * 0.895, min(p_cur * 0.955, sl_atr))
+        pct = abs((sl_p - p_cur) / p_cur)
+        return max(0.045, min(0.105, pct))
+    except Exception:
+        return fallback
+
+
+def _costruisci_dict_avviso_protezione(rec, pos_reale):
+    """Costruisce il dizionario strutturato per la card azzurra Protezione Profitto della Home Page."""
+    tk = str(rec.get('Ticker') or '').strip().upper()
+    q_pac, q_spot = _ripartizione_pac_spot_tracker(pos_reale)
+    pmc = round(float(pos_reale.get('Prezzo_Medio') or rec.get('Entry') or 0.0), 2)
+    p_live = round(float(pos_reale.get('Prezzo_Attuale_EUR') or rec.get('Max_Price') or pmc), 2)
+    sl_val = round(float(rec.get('Stop_Loss') or pmc), 2)
+    mx_val = round(max(float(rec.get('Max_Price') or p_live), p_live, pmc), 2)
+    pnl_pct = round(((p_live / pmc) - 1.0) * 100.0, 1) if (pmc > 0 and p_live > 0) else 0.0
+    step_tr = int(rec.get('Step_Trailing') or 0)
+    tipo_prot = str(rec.get('Avviso_SL_Tipo') or '').strip().upper()
+    if tipo_prot not in ('PAREGGIO', 'TRAILING'):
+        tipo_prot = 'TRAILING' if (step_tr >= 2 or sl_val > pmc * 1.01) else 'PAREGGIO'
+    return {
+        'ticker': tk,
+        'tipo_protezione': tipo_prot,
+        'sl_eur': sl_val,
+        'pmc_eur': pmc,
+        'prezzo_eur': p_live,
+        'max_eur': mx_val,
+        'pnl_pct': pnl_pct,
+        'is_misto_pac_spot': bool(q_pac > 1e-6 and q_spot > 1e-6),
+        'qta_spot': round(q_spot, 4),
+        'qta_pac': round(q_pac, 4),
+        'avviso_testo': str(rec.get('Avviso_SL') or ''),
+    }
+
+
+def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=None):
+    """
+    Sincronizza automaticamente tutte le posizioni con quote Spot (q_spot > 0, escludendo al 100% i PAC puri
+    attivi o sospesi Long) in regia_tracker*.json usando i dati OHLC già in memoria (zero chiamate API lente).
+    Rileva i passaggi di protezione profitto (Pareggio al PMC o Trailing -6% dal massimo) applicando il filtro
+    anti-rumore su SL_Confermato_TR (+1% o +0,50 €).
+    Restituisce la lista di avvisi pendenti pronti per la Home Page.
+    """
+    if not portafoglio:
+        return []
+    rate = float(eurusd_rate or 1.12)
+    oggi = _oggi_italia_str()
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        sh_list = []
+
+    upd = False
+    avvisi_home = []
+
+    for pos in (portafoglio or []):
+        if not isinstance(pos, dict):
+            continue
+        tk = str(pos.get('Ticker') or '').strip().upper()
+        if not tk:
+            continue
+        q_pac, q_spot = _ripartizione_pac_spot_tracker(pos)
+        # Esclusione assoluta per titoli solo PAC (attivi o sospesi Long)
+        if q_spot <= 1e-6:
+            continue
+
+        pmc = round(float(pos.get('Prezzo_Medio') or 0.0), 2)
+        if pmc <= 0:
+            continue
+        p_live = round(float(pos.get('Prezzo_Attuale_EUR') or pos.get('Prezzo_Attuale') or pmc), 2)
+        cur_tk = 'EUR' if any(tk.endswith(s) for s in _SUFFISSI_EUR) else 'USD'
+        conv = _fattore_cambio_ticker(tk, rate, cur_tk)
+        is_misto = bool(q_pac > 1e-6)
+        tipo_lbl = 'PAC + Spot' if is_misto else 'Spot'
+        taglia_spot = round(q_spot * pmc, 2)
+        data_acq = str(pos.get('Data_Acquisto') or pos.get('data_acquisto') or oggi)[:10]
+
+        df_ohlc = (ohlc_map or {}).get(tk) if isinstance(ohlc_map, dict) else None
+        # Trova o crea il record Portafoglio Reale attivo in regia_tracker*.json
+        rec = next(
+            (
+                x for x in sh_list
+                if isinstance(x, dict)
+                and _is_operazione_portafoglio_reale(x)
+                and str(x.get('Ticker') or '').strip().upper() == tk
+                and str(x.get('Stato') or '') == 'Attivo'
+            ),
+            None,
+        )
+        if rec is None:
+            sl_pct = _calcola_sl_pct_da_ohlc(df_ohlc, fallback=0.08)
+            t1_e = round(pmc * (1.0 + 1.5 * sl_pct), 2)
+            t2_e = round(pmc * (1.0 + 2.5 * sl_pct), 2)
+            sl_init = round(pmc * (1.0 - sl_pct), 2)
+            rec = {
+                'Ticker': tk,
+                'Segnale': '💼 PORTAFOGLIO REALE',
+                'Origine': 'Portafoglio Reale',
+                'Tipo_Posizione': tipo_lbl,
+                'Quantita_Spot': round(q_spot, 6),
+                'Quantita_PAC': round(q_pac, 6),
+                'Currency': cur_tk,
+                'Taglia_EUR': taglia_spot,
+                'Entry': pmc,
+                'Stop_Loss': sl_init,
+                'T1': t1_e,
+                'Target': t2_e,
+                'Max_Price': max(pmc, p_live),
+                'Step_Trailing': 0,
+                'SL_Confermato_TR': 0.0,
+                'Avviso_SL': '',
+                'Avviso_SL_Tipo': '',
+                'Data_Ingresso': data_acq,
+                'Data_Check_SL': data_acq,
+                'Fonti': 'Portafoglio Reale',
+                'Stato': 'Attivo',
+                'Esito_Reale': 'In Portafoglio',
+            }
+            sh_list.append(rec)
+            upd = True
+        else:
+            # Allinea PMC, quota Spot e metadati se variati
+            if abs(float(rec.get('Entry') or 0) - pmc) > 0.01 or abs(float(rec.get('Taglia_EUR') or 0) - taglia_spot) > 1.0:
+                rec['Entry'] = pmc
+                rec['Taglia_EUR'] = taglia_spot
+                upd = True
+            if rec.get('Tipo_Posizione') != tipo_lbl or abs(float(rec.get('Quantita_Spot') or 0) - q_spot) > 1e-4:
+                rec['Tipo_Posizione'] = tipo_lbl
+                rec['Quantita_Spot'] = round(q_spot, 6)
+                rec['Quantita_PAC'] = round(q_pac, 6)
+                upd = True
+
+        # Calcola massimo raggiunto in EUR combinando OHLC dalla data ingresso/check e prezzo live
+        dt_chk = str(rec.get('Data_Check_SL') or rec.get('Data_Ingresso') or oggi)[:10]
+        hi_eur = p_live
+        if df_ohlc is not None and not df_ohlc.empty and 'High' in df_ohlc.columns:
+            try:
+                sr = df_ohlc[df_ohlc.index.strftime('%Y-%m-%d') >= dt_chk] if dt_chk else df_ohlc.tail(20)
+                if not sr.empty:
+                    hi_ohlc = round(float(sr['High'].dropna().max()) / conv, 2)
+                    hi_eur = max(hi_eur, hi_ohlc)
+            except Exception:
+                pass
+
+        mx_r = round(max(float(rec.get('Max_Price') or pmc), hi_eur, p_live), 2)
+        if mx_r > float(rec.get('Max_Price') or 0) + 0.005:
+            rec['Max_Price'] = mx_r
+            upd = True
+
+        t1_r = float(rec.get('T1') or round(pmc * 1.12, 2))
+        t2_r = float(rec.get('Target') or round(pmc * 1.20, 2))
+        sl_r = float(rec.get('Stop_Loss') or round(pmc * 0.92, 2))
+        sl_conf = float(rec.get('SL_Confermato_TR') or 0.0)
+        step_tr = int(rec.get('Step_Trailing') or 0)
+
+        # Valutazione Protezione Profitto: solo se il prezzo attuale è sopra il livello Stop da inserire su TR
+        if t2_r > 0 and mx_r >= t2_r and p_live > pmc * 1.02:
+            nuovo_sl = round(max(pmc, t1_r, mx_r * 0.94), 2)
+            # Su Trade Republic un Ordine Stop di vendita deve essere inferiore al prezzo di mercato corrente
+            if nuovo_sl >= p_live * 0.995:
+                nuovo_sl = round(max(pmc, p_live * 0.94), 2)
+            if nuovo_sl > sl_r:
+                rec['Stop_Loss'] = nuovo_sl
+                sl_r = nuovo_sl
+                upd = True
+            if step_tr < 2:
+                rec['Step_Trailing'] = 2
+                upd = True
+            if p_live > sl_r and _sl_merita_nuovo_avviso(sl_r, sl_conf):
+                rec['Avviso_SL_Tipo'] = 'TRAILING'
+                rec['Avviso_SL'] = f"🏆 {tk}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (-6% dal massimo € {mx_r:.2f})."
+                upd = True
+        elif t1_r > 0 and mx_r >= t1_r and p_live > pmc * 1.005:
+            if sl_r < pmc:
+                rec['Stop_Loss'] = pmc
+                sl_r = pmc
+                upd = True
+            if step_tr < 1:
+                rec['Step_Trailing'] = 1
+                upd = True
+            if _sl_merita_nuovo_avviso(pmc, sl_conf):
+                rec['Avviso_SL_Tipo'] = 'PAREGGIO'
+                rec['Avviso_SL'] = f"🛡️ {tk}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {pmc:.2f} (pareggio)."
+                upd = True
+
+        # Se esiste un avviso pendente ancora coerente col prezzo live, lo aggiunge alla lista Home
+        if str(rec.get('Avviso_SL') or '').strip():
+            sl_curr_val = float(rec.get('Stop_Loss') or pmc)
+            if p_live > sl_curr_val * 0.995 and _sl_merita_nuovo_avviso(sl_curr_val, float(rec.get('SL_Confermato_TR') or 0.0)):
+                avvisi_home.append(_costruisci_dict_avviso_protezione(rec, pos))
+            else:
+                rec['Avviso_SL'] = ''
+                upd = True
+
+    if upd:
+        _save_j(SHADOW_FILE, sh_list)
+    return avvisi_home
+
+
+def ottieni_avvisi_protezione_pendenti(portafoglio=None):
+    """
+    Restituisce istantaneamente (zero chiamate di rete) gli avvisi Protezione Profitto pendenti
+    per le sole posizioni con quote Spot presenti nel portafoglio corrente.
+    """
+    port_src = portafoglio if portafoglio is not None else (st.session_state.get('portafoglio') or [])
+    if not port_src:
+        return []
+    port_spot_map = {}
+    for pos in port_src:
+        if not isinstance(pos, dict):
+            continue
+        tk = str(pos.get('Ticker') or '').strip().upper()
+        if not tk:
+            continue
+        _, q_spot = _ripartizione_pac_spot_tracker(pos)
+        if q_spot > 1e-6:
+            port_spot_map[tk] = pos
+
+    if not port_spot_map:
+        return []
+
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        return []
+
+    avvisi = []
+    visti = set()
+    for rec in sh_list:
+        if not isinstance(rec, dict) or not _is_operazione_portafoglio_reale(rec):
+            continue
+        if str(rec.get('Stato') or '') != 'Attivo':
+            continue
+        tk = str(rec.get('Ticker') or '').strip().upper()
+        if not tk or tk in visti or tk not in port_spot_map:
+            continue
+        if not str(rec.get('Avviso_SL') or '').strip():
+            continue
+        sl_v = float(rec.get('Stop_Loss') or 0.0)
+        sl_conf = float(rec.get('SL_Confermato_TR') or 0.0)
+        if not _sl_merita_nuovo_avviso(sl_v, sl_conf):
+            continue
+        avvisi.append(_costruisci_dict_avviso_protezione(rec, port_spot_map[tk]))
+        visti.add(tk)
+    return avvisi
+
+
+def conferma_avviso_sl(ticker, nuovo_sl=None):
+    """
+    Archivia l'avviso Protezione Profitto sia nella Home Page sia nel Tracker salvando
+    SL_Confermato_TR su regia_tracker*.json (con sincronizzazione GitHub automatica).
+    """
+    tk = str(ticker or '').strip().upper()
+    if not tk:
+        return False
+    sh_list = _load_j(SHADOW_FILE, [])
+    if not isinstance(sh_list, list):
+        return False
+    oggi = _oggi_italia_str()
+    mod = False
+    for rec in sh_list:
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get('Ticker') or '').strip().upper() != tk:
+            continue
+        if str(rec.get('Stato') or '') != 'Attivo':
+            continue
+        if _is_operazione_portafoglio_reale(rec) or str(rec.get('Avviso_SL') or '').strip():
+            sl_val = round(float(nuovo_sl if nuovo_sl is not None else (rec.get('Stop_Loss') or 0.0)), 2)
+            rec['Avviso_SL'] = ''
+            if sl_val > 0:
+                rec['SL_Confermato_TR'] = sl_val
+            rec['Data_Conferma_SL'] = oggi
+            mod = True
+    if mod:
+        _save_j(SHADOW_FILE, sh_list)
+    return mod
+
+
 def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
     rate = float(eurusd_rate or 1.12)
     fin_oggi = [x for x in (piano_ok or []) if x[-1] <= 0]
@@ -151,31 +887,36 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
 
     with st.expander('📊 Statistiche & Tracker Regia Reale (Gain Netto Tasse)', expanded=True):
         sh_list = _load_j(SHADOW_FILE, [])
-        # Separa posizioni Spot e PAC: il Trailing Stop / Stop Loss -10% si applica SOLO ai titoli Spot
+        # Separa posizioni con quote Spot e PAC puri: lo Stop Loss si applica SOLO alle quote Spot (mai PAC attivi o sospesi)
         port_map_all = {str(p.get('Ticker', '')).strip().upper(): p for p in (port_ok or []) if float(p.get('Quantita', 0) or 0) > 0}
-        pac_tickers = {tk for tk, pos in port_map_all.items() if str(pos.get('Tipo', 'Spot')).strip().upper() == 'PAC'}
+        pac_tickers = {tk for tk, pos in port_map_all.items() if _ripartizione_pac_spot_tracker(pos)[1] <= 1e-6}
         port_map_spot = {tk: pos for tk, pos in port_map_all.items() if tk not in pac_tickers}
 
-        # Allineamento automatico continuo con le posizioni Spot del portafoglio reale
+        # Allineamento automatico continuo con le posizioni del portafoglio reale
         sync_upd = False
         sh_pulita = []
         for r_p in sh_list:
             is_pr = _is_operazione_portafoglio_reale(r_p)
             tk_p = str(r_p.get('Ticker', '')).strip().upper()
-            # Rimuove eventuali vecchi alert attivi o da gestire generati erroneamente su titoli PAC
-            if is_pr and tk_p in pac_tickers and (r_p.get('Stato') == 'Attivo' or str(r_p.get('Esito_Reale', '')) == 'Da Gestire'):
+            has_bivio = bool(str(r_p.get('Bivio_ID') or '').strip())
+            # Rimuove eventuali vecchi alert SL generati erroneamente su titoli PAC (preservando quelli tracciati per un Bivio)
+            if is_pr and tk_p in pac_tickers and (not has_bivio) and (r_p.get('Stato') == 'Attivo' or str(r_p.get('Esito_Reale', '')) == 'Da Gestire'):
                 sync_upd = True
                 continue
             if is_pr and r_p.get('Stato') == 'Attivo':
-                if tk_p not in port_map_spot:
+                # Chiude come Venduto Reale se il titolo non è più nel portafoglio (per i bivi verifica port_map_all, inclusi PAC)
+                mappa_ref = port_map_all if has_bivio else port_map_spot
+                if tk_p not in mappa_ref:
                     r_p['Stato'] = 'Chiuso (Venduto Reale)'
                     r_p['Esito_Reale'] = 'Venduto Reale'
                     r_p['Avviso_SL'] = ''
                     r_p['Origine'] = 'Portafoglio Reale'
                     sync_upd = True
                 else:
-                    q_reale = float(port_map_spot[tk_p].get('Quantita', 0) or 0)
-                    pmc_reale = round(float(port_map_spot[tk_p].get('Prezzo_Medio', r_p.get('Entry', 0)) or 0), 2)
+                    pos_ref = mappa_ref[tk_p]
+                    _, q_spot_ref = _ripartizione_pac_spot_tracker(pos_ref)
+                    q_reale = q_spot_ref if (q_spot_ref > 1e-6 and not has_bivio) else float(pos_ref.get('Quantita', 0) or 0)
+                    pmc_reale = round(float(pos_ref.get('Prezzo_Medio', r_p.get('Entry', 0)) or 0), 2)
                     taglia_reale = round(q_reale * pmc_reale, 2)
                     if pmc_reale > 0 and (abs(pmc_reale - float(r_p.get('Entry', 0))) > 0.01 or abs(taglia_reale - float(r_p.get('Taglia_EUR', 0))) > 1.0):
                         r_p['Entry'] = pmc_reale
@@ -190,12 +931,12 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
             _save_j(SHADOW_FILE, sh_list)
 
         c1, c2, c3 = st.columns([1.8, 1.1, 1.1])
-        c1.caption('Traccia metodo puro e posizioni Spot reali con Trailing Stop (i PAC sono esclusi dallo Stop Loss).')
+        c1.caption('Traccia automaticamente i segnali del Pilota Automatico, i bivi Tengo vs Sistema e le posizioni Spot reali.')
         if c3.button('💼 Sync Portafoglio Reale', key='btn_sync_port_regia', use_container_width=True, disabled=not bool(port_map_spot)):
-            oggi_p = datetime.now().strftime('%Y-%m-%d')
+            oggi_p = _oggi_italia_str()
             att_port = {str(x.get('Ticker', '')).strip().upper() for x in sh_list if _is_operazione_portafoglio_reale(x) and x.get('Stato') == 'Attivo'}
             agg_p = 0
-            # Importa esclusivamente posizioni di tipo Spot (esclude rigorosamente i PAC come CRWD)
+            # Importa esclusivamente posizioni di tipo Spot (esclude rigorosamente i PAC puri)
             for tk_m, pos_m in port_map_spot.items():
                 if tk_m in att_port:
                     continue
@@ -220,9 +961,11 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 sh_list.append({
                     'Ticker': tk_m, 'Segnale': '💼 PORTAFOGLIO REALE', 'Origine': 'Portafoglio Reale',
                     'Tipo_Posizione': 'Spot', 'Taglia_EUR': round(q_m * pmc_m, 2),
+                    'Currency': 'EUR' if any(tk_m.endswith(s) for s in _SUFFISSI_EUR) else 'USD',
                     'Entry': pmc_m, 'Stop_Loss': sl_e, 'T1': t1_e, 'Target': t2_e,
                     'Max_Price': max(pmc_m, p_oggi_m), 'Step_Trailing': step_init, 'Avviso_SL': '',
                     'Data_Ingresso': str(pos_m.get('Data_Acquisto') or oggi_p)[:10],
+                    'Data_Check_SL': oggi_p,
                     'Fonti': 'Portafoglio Reale', 'Stato': 'Attivo', 'Esito_Reale': 'In Portafoglio'
                 })
                 agg_p += 1
@@ -234,7 +977,7 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
             else:
                 st.info(f'ℹ️ Tutti i titoli Spot del Portafoglio Reale sono già sincronizzati{nota_pac}.')
         if c2.button('📥 Registra Piano di Oggi', key='btn_reg_shadow_regia', use_container_width=True, disabled=not bool(fin_oggi)):
-            oggi_sh = datetime.now().strftime('%Y-%m-%d')
+            oggi_sh = _oggi_italia_str()
             att_sh = {(x.get('Ticker'), x.get('Data_Ingresso')) for x in sh_list}
             agg = 0
             for item in fin_oggi:
@@ -244,17 +987,20 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 try:
                     h1 = yf.Ticker(tk_s).history(period='2d')
                     if not h1.empty:
-                        p_eur = round(float(h1['Close'].dropna().iloc[-1]) / rate, 2)
+                        conv_s = _fattore_cambio_ticker(tk_s, rate)
+                        p_eur = round(float(h1['Close'].dropna().iloc[-1]) / conv_s, 2)
                         mp = _fetch_metriche_pro(tk_s, rate)
                         sl_e = mp['sl_eur'] if mp else round(p_eur * 0.92, 2)
                         t1_e = mp['t1_eur'] if mp else round(p_eur * 1.12, 2)
                         t2_e = mp['t2_eur'] if mp else round(p_eur * 1.20, 2)
                         sh_list.append({
-                            'Ticker': tk_s, 'Segnale': tp_s, 'Origine': 'Metodo Sistema',
+                            'Ticker': tk_s, 'Segnale': tp_s, 'Tipo_Segnale': 'MANUALE', 'Origine': 'Metodo Sistema',
+                            'Currency': 'EUR' if conv_s == 1.0 else 'USD',
                             'Taglia_EUR': round(float(taglia_ok), 2),
                             'Entry': p_eur, 'Stop_Loss': sl_e, 'T1': t1_e, 'Target': t2_e,
                             'Max_Price': p_eur, 'Step_Trailing': 0, 'Avviso_SL': '',
-                            'Data_Ingresso': oggi_sh, 'Fonti': ' + '.join([f.replace('**', '') for f in fn_s]),
+                            'Data_Ingresso': oggi_sh, 'Data_Check_SL': oggi_sh,
+                            'Fonti': ' + '.join([f.replace('**', '') for f in fn_s]),
                             'Stato': 'Attivo', 'Esito_Reale': 'In Attesa'
                         })
                         agg += 1
@@ -266,10 +1012,176 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 st.rerun()
 
         if sh_list:
-            # Conteggi esatti (aperte + chiuse) per ciascuna origine prima della selezione filtro
-            tot_all = len(sh_list)
-            tot_port = sum(1 for x in sh_list if _is_operazione_portafoglio_reale(x))
-            tot_sist = tot_all - tot_port
+            # 1) Aggiornamento prezzi live + Trailing Stop/SL su TUTTI i record (con cache per ticker)
+            upd = False
+            hist_cache = {}
+            prezzi_live_tk = {}
+            valutati = []
+            for idx_s, r in enumerate(sh_list):
+                tk_r = str(r.get('Ticker', '')).strip().upper()
+                st_r = str(r.get('Stato', 'Attivo'))
+                is_port_reale = _is_operazione_portafoglio_reale(r)
+                en_r = float(r.get('Entry', 0) or 0)
+                sl_r = float(r.get('Stop_Loss', 0) or 0)
+                t1_r = float(r.get('T1', 0) or round(en_r * 1.12, 2))
+                tg_r = float(r.get('Target', 0) or 0)
+                mx_r = float(r.get('Max_Price', en_r) or en_r)
+                step_tr = int(r.get('Step_Trailing', 0) or 0)
+                tg_e = float(r.get('Taglia_EUR', 200.0) or 200.0)
+                dt_r = str(r.get('Data_Ingresso', ''))[:10]
+                dt_chk = str(r.get('Data_Check_SL') or dt_r)[:10]
+                conv_r = _fattore_cambio_ticker(tk_r, rate, r.get('Currency'))
+                p_cur = en_r
+
+                # Aggiornamento prezzi e Trailing Stop / SL (mai applicato ai PAC puri del portafoglio reale)
+                if st_r == 'Attivo' and tk_r and en_r > 0:
+                    try:
+                        if tk_r not in hist_cache:
+                            hist_cache[tk_r] = yf.Ticker(tk_r).history(period='6mo', interval='1d')
+                        hr = hist_cache[tk_r]
+                        if hr is not None and not hr.empty:
+                            p_cur = round(float(hr['Close'].dropna().iloc[-1]) / conv_r, 2)
+                            prezzi_live_tk[tk_r] = p_cur
+                            is_pac_no_sl = is_port_reale and (tk_r in pac_tickers or str(r.get('Tipo_Posizione') or '').upper() == 'PAC')
+                            if not is_pac_no_sl:
+                                sr = hr[hr.index.strftime('%Y-%m-%d') >= dt_chk] if dt_chk else hr.tail(1)
+                                lo = float(sr['Low'].min()) / conv_r if not sr.empty else p_cur
+                                hi = float(sr['High'].max()) / conv_r if not sr.empty else p_cur
+                                if hi > mx_r:
+                                    mx_r = round(hi, 2)
+                                    sh_list[idx_s]['Max_Price'] = mx_r
+                                    upd = True
+                                if step_tr < 1 and t1_r > 0 and hi >= t1_r and sl_r < en_r:
+                                    sl_r = round(en_r, 2)
+                                    sh_list[idx_s]['Stop_Loss'] = sl_r
+                                    sh_list[idx_s]['Step_Trailing'] = 1
+                                    if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
+                                        sh_list[idx_s]['Avviso_SL_Tipo'] = 'PAREGGIO'
+                                        sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: Metti al sicuro il capitale — imposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (pareggio)."
+                                    upd = True
+                                if tg_r > 0 and hi >= tg_r:
+                                    nuovo_sl = round(max(t1_r, mx_r * 0.94), 2)
+                                    if nuovo_sl > sl_r:
+                                        sl_r = nuovo_sl
+                                        sh_list[idx_s]['Stop_Loss'] = sl_r
+                                        sh_list[idx_s]['Step_Trailing'] = 2
+                                        if _sl_merita_nuovo_avviso(sl_r, sh_list[idx_s].get('SL_Confermato_TR')):
+                                            sh_list[idx_s]['Avviso_SL_Tipo'] = 'TRAILING'
+                                            sh_list[idx_s]['Avviso_SL'] = f"🏆 {tk_r}: Proteggi il profitto accumulato — sposta lo Stop Loss su Trade Republic a € {sl_r:.2f} (-6% dal massimo € {mx_r:.2f})."
+                                        upd = True
+                                if sl_r > 0 and lo <= sl_r:
+                                    st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
+                                    p_cur, upd = sl_r, True
+                                    sh_list[idx_s]['Stato'] = st_r
+                                    sh_list[idx_s]['Prezzo_Uscita'] = sl_r
+                                    sh_list[idx_s]['Data_Uscita'] = _oggi_italia_str()
+                                    sh_list[idx_s]['Esito_Reale'] = 'Da Gestire'
+                                    sh_list[idx_s]['Avviso_SL'] = ''
+                    except Exception:
+                        pass
+                else:
+                    p_cur = float(r.get('Prezzo_Uscita') or en_r)
+
+                pct_v, netto_v = _calcola_netto_eur_trade(en_r, p_cur, tg_e)
+                valutati.append({
+                    'idx': idx_s, 'rec': r, 'tk': tk_r, 'stato': st_r,
+                    'is_port': is_port_reale, 'en': en_r, 'sl': sl_r,
+                    't1': t1_r, 'tg': tg_r, 'p_cur': p_cur,
+                    'dt': dt_r, 'pct': pct_v, 'netto': netto_v,
+                })
+
+            if upd:
+                _save_j(SHADOW_FILE, sh_list)
+
+            # 2) Box KPI Comparativo in testa al Tracker: 🤖 Metodo Sistema vs 💼 Portafoglio Reale + ⚖️ Delta Bivi
+            sys_items = [v for v in valutati if not v['is_port']]
+            real_items = [v for v in valutati if v['is_port']]
+            netto_sys_tot = round(sum(v['netto'] for v in sys_items), 2)
+            netto_real_tot = round(sum(v['netto'] for v in real_items), 2)
+            wr_sys = (sum(1 for v in sys_items if v['pct'] > 0) / len(sys_items) * 100.0) if sys_items else 0.0
+            wr_real = (sum(1 for v in real_items if v['pct'] > 0) / len(real_items) * 100.0) if real_items else 0.0
+            att_sys = sum(1 for v in sys_items if v['stato'] == 'Attivo')
+            att_real = sum(1 for v in real_items if v['stato'] == 'Attivo')
+
+            # Calcolo Delta Bivi 1-a-1 (stessa Taglia_EUR del bivio: Ramo Reale vs Ramo Sistema congelato)
+            real_by_bivio = {
+                str(v['rec'].get('Bivio_ID') or ''): v
+                for v in real_items if str(v['rec'].get('Bivio_ID') or '').strip()
+            }
+            real_by_tk = {}
+            for v in real_items:
+                if v['tk'] not in real_by_tk or v['stato'] == 'Attivo':
+                    real_by_tk[v['tk']] = v
+
+            n_bivi = 0
+            tot_bivio_sys = 0.0
+            tot_bivio_real = 0.0
+            vince_utente = 0
+            vince_sistema = 0
+            for v_s in sys_items:
+                if _inferisci_tipo_segnale_sistema(v_s['rec']) != 'BIVIO_VENDITA':
+                    continue
+                bid = str(v_s['rec'].get('Bivio_ID') or '')
+                tk_b = v_s['tk']
+                taglia_b = float(v_s['rec'].get('Taglia_EUR') or 200.0)
+                en_b = v_s['en']
+                # Prezzo corrente o chiuso del Ramo Reale per confronto mele-con-mele
+                v_r = real_by_bivio.get(bid) or real_by_tk.get(tk_b)
+                if v_r is not None:
+                    p_real_cmp = v_r['p_cur']
+                elif tk_b in prezzi_live_tk:
+                    p_real_cmp = prezzi_live_tk[tk_b]
+                elif tk_b in port_map_all and float(port_map_all[tk_b].get('Prezzo_Attuale_EUR') or 0) > 0:
+                    p_real_cmp = float(port_map_all[tk_b].get('Prezzo_Attuale_EUR'))
+                else:
+                    p_real_cmp = v_s['p_cur']
+                _, netto_b_real = _calcola_netto_eur_trade(en_b, p_real_cmp, taglia_b)
+                tot_bivio_sys += v_s['netto']
+                tot_bivio_real += netto_b_real
+                n_bivi += 1
+                if netto_b_real > v_s['netto'] + 0.01:
+                    vince_utente += 1
+                elif v_s['netto'] > netto_b_real + 0.01:
+                    vince_sistema += 1
+
+            delta_bivi = round(tot_bivio_real - tot_bivio_sys, 2)
+            col_sys = '#4ADE80' if netto_sys_tot >= 0 else '#F87171'
+            col_real = '#4ADE80' if netto_real_tot >= 0 else '#F87171'
+            if n_bivi == 0:
+                col_delta = '#94A3B8'
+                val_delta_txt = 'Nessun bivio'
+                sub_delta_txt = 'Clicca ⏭️ Tengo/Ignora su una vendita per attivare la sfida'
+            else:
+                col_delta = '#4ADE80' if delta_bivi > 0 else ('#F87171' if delta_bivi < 0 else '#E2E8F0')
+                chi_vince = 'Vince Tengo io' if delta_bivi > 0 else ('Vince il Sistema' if delta_bivi < 0 else 'In pari')
+                val_delta_txt = f'€ {delta_bivi:+,.2f} ({chi_vince})'
+                sub_delta_txt = f'{n_bivi} bivi ({vince_utente} Tu / {vince_sistema} Sistema) • Sist. € {tot_bivio_sys:+,.2f} vs Reale € {tot_bivio_real:+,.2f}'
+
+            _kpi_cmp_html = "".join([
+                "<div style='display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin:8px 0 12px 0;'>",
+                "<div style='background:#131722; border:1px solid #334155; border-top:3px solid #38BDF8; border-radius:10px; padding:0.80rem 1.0rem;'>",
+                "<div style='font-size:0.78rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;'>🤖 Metodo Sistema (Pilota)</div>",
+                f"<div style='font-family:JetBrains Mono, monospace; font-size:1.35rem; font-weight:800; color:{col_sys}; margin-top:4px;'>€ {netto_sys_tot:+,.2f}</div>",
+                f"<div style='font-size:0.78rem; color:#94A3B8; margin-top:3px;'>Win Rate {wr_sys:.0f}% • {len(sys_items)} op. ({att_sys} attive / {len(sys_items)-att_sys} chiuse)</div>",
+                "</div>",
+                "<div style='background:#131722; border:1px solid #334155; border-top:3px solid #10B981; border-radius:10px; padding:0.80rem 1.0rem;'>",
+                "<div style='font-size:0.78rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;'>💼 Portafoglio Reale</div>",
+                f"<div style='font-family:JetBrains Mono, monospace; font-size:1.35rem; font-weight:800; color:{col_real}; margin-top:4px;'>€ {netto_real_tot:+,.2f}</div>",
+                f"<div style='font-size:0.78rem; color:#94A3B8; margin-top:3px;'>Win Rate {wr_real:.0f}% • {len(real_items)} op. ({att_real} attive / {len(real_items)-att_real} chiuse)</div>",
+                "</div>",
+                "<div style='background:#131722; border:1px solid #334155; border-top:3px solid #F59E0B; border-radius:10px; padding:0.80rem 1.0rem;'>",
+                "<div style='font-size:0.78rem; font-weight:700; color:#CBD5E1; text-transform:uppercase;'>⚖️ Delta Bivi (Tengo io vs Sistema)</div>",
+                f"<div style='font-family:JetBrains Mono, monospace; font-size:1.15rem; font-weight:800; color:{col_delta}; margin-top:6px;'>{val_delta_txt}</div>",
+                f"<div style='font-size:0.76rem; color:#94A3B8; margin-top:3px;'>{sub_delta_txt}</div>",
+                "</div>",
+                "</div>",
+            ])
+            st.markdown(_kpi_cmp_html, unsafe_allow_html=True)
+
+            # 3) Filtro vista e tabella dettagliata
+            tot_all = len(valutati)
+            tot_port = len(real_items)
+            tot_sist = len(sys_items)
             opzioni_filtro = [
                 '📊 Tutte le Operazioni',
                 '🤖 Solo Metodo Sistema',
@@ -281,81 +1193,28 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                 horizontal=True,
                 key='radio_filtro_tracker_regia'
             )
-            upd, pnls, netti, rows, da_gestire, avvisi_sl = False, [], [], [], [], []
-            for idx_s, r in enumerate(sh_list):
-                tk_r, st_r = str(r.get('Ticker', '')).strip().upper(), str(r.get('Stato', 'Attivo'))
-                is_port_reale = _is_operazione_portafoglio_reale(r)
-                en_r = float(r.get('Entry', 0) or 0)
-                sl_r = float(r.get('Stop_Loss', 0) or 0)
-                t1_r = float(r.get('T1', 0) or round(en_r * 1.12, 2))
-                tg_r = float(r.get('Target', 0) or 0)
-                mx_r = float(r.get('Max_Price', en_r) or en_r)
-                step_tr = int(r.get('Step_Trailing', 0) or 0)
-                tg_e, dt_r, p_cur = float(r.get('Taglia_EUR', 200.0) or 200.0), str(r.get('Data_Ingresso', ''))[:10], en_r
 
-                # Aggiornamento prezzi e Trailing Stop / SL (mai applicato ai PAC del portafoglio reale)
-                if st_r == 'Attivo' and tk_r and en_r > 0:
-                    try:
-                        hr = yf.Ticker(tk_r).history(period='6mo', interval='1d')
-                        if not hr.empty:
-                            p_cur = round(float(hr['Close'].dropna().iloc[-1]) / rate, 2)
-                            if not (is_port_reale and tk_r in pac_tickers):
-                                sr = hr[hr.index.strftime('%Y-%m-%d') >= dt_r] if dt_r else hr.tail(1)
-                                lo = float(sr['Low'].min()) / rate if not sr.empty else p_cur
-                                hi = float(sr['High'].max()) / rate if not sr.empty else p_cur
-                                if hi > mx_r:
-                                    mx_r = round(hi, 2)
-                                    sh_list[idx_s]['Max_Price'] = mx_r
-                                    upd = True
-                                if step_tr < 1 and t1_r > 0 and hi >= t1_r and sl_r < en_r:
-                                    sl_r = round(en_r, 2)
-                                    sh_list[idx_s]['Stop_Loss'] = sl_r
-                                    sh_list[idx_s]['Step_Trailing'] = 1
-                                    sh_list[idx_s]['Avviso_SL'] = f"🛡️ {tk_r}: T1 (€ {t1_r:.2f}) raggiunto! Sposta SL a PAREGGIO (€ {sl_r:.2f}) su Trade Republic."
-                                    upd = True
-                                if tg_r > 0 and hi >= tg_r:
-                                    nuovo_sl = round(max(t1_r, mx_r * 0.94), 2)
-                                    if nuovo_sl > sl_r:
-                                        sl_r = nuovo_sl
-                                        sh_list[idx_s]['Stop_Loss'] = sl_r
-                                        sh_list[idx_s]['Step_Trailing'] = 2
-                                        sh_list[idx_s]['Avviso_SL'] = f"🚀 {tk_r}: T2 superato (Max € {mx_r:.2f})! Alza Trailing SL a € {sl_r:.2f} su Trade Republic."
-                                        upd = True
-                                if sl_r > 0 and lo <= sl_r:
-                                    st_r = 'Chiuso (Trailing)' if step_tr >= 1 else 'Chiuso (SL)'
-                                    p_cur, upd = sl_r, True
-                                    sh_list[idx_s]['Stato'], sh_list[idx_s]['Prezzo_Uscita'], sh_list[idx_s]['Esito_Reale'] = st_r, sl_r, 'Da Gestire'
-                                    sh_list[idx_s]['Avviso_SL'] = ''
-                    except Exception:
-                        pass
-                else:
-                    p_cur = float(r.get('Prezzo_Uscita') or en_r)
-
-                # Filtra sia operazioni aperte sia chiuse in base all'origine effettiva (Origine / Fonti / Segnale)
-                if filtro_vista == '🤖 Solo Metodo Sistema' and is_port_reale:
+            pnls, netti, rows, da_gestire, avvisi_sl = [], [], [], [], []
+            for v in valutati:
+                if filtro_vista == '🤖 Solo Metodo Sistema' and v['is_port']:
                     continue
-                if filtro_vista == '💼 Solo Portafoglio Reale' and not is_port_reale:
+                if filtro_vista == '💼 Solo Portafoglio Reale' and not v['is_port']:
                     continue
-
-                if st_r == 'Attivo' and str(r.get('Avviso_SL', '')).strip():
-                    avvisi_sl.append((idx_s, tk_r, str(r.get('Avviso_SL'))))
-                pct = ((p_cur - en_r) / en_r) * 100 if en_r > 0 else 0.0
-                lordo = tg_e * (pct / 100.0)
-                netto = round(lordo - max(0.0, lordo * 0.26), 2)
-                pnls.append(pct); netti.append(netto)
-                if st_r != 'Attivo' and str(r.get('Esito_Reale', 'Da Gestire')) == 'Da Gestire':
-                    da_gestire.append((idx_s, tk_r, st_r, p_cur, pct, netto))
+                r = v['rec']
+                if v['stato'] == 'Attivo' and str(r.get('Avviso_SL', '')).strip():
+                    avvisi_sl.append((v['idx'], v['tk'], str(r.get('Avviso_SL'))))
+                pnls.append(v['pct'])
+                netti.append(v['netto'])
+                if v['stato'] != 'Attivo' and str(r.get('Esito_Reale', 'Da Gestire')) == 'Da Gestire':
+                    da_gestire.append((v['idx'], v['tk'], v['stato'], v['p_cur'], v['pct'], v['netto']))
                 rows.append({
-                    'Data': dt_r, 'Ticker': tk_r,
-                    'Origine': '💼 Portafoglio Reale' if is_port_reale else '🤖 Metodo Sistema',
+                    'Data': v['dt'], 'Ticker': v['tk'],
+                    'Origine': '💼 Portafoglio Reale' if v['is_port'] else '🤖 Metodo Sistema',
                     'Segnale': r.get('Segnale', ''),
-                    'Entry €': en_r, 'SL €': sl_r, 'T1 €': t1_r, 'T2 €': tg_r, 'Attuale €': p_cur,
-                    'Stato': st_r, 'Reale': r.get('Esito_Reale', 'In Attesa'),
-                    'P&L %': f'{pct:+.1f}%', 'Netto €': f'€ {netto:+.2f}'
+                    'Entry €': v['en'], 'SL €': v['sl'], 'T1 €': v['t1'], 'T2 €': v['tg'], 'Attuale €': v['p_cur'],
+                    'Stato': v['stato'], 'Reale': r.get('Esito_Reale', 'In Attesa'),
+                    'P&L %': f"{v['pct']:+.1f}%", 'Netto €': f"€ {v['netto']:+.2f}"
                 })
-
-            if upd:
-                _save_j(SHADOW_FILE, sh_list)
 
             if rows:
                 if avvisi_sl:
@@ -363,7 +1222,8 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                         ca1, ca2 = st.columns([3.5, 1])
                         ca1.info(msg_a)
                         if ca2.button('✅ SL Aggiornato', key=f'btn_ack_sl_{ix_a}_{tk_a}', use_container_width=True):
-                            sh_list[ix_a]['Avviso_SL'] = ''; _save_j(SHADOW_FILE, sh_list); st.rerun()
+                            conferma_avviso_sl(tk_a, sh_list[ix_a].get('Stop_Loss'))
+                            st.rerun()
                 if da_gestire:
                     st.warning('🔔 **Chiusure Automatiche del Sistema (Trailing / SL) da confermare nel reale:**')
                     for ix_g, tk_g, st_g, pr_g, pc_g, nt_g in da_gestire:
@@ -372,13 +1232,21 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
                         if cg2.button('✅ Replicata', key=f'btn_rep_{ix_g}_{tk_g}', use_container_width=True):
                             sh_list[ix_g]['Esito_Reale'] = 'Replicata'; _save_j(SHADOW_FILE, sh_list); st.rerun()
                         if cg3.button('⏭️ Tengo/Ignora', key=f'btn_ign_{ix_g}_{tk_g}', use_container_width=True):
-                            sh_list[ix_g]['Esito_Reale'] = 'Ignorata (Tengo)'
-                            if _is_operazione_portafoglio_reale(sh_list[ix_g]) and tk_g not in pac_tickers:
-                                sh_list[ix_g]['Stato'] = 'Attivo'
-                                sh_list[ix_g]['Stop_Loss'] = round(pr_g * 0.90, 2)
-                                sh_list[ix_g]['Data_Ingresso'] = datetime.now().strftime('%Y-%m-%d')
-                                sh_list[ix_g].pop('Prezzo_Uscita', None)
-                            _save_j(SHADOW_FILE, sh_list); st.rerun()
+                            if _is_operazione_portafoglio_reale(sh_list[ix_g]):
+                                # Sdoppiamento in 2 rami: congela Ramo Sistema a pr_g e mantiene Ramo Reale con PMC intatto
+                                registra_bivio_tengo_vs_sistema(
+                                    ticker=tk_g,
+                                    prezzo_attuale_eur=pr_g,
+                                    portafoglio=port_ok,
+                                    motivo=st_g,
+                                    pct_vendita=100,
+                                    eurusd_rate=rate,
+                                    record_reale_idx=ix_g,
+                                )
+                            else:
+                                sh_list[ix_g]['Esito_Reale'] = 'Ignorata (Tengo)'
+                                _save_j(SHADOW_FILE, sh_list)
+                            st.rerun()
                 w = sum(1 for x in pnls if x > 0)
                 n_op = len(pnls)
                 n_att = sum(1 for x in rows if x['Stato'] == 'Attivo')
@@ -393,7 +1261,7 @@ def render_tracker_regia(piano_ok, port_ok, eurusd_rate, taglia_ok):
             else:
                 st.info('📭 Nessuna operazione presente per questo filtro.')
         else:
-            st.info('📭 Nessuna operazione registrata. Clicca Registra Piano di Oggi per iniziare.')
+            st.info('📭 Nessuna operazione registrata. I segnali del Pilota Automatico vengono registrati automaticamente all\'avvio della Home.')
 
 
 def render_stella_watchlist(tk, key_suffix="main"):

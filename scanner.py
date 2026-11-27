@@ -7334,6 +7334,12 @@ def _esegui_cascata_home_cached(
     except Exception:
         salute_h = {}
     st.session_state["home_salute_portafoglio"] = salute_h
+    # Sincronizza gli avvisi di Protezione Profitto (solo quote Spot, mai PAC) riusando hub_ohlc a zero chiamate API extra
+    try:
+        if "regia_tracker" in globals() and hasattr(regia_tracker, "sincronizza_avvisi_protezione_spot"):
+            regia_tracker.sincronizza_avvisi_protezione_spot(port_loc, eurusd_rate=eurusd_live, ohlc_map=hub_ohlc)
+    except Exception:
+        pass
 
     # Fase 3/5: Scansione Principale + pattern_engine + Bacheca Segnali Attivi
     _notify(58, "Fase 3/5 — Eseguo scansione tecnica, figure grafiche e Bacheca Segnali...")
@@ -7464,6 +7470,17 @@ def _esegui_cascata_home_cached(
             "calcolato_alle": _now_italia().strftime("%d/%m/%Y %H:%M"),
         },
     }
+    # Registra automaticamente i segnali confermati del Pilota nel Tracker (Origine='Metodo Sistema', anti-duplicati)
+    try:
+        if "regia_tracker" in globals() and hasattr(regia_tracker, "registra_segnali_pilota_automatico"):
+            regia_tracker.registra_segnali_pilota_automatico(
+                snap_res["home_snapshot_decisionale"],
+                portafoglio=port_loc,
+                eurusd_rate=eurusd_live,
+                liq_libera=liq_reale_alloc,
+            )
+    except Exception:
+        pass
     cache_store[cache_key] = (time.monotonic(), snap_res)
     _notify(100, "Analisi completata!")
     return snap_res
@@ -7698,6 +7715,30 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
     monitora_recupero = []
     avvisi_speculativi = []
     tickers_port_nomi = []
+    # Raccoglie le proposte di vendita / take profit / switch per i pulsanti rapidi "⏭️ Tengo/Ignora"
+    bivi_home_oggi = []
+    _bivi_home_seen = set()
+
+    def _aggiungi_bivio_home(tk_b, prezzo_eur_b, motivo_b, label_b, pct_b=100):
+        tk_u_b = str(tk_b or "").strip().upper()
+        chiave_b = (tk_u_b, str(motivo_b or "").strip().upper())
+        if not tk_u_b or chiave_b in _bivi_home_seen:
+            return
+        p_b = float(prezzo_eur_b or 0.0)
+        if p_b <= 0:
+            pos_f = next((x for x in port_h if str(x.get("Ticker", "")).strip().upper() == tk_u_b), None)
+            if pos_f:
+                p_b = float(pos_f.get("Prezzo_Attuale_EUR") or pos_f.get("Prezzo_Medio") or 0.0)
+        if p_b <= 0:
+            return
+        _bivi_home_seen.add(chiave_b)
+        bivi_home_oggi.append({
+            "ticker": tk_u_b,
+            "prezzo_eur": round(p_b, 2),
+            "motivo": str(motivo_b),
+            "label": str(label_b),
+            "pct_vendita": int(round(float(pct_b or 100))),
+        })
 
     for pos in port_h:
         tk = str(pos.get("Ticker", "")).strip().upper()
@@ -7721,6 +7762,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 f"💰 <b>CONSIDERA PRESA PROFITTO: {tk} ({pnl_p:+.1f}%)</b> ({str_gain_e}) — "
                 f"Puoi consolidare il guadagno oppure liberare liquidità per finanziare un nuovo segnale BUY."
             )
+            _aggiungi_bivio_home(tk, att_p, "Presa Profitto >= +35%", "Presa Profitto", pct_b=50)
             continue
 
         # Chiave corretta "buys" per acquisti ufficiali SEC Form 4 (90gg)
@@ -7787,6 +7829,7 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                         f"🔴 <b>AZIONE: VENDI {tk}</b> — Deterioramento strutturale isolato con mercato SPY/QQQ in regime VERDE "
                         f"(<b>Fase 4 confermata</b> sotto SMA 200, S-Score <b>{s_sc}/100</b>, zero acquisti SEC, P&amp;L {pnl_p:+.1f}%)."
                     )
+                    _aggiungi_bivio_home(tk, att_p, "Vendita Fase 4", "Vendita Fase 4", pct_b=100)
 
     # Costruisce blocco HTML "1) SUL PORTAFOGLIO ATTUALE"
     if not port_h:
@@ -7895,6 +7938,13 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         )
         if top1_valido_pb and riserva is not None:
             ordine_buy_proposto = True
+            _aggiungi_bivio_home(
+                riserva["ticker"],
+                0.0,
+                f"Switch Piano B -> {top1_cand['ticker']}",
+                f"Switch -> {top1_cand['ticker']}",
+                pct_b=riserva.get("pct_vendita", 100),
+            )
             imp_sw = round(min(riserva["netto_eur"] + liq_libera_h, 500.0), 2)
             taglia_sw, nota_comm_sw = _formatta_taglia_esecuzione_tr(imp_sw, top1_cand["prezzo_eur"], nascondi_eur=nascondi_eur)
             simb_o = "$" if top1_cand["currency"] == "USD" else "€"
@@ -7975,6 +8025,13 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                     port_h, salute_map, target_score=score_dca_pb, modalita="DCA", liq_libera=liq_libera_h
                 )
                 if ris_dca is not None and ris_dca.get("ticker") != dca_pb.get("ticker"):
+                    _aggiungi_bivio_home(
+                        ris_dca["ticker"],
+                        0.0,
+                        f"Switch DCA -> {dca_pb['ticker']}",
+                        f"Switch DCA -> {dca_pb['ticker']}",
+                        pct_b=ris_dca.get("pct_vendita", 100),
+                    )
                     str_net_d = "€ ••••" if nascondi_eur else f"€ {ris_dca['netto_eur']:,.2f}"
                     blocco_dca_html = (
                         f"<div style='height:1px; background:#2A2E39; margin:1.05rem 0;'></div>"
@@ -8030,6 +8087,37 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
                 f"{_righe_pr}"
             )
 
+    # Calcola gli avvisi di Protezione Profitto pendenti (solo quote Spot, mai PAC) ed evita conflitti con Switch al 100%
+    _tickers_switch_100 = {
+        str(b.get("ticker") or "").strip().upper()
+        for b in bivi_home_oggi
+        if "SWITCH" in str(b.get("motivo") or "").upper() and int(b.get("pct_vendita") or 0) >= 100
+    }
+    _tickers_raccolto_parz = {
+        str(b.get("ticker") or "").strip().upper()
+        for b in bivi_home_oggi
+        if ("PROFITTO" in str(b.get("motivo") or "").upper()) or (0 < int(b.get("pct_vendita") or 100) < 100)
+    }
+    avvisi_protezione_home = []
+    try:
+        if "regia_tracker" in globals() and hasattr(regia_tracker, "ottieni_avvisi_protezione_pendenti"):
+            _raw_prot = regia_tracker.ottieni_avvisi_protezione_pendenti(port_h) or []
+            avvisi_protezione_home = [
+                av for av in _raw_prot
+                if str(av.get("ticker") or "").strip().upper() not in _tickers_switch_100
+            ]
+    except Exception:
+        avvisi_protezione_home = []
+
+    if avvisi_protezione_home:
+        _tks_prot_lbl = ", ".join(av["ticker"] for av in avvisi_protezione_home)
+        blocco_port_html += (
+            f"<div style='color:#E0F2FE; font-size:0.92rem; line-height:1.5; margin-top:6px; "
+            f"background:#0F2436; border-left:3px solid #38BDF8; padding:6px 10px; border-radius:6px;'>"
+            f"🛡️ <b>PROTEZIONE PROFITTO ATTIVA ({_tks_prot_lbl}):</b> segui la guida rapida su Trade Republic "
+            f"nel riquadro azzurro qui sotto e conferma quando hai inserito lo Stop Loss.</div>"
+        )
+
     bordo_box_oggi = "#EF4444" if vendite_azioni else ("#F59E0B" if monitora_recupero else "#10B981")
     # Costruzione HTML priva di qualsiasi indentazione iniziale (>= 4 spazi) per impedire a Markdown di renderizzare blocchi <code>
     _card_oggi_html = "".join([
@@ -8046,6 +8134,99 @@ def render_home_pilota_automatico(impostazioni, semaforo_header):
         "</div>",
     ])
     st.markdown(_card_oggi_html, unsafe_allow_html=True)
+
+    # Card azzurra guidata "Protezione Profitto" (solo quote Spot, linguaggio semplice passo-passo per Trade Republic)
+    if avvisi_protezione_home:
+        for idx_pr, av_p in enumerate(avvisi_protezione_home):
+            tk_p = av_p["ticker"]
+            pnl_s = f"{float(av_p.get('pnl_pct') or 0.0):+.1f}%".replace(".", ",")
+            sl_s = "€ ••••" if nascondi_eur else f"€ {float(av_p.get('sl_eur') or 0.0):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            max_s = "€ ••••" if nascondi_eur else f"€ {float(av_p.get('max_eur') or 0.0):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            if av_p.get("is_misto_pac_spot"):
+                q_sp_raw = float(av_p.get("qta_spot") or 0.0)
+                q_sp_lbl = f"{int(q_sp_raw)}" if abs(q_sp_raw - round(q_sp_raw)) < 1e-4 else f"{q_sp_raw:.2f}".replace(".", ",")
+                nota_misto_p = f" sulle sole <b>{q_sp_lbl} azioni Spot</b> (lascia intatto il tuo PAC)"
+            else:
+                nota_misto_p = ""
+            nota_racc_p = (
+                " — <i>se consolidi il 50% (o scegli di tenere il titolo), applica questa protezione alla quota Spot che lasci correre</i>"
+                if tk_p in _tickers_raccolto_parz else ""
+            )
+
+            if av_p.get("tipo_protezione") == "TRAILING":
+                tit_prot = f"🏆 PROTEGGI IL PROFITTO ACCUMULATO — {tk_p} ({pnl_s}, massimo {max_s}): alziamo la rete di sicurezza per blindare il guadagno."
+                corpo_prot = (
+                    f"👉 <b>Cosa fare su Trade Republic (30 secondi):</b> Apri <b>{tk_p}</b> → <b>Vendi</b> → "
+                    f"<b>Ordine Stop</b> → sposta il prezzo di protezione a <b>{sl_s}</b> (-6% dal massimo){nota_misto_p}{nota_racc_p}. "
+                    f"Così la maggior parte del guadagno resta al sicuro!"
+                )
+            else:
+                tit_prot = f"🛡️ METTI AL SICURO IL GUADAGNO — {tk_p} ({pnl_s}): ora possiamo azzerare il rischio di perdita."
+                corpo_prot = (
+                    f"👉 <b>Cosa fare su Trade Republic (30 secondi):</b> Apri <b>{tk_p}</b> → <b>Vendi</b> → "
+                    f"<b>Ordine Stop</b> → imposta il prezzo a <b>{sl_s}</b> (il tuo prezzo di carico){nota_misto_p}{nota_racc_p}. "
+                    f"Così se scende esci senza perdere un euro; se sale, lasci correre il guadagno!"
+                )
+
+            _card_prot_html = "".join([
+                "<div style='background:#0F2436; border:1px solid #38BDF8; border-left:5px solid #38BDF8; ",
+                "border-radius:12px; padding:1.05rem 1.25rem; margin-bottom:0.45rem; color:#E0F2FE;'>",
+                f"<div style='font-size:0.97rem; font-weight:800; color:#F8FAFC; line-height:1.45; margin-bottom:0.40rem;'>{tit_prot}</div>",
+                f"<div style='font-size:0.92rem; color:#E0F2FE; line-height:1.55;'>{corpo_prot}</div>",
+                "</div>",
+            ])
+            st.markdown(_card_prot_html, unsafe_allow_html=True)
+
+            lbl_btn_sl = (
+                "✅ Fatto, Stop Loss inserito su Trade Republic"
+                if len(avvisi_protezione_home) == 1
+                else f"✅ Fatto, Stop Loss su {tk_p} inserito su Trade Republic"
+            )
+            if st.button(lbl_btn_sl, key=f"btn_home_conferma_sl_{idx_pr}_{tk_p}", type="primary", use_container_width=True):
+                if "regia_tracker" in globals() and hasattr(regia_tracker, "conferma_avviso_sl"):
+                    regia_tracker.conferma_avviso_sl(tk_p, av_p.get("sl_eur"))
+                st.toast(f"✅ Stop Loss confermato su {tk_p} ({sl_s}): avviso archiviato in Home e nel Tracker!", icon="🛡️")
+                st.rerun()
+            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+
+    # Pulsanti rapidi Bivio "Tengo io vs Vende il Sistema" per proposte Vendita / Take Profit / Switch della Home
+    if bivi_home_oggi and "regia_tracker" in globals() and hasattr(regia_tracker, "registra_bivio_tengo_vs_sistema"):
+        st.caption("⚖️ **Vuoi ignorare una proposta di vendita/alleggerimento e tenere il titolo?** Registrala qui per confrontare nel tempo *Tengo io* vs *Vende il Sistema*:")
+        cols_bv = st.columns(min(3, len(bivi_home_oggi)))
+        for idx_bv, bv in enumerate(bivi_home_oggi):
+            col_bv = cols_bv[idx_bv % len(cols_bv)]
+            gia_reg_bv = False
+            try:
+                if hasattr(regia_tracker, "is_bivio_registrato_oggi"):
+                    gia_reg_bv = bool(regia_tracker.is_bivio_registrato_oggi(bv["ticker"], bv["motivo"]))
+            except Exception:
+                gia_reg_bv = False
+            with col_bv:
+                if gia_reg_bv:
+                    st.markdown(
+                        f"<div style='background:#0F2436; border:1px solid #38BDF8; border-radius:8px; "
+                        f"padding:0.48rem 0.70rem; color:#E0F2FE; font-size:0.82rem; font-weight:700; text-align:center;'>"
+                        f"✅ {bv['ticker']}: Bivio Tengo vs Sistema registrato</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    btn_lbl = f"⏭️ Tengo {bv['ticker']} / Ignora ({bv['label']})"
+                    if st.button(
+                        btn_lbl,
+                        key=f"btn_home_bivio_{idx_bv}_{bv['ticker']}",
+                        use_container_width=True,
+                        help=f"Congela la vendita virtuale del Sistema a € {bv['prezzo_eur']:.2f} e lascia aperto il tuo Portafoglio Reale per il confronto nel Tracker.",
+                    ):
+                        regia_tracker.registra_bivio_tengo_vs_sistema(
+                            ticker=bv["ticker"],
+                            prezzo_attuale_eur=bv["prezzo_eur"],
+                            portafoglio=port_h,
+                            motivo=bv["motivo"],
+                            pct_vendita=bv["pct_vendita"],
+                            eurusd_rate=eurusd_live,
+                        )
+                        st.toast(f"⚖️ Bivio registrato su {bv['ticker']}: Sistema congelato a € {bv['prezzo_eur']:.2f} vs Tengo io!", icon="⚖️")
+                        st.rerun()
 
     # 3b) Box periodico: "Il Punto della Settimana / Fine Mese & Radar Rotazione Balene"
     _render_box_punto_periodico_home(port_h)
