@@ -1005,6 +1005,7 @@ def _is_file_sincronizzabile_github(fname):
         "registro_vendite",
         "registro_acquisti",
         "minusvalenze",
+        "telegram_monitor_state",
     )
     if fn == "insider_promossi.json":
         return True
@@ -8258,6 +8259,16 @@ def _invia_report_settimanale_sabato_telegram(
                 return False, "Invio automatico attivo solo il sabato."
             if str(imp_disk.get("ultimo_report_sabato_tg") or "") == sett_iso:
                 return False, f"Report {sett_iso} già inviato."
+            # Verifica incrociata con telegram_monitor_state.json (TTL 180s) per evitare doppioni con GitHub Actions
+            try:
+                if "regia_tracker" in globals() and hasattr(regia_tracker, "_leggi_stato_telegram_monitor"):
+                    _st_mon = regia_tracker._leggi_stato_telegram_monitor(ttl_sec=180)
+                    _u_k = str(chiave_u or "fabio").strip().lower()
+                    _u_st = _st_mon.get(_u_k) if isinstance(_st_mon, dict) else None
+                    if isinstance(_u_st, dict) and str(_u_st.get("ultimo_report_sabato_tg") or "") == sett_iso:
+                        return False, f"Report {sett_iso} già inviato dal Monitor Telegram."
+            except Exception:
+                pass
 
         wl_list = [t.strip().upper() for t in str(watchlist_str or "").replace("\n", ",").split(",") if t.strip()]
         msg = _costruisci_messaggio_report_sabato(

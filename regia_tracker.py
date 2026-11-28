@@ -948,6 +948,68 @@ def _costruisci_dict_avviso_protezione(rec, pos_reale):
     }
 
 
+def _leggi_stato_telegram_monitor(ttl_sec=180):
+    """
+    Legge telegram_monitor_state.json (aggiornato da monitor_telegram.py su GitHub Actions)
+    con micro-cache TTL 180s in st.session_state per evitare notifiche duplicate su Streamlit Cloud
+    senza appesantire i rerun. Fallisce silenziosamente restituendo {}.
+    """
+    fname = 'telegram_monitor_state.json'
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    abs_fp = os.path.join(base_dir, fname)
+    now_ts = time.time() if 'time' in globals() else 0.0
+    try:
+        if now_ts <= 0.0:
+            import time as _t_mod
+            now_ts = _t_mod.time()
+    except Exception:
+        now_ts = 0.0
+
+    try:
+        cache_ts = float(st.session_state.get('_tg_mon_state_ts') or 0.0)
+        cache_data = st.session_state.get('_tg_mon_state_data')
+        if isinstance(cache_data, dict) and (now_ts - cache_ts) < float(ttl_sec):
+            return cache_data
+    except Exception:
+        pass
+
+    data = {}
+    is_locale_pc = (os.name == 'nt')
+    pulled = False
+    try:
+        sync_fn = st.session_state.get('_sync_github_file_fn')
+        if callable(sync_fn) and ((not is_locale_pc) or (not os.path.exists(abs_fp))):
+            rem_txt = sync_fn(fname, '', mode='pull')
+            if rem_txt:
+                parsed = json.loads(rem_txt)
+                if isinstance(parsed, dict):
+                    data = parsed
+                    pulled = True
+                    try:
+                        with open(abs_fp, 'w', encoding='utf-8') as fw:
+                            fw.write(rem_txt)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    if (not pulled) and os.path.exists(abs_fp):
+        try:
+            with open(abs_fp, 'r', encoding='utf-8') as fr:
+                parsed = json.load(fr)
+            if isinstance(parsed, dict):
+                data = parsed
+        except Exception:
+            data = {}
+
+    try:
+        st.session_state['_tg_mon_state_ts'] = now_ts
+        st.session_state['_tg_mon_state_data'] = data
+    except Exception:
+        pass
+    return data
+
+
 def _invia_notifica_telegram(utente, messaggio):
     """
     Invia una notifica push Telegram separata al singolo membro della famiglia leggendo
@@ -1120,6 +1182,12 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
         sh_list = []
 
     sh_list, dedup_mod = _deduplica_e_allinea_tracker_list(sh_list)
+    st_tg_mon = _leggi_stato_telegram_monitor(ttl_sec=180)
+    st_tg_u = st_tg_mon.get(utente_eff) if isinstance(st_tg_mon, dict) else {}
+    if not isinstance(st_tg_u, dict):
+        st_tg_u = {}
+    st_tg_sl_map = st_tg_u.get('sl_notificato') if isinstance(st_tg_u.get('sl_notificato'), dict) else {}
+    st_tg_gain_map = st_tg_u.get('gain_notificato') if isinstance(st_tg_u.get('gain_notificato'), dict) else {}
     upd = bool(dedup_mod)
     avvisi_home = []
 
@@ -1291,8 +1359,11 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
             if p_live > sl_curr_val * 0.995 and _sl_merita_nuovo_avviso(sl_curr_val, float(rec.get('SL_Confermato_TR') or 0.0)):
                 av_d = _costruisci_dict_avviso_protezione(rec, pos)
                 avvisi_home.append(av_d)
-                # Notifica push Telegram dedicata al singolo utente solo per un nuovo livello SL non ancora notificato
-                sl_not_tg = float(rec.get('SL_Notificato_Telegram') or 0.0)
+                # Notifica push Telegram dedicata al singolo utente solo per un nuovo livello SL non ancora notificato (incrociato con monitor_telegram.py)
+                sl_not_tg = max(
+                    float(rec.get('SL_Notificato_Telegram') or 0.0),
+                    float(st_tg_sl_map.get(tk) or 0.0),
+                )
                 if _sl_merita_nuovo_avviso(sl_curr_val, sl_not_tg):
                     msg_tg = _formatta_messaggio_telegram_sl(av_d, utente_eff)
                     if _invia_notifica_telegram(utente_eff, msg_tg):
@@ -1306,7 +1377,10 @@ def sincronizza_avvisi_protezione_spot(portafoglio, eurusd_rate=1.12, ohlc_map=N
         # Alert Telegram automatico Presa Profitto / Chiusura Gain (SOLO quote Spot, scaglioni 35% / 50% / 70%, soglia anti-briciole >= € 100 netti)
         pnl_pct_spot = ((p_live / pmc) - 1.0) * 100.0 if (pmc > 0 and p_live > 0) else 0.0
         scaglione_gain = 70 if pnl_pct_spot >= 70.0 else (50 if pnl_pct_spot >= 50.0 else (35 if pnl_pct_spot >= 35.0 else 0))
-        gain_not_prev = int(rec.get('Gain_Notificato_Telegram') or 0)
+        gain_not_prev = max(
+            int(rec.get('Gain_Notificato_Telegram') or 0),
+            int(st_tg_gain_map.get(tk) or 0),
+        )
         if scaglione_gain > 0 and scaglione_gain > gain_not_prev:
             val_spot_g = round(q_spot * p_live, 2)
             carico_spot_g = round(q_spot * pmc, 2)
